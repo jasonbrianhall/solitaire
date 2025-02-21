@@ -7,6 +7,13 @@
 #include <memory>
 #include <optional>
 
+struct TableauCard {
+    cardlib::Card card;
+    bool face_up;
+    
+    TableauCard(const cardlib::Card& c, bool up) : card(c), face_up(up) {}
+};
+
 class SolitaireGame {
 public:
     SolitaireGame();
@@ -20,8 +27,8 @@ private:
     std::vector<cardlib::Card> stock_;          // Draw pile
     std::vector<cardlib::Card> waste_;          // Faced-up cards from stock
     std::vector<std::vector<cardlib::Card>> foundation_; // 4 piles for aces
-    std::vector<std::vector<cardlib::Card>> tableau_;    // 7 main piles
-
+    std::vector<std::vector<TableauCard>> tableau_;
+    void flipTopTableauCard(int);
     // Drag and drop state
     bool dragging_;
     GtkWidget* drag_source_;
