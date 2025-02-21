@@ -55,9 +55,9 @@ $(BUILD_DIR_WIN)/%.win.o: %.cpp
 
 # DLL collection
 .PHONY: collect-dlls
-collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN)
+src/collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN)
 	@echo "Collecting DLLs..."
-	@./collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
+	@./src/collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
 
 # Clean targets
 .PHONY: clean
