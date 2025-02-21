@@ -20,24 +20,48 @@ void SolitaireGame::run(int argc, char **argv) {
 }
 
 void SolitaireGame::initializeGame() {
-  // Initialize deck and shuffle
-  deck_ = cardlib::Deck();
-  deck_.shuffle();
+  try {
+    // Try to find cards.zip in several common locations
+    const std::vector<std::string> paths = {
+      "cards.zip"
+    };
 
-  // Clear all piles
-  stock_.clear();
-  waste_.clear();
-  foundation_.clear();
-  tableau_.clear();
+    bool loaded = false;
+    for (const auto& path : paths) {
+      try {
+        deck_ = cardlib::Deck(path);
+        loaded = true;
+        break;
+      } catch (const std::exception& e) {
+        std::cerr << "Failed to load cards from " << path << ": " << e.what() << std::endl;
+      }
+    }
 
-  // Initialize foundation piles (4 empty piles for aces)
-  foundation_.resize(4);
+    if (!loaded) {
+      throw std::runtime_error("Could not find cards.zip in any search path");
+    }
 
-  // Initialize tableau (7 piles)
-  tableau_.resize(7);
+    deck_.shuffle();
 
-  // Deal cards
-  deal();
+    // Clear all piles
+    stock_.clear();
+    waste_.clear();
+    foundation_.clear();
+    tableau_.clear();
+
+    // Initialize foundation piles (4 empty piles for aces)
+    foundation_.resize(4);
+
+    // Initialize tableau (7 piles)
+    tableau_.resize(7);
+
+    // Deal cards
+    deal();
+
+  } catch (const std::exception& e) {
+    std::cerr << "Fatal error during game initialization: " << e.what() << std::endl;
+    exit(1);
+  }
 }
 
 bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
@@ -79,6 +103,48 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
         "Cannot get reference to tableau pile - type mismatch");
   }
   throw std::out_of_range("Invalid pile index");
+}
+
+void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage* img) const {
+    if (!img || img->data.empty()) {
+        std::cerr << "Invalid card image data" << std::endl;
+        return;
+    }
+
+    GError* error = nullptr;
+    GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+    if (!loader) {
+        std::cerr << "Failed to create pixbuf loader" << std::endl;
+        return;
+    }
+
+    // Write the image data
+    if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error)) {
+        std::cerr << "Failed to write image data: " << (error ? error->message : "unknown error") << std::endl;
+        if (error) g_error_free(error);
+        g_object_unref(loader);
+        return;
+    }
+
+    // Close the loader
+    if (!gdk_pixbuf_loader_close(loader, &error)) {
+        std::cerr << "Failed to close loader: " << (error ? error->message : "unknown error") << std::endl;
+        if (error) g_error_free(error);
+        g_object_unref(loader);
+        return;
+    }
+
+    // Get the pixbuf
+    GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+    if (pixbuf) {
+        // Set up the cairo context and paint
+        gdk_cairo_set_source_pixbuf(cr, pixbuf, x, y);
+        cairo_paint(cr);
+        // We don't unref pixbuf - it's owned by the loader
+    }
+
+    // Clean up
+    g_object_unref(loader);  // This will also free the pixbuf
 }
 
 void SolitaireGame::deal() {
@@ -182,82 +248,72 @@ GtkWidget *SolitaireGame::createCardWidget(const cardlib::Card &card,
   return frame;
 }
 
-gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
+    
+    // Clear background
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(widget, &allocation);
+    cairo_set_source_rgb(cr, 0.0, 0.5, 0.0);  // Green table
+    cairo_rectangle(cr, 0, 0, allocation.width, allocation.height);
+    cairo_fill(cr);
 
-  // Clear background
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(widget, &allocation);
-  cairo_set_source_rgb(cr, 0.0, 0.5, 0.0); // Green table
-  cairo_rectangle(cr, 0, 0, allocation.width, allocation.height);
-  cairo_fill(cr);
-
-  // Draw stock pile
-  int x = CARD_SPACING;
-  int y = CARD_SPACING;
-  if (!game->stock_.empty()) {
-    cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
-    cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-    cairo_stroke(cr);
-  }
-
-  // Draw waste pile
-  x += CARD_WIDTH + CARD_SPACING;
-  if (!game->waste_.empty()) {
-    const auto &top_card = game->waste_.back();
-    // Draw face-up card
-    if (auto img = game->deck_.getCardImage(top_card)) {
-      // Implementation of drawing card image
-      cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-      cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-      cairo_fill(cr);
-    }
-  }
-
-  // Draw foundation piles
-  x = 3 * (CARD_WIDTH + CARD_SPACING);
-  for (const auto &pile : game->foundation_) {
-    cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
-    cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-    cairo_stroke(cr);
-
-    if (!pile.empty()) {
-      const auto &top_card = pile.back();
-      if (auto img = game->deck_.getCardImage(top_card)) {
-        // Implementation of drawing card image
-        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-        cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-        cairo_fill(cr);
-      }
-    }
-    x += CARD_WIDTH + CARD_SPACING;
-  }
-
-  // Draw tableau piles
-  y = CARD_SPACING + CARD_HEIGHT + VERT_SPACING;
-  for (size_t i = 0; i < game->tableau_.size(); i++) {
-    x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
-    const auto &pile = game->tableau_[i];
-
-    for (size_t j = 0; j < pile.size(); j++) {
-      const auto &tableau_card = pile[j];
-      if (tableau_card.face_up) {
-        if (auto img = game->deck_.getCardImage(
-                tableau_card.card)) { // Implementation of drawing card image
-          cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-          cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-          cairo_fill(cr);
+    // Draw stock pile
+    int x = CARD_SPACING;
+    int y = CARD_SPACING;
+    if (!game->stock_.empty()) {
+        if (auto back_img = game->deck_.getCardBackImage()) {
+            game->drawCard(cr, x, y, &(*back_img));
         }
-      } else {
+    }
+
+    // Draw waste pile
+    x += CARD_WIDTH + CARD_SPACING;
+    if (!game->waste_.empty()) {
+        const auto& top_card = game->waste_.back();
+        if (auto img = game->deck_.getCardImage(top_card)) {
+            game->drawCard(cr, x, y, &(*img));
+        }
+    }
+
+    // Draw foundation piles
+    x = 3 * (CARD_WIDTH + CARD_SPACING);
+    for (const auto& pile : game->foundation_) {
         cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
         cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
         cairo_stroke(cr);
-      }
-      y += VERT_SPACING;
+        
+        if (!pile.empty()) {
+            const auto& top_card = pile.back();
+            if (auto img = game->deck_.getCardImage(top_card)) {
+                game->drawCard(cr, x, y, &(*img));
+            }
+        }
+        x += CARD_WIDTH + CARD_SPACING;
     }
-  }
 
-  return TRUE;
+    // Draw tableau piles
+    y = CARD_SPACING + CARD_HEIGHT + VERT_SPACING;
+    for (size_t i = 0; i < game->tableau_.size(); i++) {
+        x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
+        const auto& pile = game->tableau_[i];
+        
+        for (size_t j = 0; j < pile.size(); j++) {
+            const auto& tableau_card = pile[j];
+            if (tableau_card.face_up) {
+                if (auto img = game->deck_.getCardImage(tableau_card.card)) {
+                    game->drawCard(cr, x, y, &(*img));
+                }
+            } else {
+                if (auto back_img = game->deck_.getCardBackImage()) {
+                    game->drawCard(cr, x, y, &(*back_img));
+                }
+            }
+            y += VERT_SPACING;
+        }
+    }
+
+    return TRUE;
 }
 
 gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
