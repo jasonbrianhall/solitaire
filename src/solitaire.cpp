@@ -1,368 +1,428 @@
-#include <gtk/gtk.h>
-#include <zip.h>
-#include <iostream>
-#include <vector>
-#include <string>
-#include <memory>
+#include "solitaire.h"
 #include <algorithm>
-#include <filesystem>
-#include <map>
-#include <optional>
+#include <iostream>
 
-enum class Suit {
-    CLUBS,
-    DIAMONDS,
-    HEARTS,
-    SPADES,
-    JOKER
-};
-
-enum class Rank {
-    ACE = 1,
-    TWO,
-    THREE,
-    FOUR,
-    FIVE,
-    SIX,
-    SEVEN,
-    EIGHT,
-    NINE,
-    TEN,
-    JACK,
-    QUEEN,
-    KING,
-    JOKER
-};
-
-struct Card {
-    Suit suit;
-    Rank rank;
-    bool is_alternate_art;
-
-    std::string toString() const {
-        if (rank == Rank::JOKER) {
-            return suit == Suit::HEARTS ? "Red Joker" : "Black Joker";
-        }
-
-        std::string rank_str;
-        switch (rank) {
-            case Rank::ACE: rank_str = "Ace"; break;
-            case Rank::TWO: rank_str = "2"; break;
-            case Rank::THREE: rank_str = "3"; break;
-            case Rank::FOUR: rank_str = "4"; break;
-            case Rank::FIVE: rank_str = "5"; break;
-            case Rank::SIX: rank_str = "6"; break;
-            case Rank::SEVEN: rank_str = "7"; break;
-            case Rank::EIGHT: rank_str = "8"; break;
-            case Rank::NINE: rank_str = "9"; break;
-            case Rank::TEN: rank_str = "10"; break;
-            case Rank::JACK: rank_str = "Jack"; break;
-            case Rank::QUEEN: rank_str = "Queen"; break;
-            case Rank::KING: rank_str = "King"; break;
-            default: rank_str = "Unknown"; break;
-        }
-
-        std::string suit_str;
-        switch (suit) {
-            case Suit::CLUBS: suit_str = "Clubs"; break;
-            case Suit::DIAMONDS: suit_str = "Diamonds"; break;
-            case Suit::HEARTS: suit_str = "Hearts"; break;
-            case Suit::SPADES: suit_str = "Spades"; break;
-            default: suit_str = "Unknown"; break;
-        }
-
-        std::string result = rank_str + " of " + suit_str;
-        if (is_alternate_art) {
-            result += " (Alt)";
-        }
-        return result;
-    }
-};
-
-struct CardImage {
-    std::string filename;
-    std::vector<unsigned char> data;
-    std::optional<Card> card_info;
-};
-
-std::string find_cards_zip() {
-    namespace fs = std::filesystem;
-    fs::path current_path = fs::current_path();
-    
-    if (fs::exists(current_path / "cards.zip")) {
-        return (current_path / "cards.zip").string();
-    }
-    
-    if (fs::exists(current_path.parent_path() / "cards.zip")) {
-        return (current_path.parent_path() / "cards.zip").string();
-    }
-    
-    return "";
+SolitaireGame::SolitaireGame() 
+    : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
+      window_(nullptr), game_area_(nullptr) {
+    initializeGame();
 }
 
-GtkWidget* create_error_dialog(const char* message) {
-    GtkWidget* dialog = gtk_message_dialog_new(NULL,
-                                             GTK_DIALOG_DESTROY_WITH_PARENT,
-                                             GTK_MESSAGE_ERROR,
-                                             GTK_BUTTONS_CLOSE,
-                                             "%s", message);
-    gtk_window_set_title(GTK_WINDOW(dialog), "Error");
-    return dialog;
+SolitaireGame::~SolitaireGame() {
+    // GTK cleanup will handle widget destruction
 }
 
-std::optional<Card> parse_filename(const std::string& filename) {
-    Card card;
-    card.is_alternate_art = false;
-
-    if (filename == "red_joker.png") {
-        card.rank = Rank::JOKER;
-        card.suit = Suit::HEARTS;
-        return card;
-    }
-    if (filename == "black_joker.png") {
-        card.rank = Rank::JOKER;
-        card.suit = Suit::SPADES;
-        return card;
-    }
-
-    if (filename.length() > 5 && filename.substr(filename.length() - 5) == "2.png") {
-        card.is_alternate_art = true;
-    }
-
-    if (filename.compare(0, 4, "ace_") == 0) card.rank = Rank::ACE;
-    else if (filename.compare(0, 2, "2_") == 0) card.rank = Rank::TWO;
-    else if (filename.compare(0, 2, "3_") == 0) card.rank = Rank::THREE;
-    else if (filename.compare(0, 2, "4_") == 0) card.rank = Rank::FOUR;
-    else if (filename.compare(0, 2, "5_") == 0) card.rank = Rank::FIVE;
-    else if (filename.compare(0, 2, "6_") == 0) card.rank = Rank::SIX;
-    else if (filename.compare(0, 2, "7_") == 0) card.rank = Rank::SEVEN;
-    else if (filename.compare(0, 2, "8_") == 0) card.rank = Rank::EIGHT;
-    else if (filename.compare(0, 2, "9_") == 0) card.rank = Rank::NINE;
-    else if (filename.compare(0, 3, "10_") == 0) card.rank = Rank::TEN;
-    else if (filename.compare(0, 5, "jack_") == 0) card.rank = Rank::JACK;
-    else if (filename.compare(0, 6, "queen_") == 0) card.rank = Rank::QUEEN;
-    else if (filename.compare(0, 5, "king_") == 0) card.rank = Rank::KING;
-    else return std::nullopt;
-
-    if (filename.find("_of_clubs") != std::string::npos) card.suit = Suit::CLUBS;
-    else if (filename.find("_of_diamonds") != std::string::npos) card.suit = Suit::DIAMONDS;
-    else if (filename.find("_of_hearts") != std::string::npos) card.suit = Suit::HEARTS;
-    else if (filename.find("_of_spades") != std::string::npos) card.suit = Suit::SPADES;
-    else return std::nullopt;
-
-    return card;
+void SolitaireGame::run(int argc, char** argv) {
+    gtk_init(&argc, &argv);
+    setupWindow();
+    setupGameArea();
+    gtk_main();
 }
 
-std::vector<CardImage> load_cards_from_zip(const char* zipPath) {
-    std::vector<CardImage> cards;
-    int err;
-    zip* archive = zip_open(zipPath, ZIP_RDONLY, &err);
-    
-    if (!archive) {
-        zip_error_t ziperr;
-        zip_error_init_with_code(&ziperr, err);
-        std::cerr << "Error opening " << zipPath << ": " << zip_error_strerror(&ziperr) << std::endl;
-        zip_error_fini(&ziperr);
-        std::cerr << "Error opening " << zipPath << ": " << zip_error_strerror(&ziperr) << std::endl;
-        return cards;
-    }
+void SolitaireGame::initializeGame() {
+    // Initialize deck and shuffle
+    deck_ = cardlib::Deck();
+    deck_.shuffle();
 
-    zip_int64_t num_entries = zip_get_num_entries(archive, 0);
-    if (num_entries <= 0) {
-        std::cerr << "No files found in " << zipPath << std::endl;
-        zip_close(archive);
-        return cards;
+    // Clear all piles
+    stock_.clear();
+    waste_.clear();
+    foundation_.clear();
+    tableau_.clear();
+
+    // Initialize foundation piles (4 empty piles for aces)
+    foundation_.resize(4);
+
+    // Initialize tableau (7 piles)
+    tableau_.resize(7);
+
+    // Deal cards
+    deal();
+}
+
+bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
+    if (pile_index < 0) return false;
+    
+    // Can drag from waste pile only top card
+    if (pile_index == 1) {
+        return !waste_.empty() && static_cast<size_t>(card_index) == waste_.size() - 1;
     }
     
-    for (zip_int64_t i = 0; i < num_entries; i++) {
-        const char* name = zip_get_name(archive, i, 0);
-        if (!name) continue;
-        
-        if (strstr(name, ".png") != nullptr) {
-            zip_file* file = zip_fopen(archive, name, 0);
-            if (!file) continue;
-            
-            std::vector<unsigned char> buffer;
-            const size_t chunk_size = 4096;
-            unsigned char chunk[chunk_size];
-            zip_int64_t bytesRead;
-            
-            while ((bytesRead = zip_fread(file, chunk, chunk_size)) > 0) {
-                buffer.insert(buffer.end(), chunk, chunk + bytesRead);
-            }
-            
-            zip_fclose(file);
-            
-            if (!buffer.empty()) {
-                CardImage card;
-                card.filename = name;
-                card.data = std::move(buffer);
-                card.card_info = parse_filename(name);
-                cards.push_back(std::move(card));
+    // Can drag from foundation only top card
+    if (pile_index >= 2 && pile_index <= 5) {
+        const auto& pile = foundation_[pile_index - 2];
+        return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
+    }
+    
+    // Can drag from tableau if cards are face up
+    if (pile_index >= 6 && pile_index <= 12) {
+        const auto& pile = tableau_[pile_index - 6];
+        return !pile.empty() && card_index >= 0 && 
+               static_cast<size_t>(card_index) < pile.size();
+    }
+    
+    return false;
+}
+
+std::vector<cardlib::Card>& SolitaireGame::getPileReference(int pile_index) {
+    if (pile_index == 0) return stock_;
+    if (pile_index == 1) return waste_;
+    if (pile_index >= 2 && pile_index <= 5) return foundation_[pile_index - 2];
+    if (pile_index >= 6 && pile_index <= 12) return tableau_[pile_index - 6];
+    throw std::out_of_range("Invalid pile index");
+}
+
+void SolitaireGame::deal() {
+    // Deal to tableau
+    for (int i = 0; i < 7; i++) {
+        for (int j = i; j < 7; j++) {
+            if (auto card = deck_.drawCard()) {
+                tableau_[j].push_back(*card);
             }
         }
     }
-    
-    zip_close(archive);
-    
-    std::sort(cards.begin(), cards.end(),
-              [](const CardImage& a, const CardImage& b) {
-                  if (!a.card_info || !b.card_info) {
-                      return a.filename < b.filename;
-                  }
-                  
-                  const Card& card_a = *a.card_info;
-                  const Card& card_b = *b.card_info;
-                  
-                  if (card_a.rank != card_b.rank) {
-                      return static_cast<int>(card_a.rank) < static_cast<int>(card_b.rank);
-                  }
-                  if (card_a.suit != card_b.suit) {
-                      return static_cast<int>(card_a.suit) < static_cast<int>(card_b.suit);
-                  }
-                  return card_a.is_alternate_art < card_b.is_alternate_art;
-              });
-    
-    return cards;
+
+    // Move remaining cards to stock
+    while (auto card = deck_.drawCard()) {
+        stock_.push_back(*card);
+    }
 }
 
-struct AppData {
-    std::string zip_path;
-    AppData(const std::string& path) : zip_path(path) {}
-};
-
-static void show_error_and_quit(GtkWindow* parent, const char* message) {
-    GtkWidget* dialog = create_error_dialog(message);
-    gtk_window_set_transient_for(GTK_WINDOW(dialog), parent);
-    g_signal_connect_swapped(dialog, "response",
-                           G_CALLBACK(gtk_widget_destroy), dialog);
-    gtk_widget_show_all(dialog);
+void SolitaireGame::setupWindow() {
+    window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
+    gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
+    g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit), NULL);
 }
 
-static GtkWidget* create_card_widget(const CardImage& card) {
-    GError* error = NULL;
-    GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
-    if (!loader) {
-        return NULL;
-    }
+void SolitaireGame::setupGameArea() {
+    game_area_ = gtk_drawing_area_new();
+    gtk_container_add(GTK_CONTAINER(window_), game_area_);
 
-    gboolean write_success = FALSE;
-    write_success = gdk_pixbuf_loader_write(loader, card.data.data(), card.data.size(), &error);
+    // Enable mouse event handling
+    gtk_widget_add_events(game_area_, 
+        GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK);
+
+    // Connect signals
+    g_signal_connect(G_OBJECT(game_area_), "draw", 
+        G_CALLBACK(onDraw), this);
+    g_signal_connect(G_OBJECT(game_area_), "button-press-event", 
+        G_CALLBACK(onButtonPress), this);
+    g_signal_connect(G_OBJECT(game_area_), "button-release-event", 
+        G_CALLBACK(onButtonRelease), this);
+    g_signal_connect(G_OBJECT(game_area_), "motion-notify-event", 
+        G_CALLBACK(onMotionNotify), this);
+
+    gtk_widget_show_all(window_);
+}
+
+GtkWidget* SolitaireGame::createCardWidget(const cardlib::Card& card, bool face_up) {
+    if (face_up) {
+        if (auto img = deck_.getCardImage(card)) {
+            // Create pixbuf from card image data
+            GError* error = NULL;
+            GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+            gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error);
+            gdk_pixbuf_loader_close(loader, &error);
+            
+            GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+            GdkPixbuf* scaled = gdk_pixbuf_scale_simple(pixbuf, CARD_WIDTH, CARD_HEIGHT, 
+                GDK_INTERP_BILINEAR);
+            
+            GtkWidget* image = gtk_image_new_from_pixbuf(scaled);
+            g_object_unref(scaled);
+            g_object_unref(loader);
+            
+            return image;
+        }
+    }
     
-    if (!write_success) {
-        if (error) {
-            std::cerr << "Error loading image: " << error->message << std::endl;
-            g_error_free(error);
-        }
-        g_object_unref(loader);
-        return NULL;
-    }
-
-    if (!gdk_pixbuf_loader_close(loader, &error)) {
-        if (error) {
-            std::cerr << "Error closing loader: " << error->message << std::endl;
-            g_error_free(error);
-        }
-        g_object_unref(loader);
-        return NULL;
-    }
-
-    GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-    if (!pixbuf) {
-        g_object_unref(loader);
-        return NULL;
-    }
-
-    GdkPixbuf* scaled = gdk_pixbuf_scale_simple(pixbuf, 150, 218, GDK_INTERP_BILINEAR);
-    g_object_unref(loader);
-
-    if (!scaled) {
-        return NULL;
-    }
-
-    GtkWidget* image = gtk_image_new_from_pixbuf(scaled);
-    g_object_unref(scaled);
-
-    if (!image) {
-        return NULL;
-    }
-
-    std::string label = card.card_info ? card.card_info->toString() : card.filename;
-    GtkWidget* frame = gtk_frame_new(label.c_str());
-    if (!frame) {
-        gtk_widget_destroy(image);
-        return NULL;
-    }
-
-    gtk_container_add(GTK_CONTAINER(frame), image);
+    // Create card back or placeholder
+    GtkWidget* frame = gtk_frame_new(NULL);
+    gtk_widget_set_size_request(frame, CARD_WIDTH, CARD_HEIGHT);
+    gtk_frame_set_shadow_type(GTK_FRAME(frame), GTK_SHADOW_ETCHED_OUT);
     return frame;
 }
 
-static void activate(GtkApplication* app, gpointer user_data) {
-    AppData* app_data = static_cast<AppData*>(user_data);
+gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
     
-    GtkWidget* window = gtk_application_window_new(app);
-    gtk_window_set_title(GTK_WINDOW(window), 
-                        ("Card Deck Viewer - " + app_data->zip_path).c_str());
-    gtk_window_set_default_size(GTK_WINDOW(window), 1200, 800);
+    // Clear background
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(widget, &allocation);
+    cairo_set_source_rgb(cr, 0.0, 0.5, 0.0);  // Green table
+    cairo_rectangle(cr, 0, 0, allocation.width, allocation.height);
+    cairo_fill(cr);
 
-    std::vector<CardImage> cards = load_cards_from_zip(app_data->zip_path.c_str());
-    
-    if (cards.empty()) {
-        show_error_and_quit(GTK_WINDOW(window), 
-                          "No card images found in the ZIP file.");
-        return;
+    // Draw stock pile
+    int x = CARD_SPACING;
+    int y = CARD_SPACING;
+    if (!game->stock_.empty()) {
+        cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+        cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+        cairo_stroke(cr);
     }
 
-    GtkWidget* scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_container_add(GTK_CONTAINER(window), scroll);
-    
-    GtkWidget* grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_container_add(GTK_CONTAINER(scroll), grid);
+    // Draw waste pile
+    x += CARD_WIDTH + CARD_SPACING;
+    if (!game->waste_.empty()) {
+        const auto& top_card = game->waste_.back();
+        // Draw face-up card
+        if (auto img = game->deck_.getCardImage(top_card)) {
+            // Implementation of drawing card image
+            cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+            cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+            cairo_fill(cr);
+        }
+    }
 
-    const int COLS = 7;
-    int row = 0, col = 0;
+    // Draw foundation piles
+    x = 3 * (CARD_WIDTH + CARD_SPACING);
+    for (const auto& pile : game->foundation_) {
+        cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+        cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+        cairo_stroke(cr);
+        
+        if (!pile.empty()) {
+            const auto& top_card = pile.back();
+            if (auto img = game->deck_.getCardImage(top_card)) {
+                // Implementation of drawing card image
+                cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+                cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+                cairo_fill(cr);
+            }
+        }
+        x += CARD_WIDTH + CARD_SPACING;
+    }
+
+    // Draw tableau piles
+    y = CARD_SPACING + CARD_HEIGHT + VERT_SPACING;
+    for (size_t i = 0; i < game->tableau_.size(); i++) {
+        x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
+        const auto& pile = game->tableau_[i];
+        
+        for (size_t j = 0; j < pile.size(); j++) {
+            const auto& card = pile[j];
+            bool face_up = true;  // TODO: Implement face-up logic
+            if (face_up) {
+                if (auto img = game->deck_.getCardImage(card)) {
+                    // Implementation of drawing card image
+                    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+                    cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+                    cairo_fill(cr);
+                }
+            } else {
+                cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+                cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+                cairo_stroke(cr);
+            }
+            y += VERT_SPACING;
+        }
+    }
+
+    return TRUE;
+}
+
+gboolean SolitaireGame::onButtonPress(GtkWidget* widget, GdkEventButton* event, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
     
-    for (const auto& card : cards) {
-        GtkWidget* card_widget = create_card_widget(card);
-        if (card_widget) {
-            gtk_grid_attach(GTK_GRID(grid), card_widget, col, row, 1, 1);
+    if (event->button == 1) {  // Left click
+        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+        
+        if (pile_index >= 0) {
+            game->dragging_ = true;
+            game->drag_source_pile_ = pile_index;
+            game->drag_start_x_ = event->x;
+            game->drag_start_y_ = event->y;
             
-            col++;
-            if (col >= COLS) {
-                col = 0;
-                row++;
+            auto& source_pile = game->getPileReference(pile_index);
+            if (card_index >= 0 && static_cast<size_t>(card_index) < source_pile.size()) {
+                game->drag_cards_.assign(
+                    source_pile.begin() + card_index,
+                    source_pile.end()
+                );
+            }
+        }
+    }
+    
+    return TRUE;
+}
+
+gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
+    
+    if (event->button == 1 && game->dragging_) {
+        auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
+        
+        if (target_pile >= 0) {
+            auto& target = game->getPileReference(target_pile);
+            
+            if (game->canMoveToPile(game->drag_cards_, target)) {
+                auto& source = game->getPileReference(game->drag_source_pile_);
+                source.erase(
+                    source.end() - game->drag_cards_.size(),
+                    source.end()
+                );
+                
+                target.insert(
+                    target.end(),
+                    game->drag_cards_.begin(),
+                    game->drag_cards_.end()
+                );
+            }
+        }
+        
+        game->dragging_ = false;
+        game->drag_cards_.clear();
+        game->drag_source_pile_ = -1;
+        
+        gtk_widget_queue_draw(game->game_area_);
+        
+        if (game->checkWinCondition()) {
+            GtkWidget* dialog = gtk_message_dialog_new(
+                GTK_WINDOW(game->window_),
+                GTK_DIALOG_DESTROY_WITH_PARENT,
+                GTK_MESSAGE_INFO,
+                GTK_BUTTONS_OK,
+                "Congratulations! You've won!"
+            );
+            gtk_dialog_run(GTK_DIALOG(dialog));
+            gtk_widget_destroy(dialog);
+            
+            game->initializeGame();
+            gtk_widget_queue_draw(game->game_area_);
+        }
+    }
+    
+    return TRUE;
+}
+
+gboolean SolitaireGame::onMotionNotify(GtkWidget* widget, GdkEventMotion* event, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
+    
+    if (game->dragging_) {
+        gtk_widget_queue_draw(game->game_area_);
+    }
+    
+    return TRUE;
+}
+
+std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
+    // Check stock pile
+    if (x >= CARD_SPACING && x <= CARD_SPACING + CARD_WIDTH &&
+        y >= CARD_SPACING && y <= CARD_SPACING + CARD_HEIGHT) {
+        return {0, stock_.empty() ? -1 : 0};
+    }
+
+    // Check waste pile
+    if (x >= 2 * CARD_SPACING + CARD_WIDTH && 
+        x <= 2 * CARD_SPACING + 2 * CARD_WIDTH &&
+        y >= CARD_SPACING && y <= CARD_SPACING + CARD_HEIGHT) {
+        return {1, waste_.empty() ? -1 : 0};
+    }
+
+    // Check foundation piles
+    int foundation_x = 3 * (CARD_WIDTH + CARD_SPACING);
+    for (int i = 0; i < 4; i++) {
+        if (x >= foundation_x && x <= foundation_x + CARD_WIDTH &&
+            y >= CARD_SPACING && y <= CARD_SPACING + CARD_HEIGHT) {
+            return {2 + i, foundation_[i].empty() ? -1 : static_cast<int>(foundation_[i].size() - 1)};
+        }
+        foundation_x += CARD_WIDTH + CARD_SPACING;
+    }
+
+    // Check tableau piles
+    int tableau_y = CARD_SPACING + CARD_HEIGHT + VERT_SPACING;
+    for (int i = 0; i < 7; i++) {
+        int pile_x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
+        if (x >= pile_x && x <= pile_x + CARD_WIDTH) {
+            const auto& pile = tableau_[i];
+            for (int j = 0; j < static_cast<int>(pile.size()); j++) {
+                int card_y = tableau_y + j * VERT_SPACING;
+                if (y >= card_y && y <= card_y + CARD_HEIGHT) {
+                    return {6 + i, j};
+                }
+            }
+            if (pile.empty() && y >= tableau_y && y <= tableau_y + CARD_HEIGHT) {
+                return {6 + i, -1};
             }
         }
     }
 
-    gtk_widget_show_all(window);
+    return {-1, -1};
+}
+
+bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card>& cards, 
+                                 const std::vector<cardlib::Card>& target) const {
+    if (cards.empty()) return false;
+
+    // Moving to foundation pile
+    if (target.empty()) {
+        return cards[0].rank == cardlib::Rank::ACE;
+    }
+
+    const auto& target_card = target.back();
+    const auto& moving_card = cards[0];
+
+    // Moving to tableau pile
+    bool opposite_color = (
+        (target_card.suit == cardlib::Suit::HEARTS || 
+         target_card.suit == cardlib::Suit::DIAMONDS) !=
+        (moving_card.suit == cardlib::Suit::HEARTS || 
+         moving_card.suit == cardlib::Suit::DIAMONDS)
+    );
+
+    bool lower_rank = static_cast<int>(moving_card.rank) == 
+                     static_cast<int>(target_card.rank) - 1;
+
+    return opposite_color && lower_rank;
+}
+
+bool SolitaireGame::canMoveToFoundation(const cardlib::Card& card, int foundation_index) const {
+    const auto& pile = foundation_[foundation_index];
+    
+    if (pile.empty()) {
+        return card.rank == cardlib::Rank::ACE;
+    }
+    
+    const auto& top_card = pile.back();
+    return card.suit == top_card.suit && 
+           static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1;
+}
+
+void SolitaireGame::moveCards(std::vector<cardlib::Card>& from, 
+                            std::vector<cardlib::Card>& to, 
+                            size_t count) {
+    if (count > from.size()) return;
+    
+    to.insert(to.end(), 
+             from.end() - count,
+             from.end());
+    
+    from.erase(from.end() - count, from.end());
+}
+
+bool SolitaireGame::checkWinCondition() const {
+    // Check if all foundation piles have 13 cards
+    for (const auto& pile : foundation_) {
+        if (pile.size() != 13) return false;
+    }
+    
+    // Check if all other piles are empty
+    return stock_.empty() && waste_.empty() && 
+           std::all_of(tableau_.begin(), tableau_.end(), 
+                      [](const auto& pile) { return pile.empty(); });
+}
+
+// Function to refresh the display
+void SolitaireGame::refreshDisplay() {
+    if (game_area_) {
+        gtk_widget_queue_draw(game_area_);
+    }
 }
 
 int main(int argc, char** argv) {
-    std::string zip_path;
-    
-    if (argc > 1) {
-        zip_path = argv[1];
-    } else {
-        zip_path = find_cards_zip();
-        if (zip_path.empty()) {
-            std::cerr << "Error: Could not find cards.zip in current or parent directory.\n"
-                     << "Please provide the path to the ZIP file as an argument." << std::endl;
-            return 1;
-        }
-    }
-
-    AppData app_data(zip_path);
-    
-    GtkApplication* app = gtk_application_new("org.example.cardviewer",
-                                            G_APPLICATION_DEFAULT_FLAGS);
-    g_signal_connect(app, "activate", G_CALLBACK(activate), &app_data);
-    
-    int status = g_application_run(G_APPLICATION(app), argc, argv);
-    g_object_unref(app);
-    
-    return status;
+    SolitaireGame game;
+    game.run(argc, argv);
+    return 0;
 }
