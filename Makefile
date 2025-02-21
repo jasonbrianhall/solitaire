@@ -55,17 +55,17 @@ $(BUILD_DIR_WIN)/%.win.o: %.cpp
 
 # DLL collection
 .PHONY: collect-dlls
-src/collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN)
+collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN)
 	@echo "Collecting DLLs..."
-	@./src/collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
+	@build/windows/collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
 
 # Clean targets
 .PHONY: clean
 clean:
-	rm -rf $(BUILD_DIR)
-	rm *.o
-	rm *.exe
-	rm minesweeper
+	find build -type f -name "*.o" | xargs -I xxx rm xxx
+	find build -type f -name "*.dll" | xargs -I xxx rm xxx
+	find build -type f -name "*.exe" | xargs -I xxx rm xxx
+	rm build/linux/minesweeper -f
 
 # Help target
 .PHONY: help
