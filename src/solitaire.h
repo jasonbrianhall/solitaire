@@ -28,6 +28,7 @@ private:
     std::vector<cardlib::Card> waste_;          // Faced-up cards from stock
     std::vector<std::vector<cardlib::Card>> foundation_; // 4 piles for aces
     std::vector<std::vector<TableauCard>> tableau_;
+    void drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage* img) const;
     void flipTopTableauCard(int);
     // Drag and drop state
     bool dragging_;

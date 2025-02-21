@@ -134,17 +134,27 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage
         return;
     }
 
-    // Get the pixbuf
-    GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-    if (pixbuf) {
-        // Set up the cairo context and paint
-        gdk_cairo_set_source_pixbuf(cr, pixbuf, x, y);
-        cairo_paint(cr);
-        // We don't unref pixbuf - it's owned by the loader
+    // Get the pixbuf and scale it
+    GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+    if (original_pixbuf) {
+        // Scale the pixbuf to our desired card size
+        GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
+            original_pixbuf,
+            CARD_WIDTH,
+            CARD_HEIGHT,
+            GDK_INTERP_BILINEAR
+        );
+
+        if (scaled_pixbuf) {
+            // Draw the scaled pixbuf
+            gdk_cairo_set_source_pixbuf(cr, scaled_pixbuf, x, y);
+            cairo_paint(cr);
+            g_object_unref(scaled_pixbuf);
+        }
     }
 
     // Clean up
-    g_object_unref(loader);  // This will also free the pixbuf
+    g_object_unref(loader);  // This will also free the original pixbuf
 }
 
 void SolitaireGame::deal() {
