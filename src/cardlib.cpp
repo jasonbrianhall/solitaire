@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <sstream>
+#include <cstring>
 
 namespace cardlib {
 
@@ -142,7 +143,7 @@ void Deck::loadCardsFromZip(const std::string& zip_path) {
     
     for (zip_int64_t i = 0; i < num_entries; i++) {
         const char* name = zip_get_name(archive, i, 0);
-        if (!name || strstr(name, ".png") == nullptr) continue;
+        if (!name || std::strstr(name, ".png") == nullptr) continue;
         
         zip_file* file = zip_fopen(archive, name, 0);
         if (!file) continue;
@@ -284,4 +285,23 @@ std::optional<Card> parseCardString(const std::string& card_str) {
     else if (rank_str == "4") card.rank = Rank::FOUR;
     else if (rank_str == "5") card.rank = Rank::FIVE;
     else if (rank_str == "6") card.rank = Rank::SIX;
-    else if (rank_str
+    else if (rank_str == "7") card.rank = Rank::SEVEN;
+    else if (rank_str == "8") card.rank = Rank::EIGHT;
+    else if (rank_str == "9") card.rank = Rank::NINE;
+    else if (rank_str == "10") card.rank = Rank::TEN;
+    else if (rank_str == "Jack") card.rank = Rank::JACK;
+    else if (rank_str == "Queen") card.rank = Rank::QUEEN;
+    else if (rank_str == "King") card.rank = Rank::KING;
+    else return std::nullopt;
+
+    // Parse suit
+    if (suit_str == "Clubs") card.suit = Suit::CLUBS;
+    else if (suit_str == "Diamonds") card.suit = Suit::DIAMONDS;
+    else if (suit_str == "Hearts") card.suit = Suit::HEARTS;
+    else if (suit_str == "Spades") card.suit = Suit::SPADES;
+    else return std::nullopt;
+
+    return card;
+}
+
+} // namespace cardlib
