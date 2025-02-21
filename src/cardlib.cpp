@@ -139,6 +139,7 @@ void Deck::loadCardsFromZip(const std::string& zip_path) {
     }
     
     card_images_.clear();
+    card_back_image_ = std::nullopt; // Reset card back image
     zip_int64_t num_entries = zip_get_num_entries(archive, 0);
     
     for (zip_int64_t i = 0; i < num_entries; i++) {
@@ -160,11 +161,20 @@ void Deck::loadCardsFromZip(const std::string& zip_path) {
         zip_fclose(file);
         
         if (!buffer.empty()) {
-            CardImage card_img;
-            card_img.filename = name;
-            card_img.data = std::move(buffer);
-            card_img.card_info = parseFilename(name);
-            card_images_.push_back(std::move(card_img));
+            // Check if this is the card back image
+            if (std::string(name) == "back.png") {
+                CardImage back_img;
+                back_img.filename = name;
+                back_img.data = std::move(buffer);
+                back_img.card_info = std::nullopt;
+                card_back_image_ = std::move(back_img);
+            } else {
+                CardImage card_img;
+                card_img.filename = name;
+                card_img.data = std::move(buffer);
+                card_img.card_info = parseFilename(name);
+                card_images_.push_back(std::move(card_img));
+            }
         }
     }
     
@@ -302,6 +312,10 @@ std::optional<Card> parseCardString(const std::string& card_str) {
     else return std::nullopt;
 
     return card;
+}
+
+std::optional<CardImage> Deck::getCardBackImage() const {
+    return card_back_image_;
 }
 
 } // namespace cardlib

@@ -64,11 +64,12 @@ public:
     bool isEmpty() const;
     size_t size() const;
     void reset(); // Resets to initial state
-    
     // Card access
     std::vector<Card> getAllCards() const;
     std::optional<Card> peekTopCard() const;
     std::optional<Card> peekBottomCard() const;
+    std::optional<CardImage> getCardBackImage() const;
+
     
     // Image operations
     std::optional<CardImage> getCardImage(const Card& card) const;
@@ -80,6 +81,7 @@ public:
 private:
     std::vector<Card> cards_;
     std::vector<CardImage> card_images_;
+    std::optional<CardImage> card_back_image_;
     bool include_jokers_;
     bool use_alternate_art_;
     
