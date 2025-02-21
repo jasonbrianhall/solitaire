@@ -11,7 +11,7 @@ LDFLAGS_LINUX = $(shell pkg-config --libs gtk+-3.0) -lzip
 LDFLAGS_WIN = $(shell mingw64-pkg-config --libs gtk+-3.0) -lstdc++ -lzip
 
 # Source files and targets
-SRCS = src/solitaire.cpp
+SRCS = src/solitaire.cpp src/cardlib.cpp
 OBJS_LINUX = $(SRCS:.cpp=.o)
 OBJS_WIN = $(SRCS:.cpp=.win.o)
 TARGET_LINUX = solitaire
