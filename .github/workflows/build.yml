@@ -21,13 +21,11 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        dnf -y update
         dnf -y install mingw64-gcc mingw64-gcc-c++ mingw64-gtk3 mingw64-gtkmm30 wine wine-devel wixl binutils make zip unzip
 
     - name: Build GTK Version
-      working-directory: build/windows/src
       run: |
-        make -f Makefile.mingw
+        make windows
 
     - name: Copy Resources and Collect DLLs
       working-directory: build/windows
