@@ -69,7 +69,7 @@ jobs:
                     <File Id="MainEXE" Name="solitaire.exe" Source="src/solitaire.exe" KeyPath="yes"/>
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
                     <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
-EOL
+        EOL
 
         # Add the generated DLL entries
         echo "$DLL_ENTRIES" >> installer.wxs
