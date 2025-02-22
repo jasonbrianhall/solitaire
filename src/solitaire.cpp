@@ -420,7 +420,7 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
         if (target_pile >= 0) {
             bool move_successful = false;
             
-            // Handle dropping on tableau piles
+            // Handle dropping on tableau piles (index 6-12)
             if (target_pile >= 6 && target_pile <= 12) {
                 auto& tableau_pile = game->tableau_[target_pile - 6];
                 if (game->canMoveToPile(game->drag_cards_, 
@@ -447,24 +447,30 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
                     }
                     move_successful = true;
                 }
-            } else {
-                // Handle dropping on non-tableau piles
-                auto& target = game->getPileReference(target_pile);
-                if (game->canMoveToPile(game->drag_cards_, target)) {
-                    if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-                        auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
-                        source_tableau.erase(source_tableau.end() - game->drag_cards_.size(), source_tableau.end());
-                        
-                        // Flip over the new top card if there is one
-                        if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                            source_tableau.back().face_up = true;
+            }
+            // Handle dropping on foundation piles (index 2-5)
+            else if (target_pile >= 2 && target_pile <= 5) {
+                if (game->drag_cards_.size() == 1) {  // Only allow single cards
+                    auto& foundation_pile = game->foundation_[target_pile - 2];
+                    if (game->canMoveToPile(game->drag_cards_, foundation_pile)) {
+                        // Remove card from source
+                        if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
+                            auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
+                            source_tableau.pop_back();  // Remove single card
+                            
+                            // Flip over the new top card if there is one
+                            if (!source_tableau.empty() && !source_tableau.back().face_up) {
+                                source_tableau.back().face_up = true;
+                            }
+                        } else {
+                            auto& source = game->getPileReference(game->drag_source_pile_);
+                            source.pop_back();
                         }
-                    } else {
-                        auto& source = game->getPileReference(game->drag_source_pile_);
-                        source.erase(source.end() - game->drag_cards_.size(), source.end());
+
+                        // Add to foundation
+                        foundation_pile.push_back(game->drag_cards_[0]);
+                        move_successful = true;
                     }
-                    target.insert(target.end(), game->drag_cards_.begin(), game->drag_cards_.end());
-                    move_successful = true;
                 }
             }
 
@@ -488,7 +494,6 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
 
     return TRUE;
 }
-
 void SolitaireGame::handleStockPileClick() {
     if (stock_.empty()) {
         // If stock is empty, move all waste cards back to stock in reverse order
@@ -519,50 +524,53 @@ gboolean SolitaireGame::onMotionNotify(GtkWidget* widget, GdkEventMotion* event,
 }
 
 std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
-  // Check stock pile
-  if (x >= CARD_SPACING && x <= CARD_SPACING + CARD_WIDTH &&
-      y >= CARD_SPACING && y <= CARD_SPACING + CARD_HEIGHT) {
-    return {0, stock_.empty() ? -1 : 0};
-  }
-
-  // Check waste pile
-  if (x >= 2 * CARD_SPACING + CARD_WIDTH &&
-      x <= 2 * CARD_SPACING + 2 * CARD_WIDTH && y >= CARD_SPACING &&
-      y <= CARD_SPACING + CARD_HEIGHT) {
-    return {1, waste_.empty() ? -1 : 0};
-  }
-
-  // Check foundation piles
-  int foundation_x = 3 * (CARD_WIDTH + CARD_SPACING);
-  for (int i = 0; i < 4; i++) {
-    if (x >= foundation_x && x <= foundation_x + CARD_WIDTH &&
+    // Check stock pile
+    if (x >= CARD_SPACING && x <= CARD_SPACING + CARD_WIDTH &&
         y >= CARD_SPACING && y <= CARD_SPACING + CARD_HEIGHT) {
-      return {2 + i, foundation_[i].empty()
-                         ? -1
-                         : static_cast<int>(foundation_[i].size() - 1)};
+        return {0, stock_.empty() ? -1 : 0};
     }
-    foundation_x += CARD_WIDTH + CARD_SPACING;
-  }
 
-  // Check tableau piles
-  int tableau_y = CARD_SPACING + CARD_HEIGHT + VERT_SPACING;
-  for (int i = 0; i < 7; i++) {
-    int pile_x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
-    if (x >= pile_x && x <= pile_x + CARD_WIDTH) {
-      const auto &pile = tableau_[i];
-      for (int j = 0; j < static_cast<int>(pile.size()); j++) {
-        int card_y = tableau_y + j * VERT_SPACING;
-        if (y >= card_y && y <= card_y + CARD_HEIGHT) {
-          return {6 + i, j};
+    // Check waste pile
+    if (x >= 2 * CARD_SPACING + CARD_WIDTH &&
+        x <= 2 * CARD_SPACING + 2 * CARD_WIDTH && y >= CARD_SPACING &&
+        y <= CARD_SPACING + CARD_HEIGHT) {
+        return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
+    }
+
+    // Check foundation piles
+    int foundation_x = 3 * (CARD_WIDTH + CARD_SPACING);
+    for (int i = 0; i < 4; i++) {
+        if (x >= foundation_x && x <= foundation_x + CARD_WIDTH &&
+            y >= CARD_SPACING && y <= CARD_SPACING + CARD_HEIGHT) {
+            return {2 + i, foundation_[i].empty() ? -1 : static_cast<int>(foundation_[i].size() - 1)};
         }
-      }
-      if (pile.empty() && y >= tableau_y && y <= tableau_y + CARD_HEIGHT) {
-        return {6 + i, -1};
-      }
+        foundation_x += CARD_WIDTH + CARD_SPACING;
     }
-  }
 
-  return {-1, -1};
+    // Check tableau piles - check from top card down
+    int tableau_y = CARD_SPACING + CARD_HEIGHT + VERT_SPACING;
+    for (int i = 0; i < 7; i++) {
+        int pile_x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
+        if (x >= pile_x && x <= pile_x + CARD_WIDTH) {
+            const auto& pile = tableau_[i];
+            if (pile.empty() && y >= tableau_y && y <= tableau_y + CARD_HEIGHT) {
+                return {6 + i, -1};
+            }
+            
+            // Check cards from top to bottom
+            for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
+                int card_y = tableau_y + j * VERT_SPACING;
+                if (y >= card_y && y <= card_y + CARD_HEIGHT) {
+                    if (pile[j].face_up) {
+                        return {6 + i, j};
+                    }
+                    break;  // Hit a face-down card, stop checking
+                }
+            }
+        }
+    }
+
+    return {-1, -1};
 }
 
 bool SolitaireGame::canMoveToPile(
