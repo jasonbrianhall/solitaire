@@ -1,0 +1,196 @@
+name: Build Solitaire
+
+on:
+  push:
+    branches: [ dev, main ]
+  pull_request:
+    branches: [ dev ]
+
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.3.1
+      
+    - name: Setup Developer Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Build C++ Executable
+      working-directory: build/windows/src
+      run: |
+        msbuild /p:Configuration=Release /p:Platform=x64 solitaire.vcxproj
+
+    - name: Copy Resources and Collect DLLs
+      run: |
+        Copy-Item "cards/cards.zip" -Destination "build/windows/"
+        Copy-Item "icon.ico" -Destination "build/windows/"
+        # Setup MSYS2 environment for running collect_dlls.sh
+        choco install -y msys2
+        $env:Path = "C:\tools\msys64\usr\bin;$env:Path"
+        cd build/windows
+        bash collect_dlls.sh
+
+    - name: Install WiX Toolset
+      run: |
+        mkdir wix
+        cd wix
+        Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix311-binaries.zip"
+        Expand-Archive wix311-binaries.zip -DestinationPath .
+        echo "$pwd" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+    - name: Generate DLL Includes
+      working-directory: build/windows
+      run: |
+        # Generate WiX include file for DLLs
+        echo '<?xml version="1.0" encoding="utf-8"?>' > dlls.wxi
+        echo '<Include>' >> dlls.wxi
+        Get-ChildItem *.dll | ForEach-Object {
+          $id = $_.Name -replace '[^a-zA-Z0-9]', ''
+          echo "<File Id=`"$id`" Name=`"$($_.Name)`" Source=`"$($_.Name)`"/>" >> dlls.wxi
+        }
+        echo '</Include>' >> dlls.wxi
+
+    - name: Create MSI Installer
+      working-directory: build/windows
+      run: |
+        echo '<?xml version="1.0" encoding="UTF-8"?>
+        <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+          <Product Id="*" Name="Solitaire" Language="1033" Version="1.0.0" Manufacturer="Your Name" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801">
+            <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+            <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+            <MediaTemplate EmbedCab="yes" />
+            <Directory Id="TARGETDIR" Name="SourceDir">
+              <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLFOLDER" Name="Solitaire">
+                  <Component Id="MainExecutable" Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23">
+                    <File Id="MainEXE" Name="solitaire.exe" Source="src/x64/Release/solitaire.exe" KeyPath="yes"/>
+                    <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
+                    <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
+                    <File Id="README" Name="README.md" Source="../../README.md"/>
+                    <File Id="LICENSE" Name="LICENSE.md" Source="../../LICENSE.md"/>
+                    <!-- Auto-generated DLL entries will be inserted here -->
+                    <?include dlls.wxi ?>
+                  </Component>
+                </Directory>
+              </Directory>
+              <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="Solitaire">
+                  <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
+                    <Shortcut Id="ApplicationStartMenu" 
+                             Name="Solitaire" 
+                             Target="[INSTALLFOLDER]solitaire.exe" 
+                             WorkingDirectory="INSTALLFOLDER"
+                             Icon="SolitaireIcon"/>
+                    <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
+                    <RegistryValue Root="HKCU" Key="Software\Solitaire" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                  </Component>
+                </Directory>
+              </Directory>
+            </Directory>
+            <Feature Id="ProductFeature" Title="Solitaire" Level="1">
+              <ComponentRef Id="MainExecutable" />
+              <ComponentRef Id="ApplicationShortcuts" />
+            </Feature>
+            <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
+          </Product>
+        </Wix>' > installer.wxs
+
+        candle installer.wxs
+        light installer.wixobj -out Solitaire.msi
+
+    - name: Upload Windows Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-artifacts
+        path: |
+          build/windows/Solitaire.msi
+          build/windows/src/x64/Release/solitaire.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential g++ libgtk-3-dev
+
+    - name: Build Linux Version
+      working-directory: build/linux/src
+      run: |
+        make
+
+    - name: Copy Resources
+      run: |
+        cp cards/cards.zip build/linux/
+        cp icon.ico build/linux/
+
+    - name: Create Linux Archive
+      working-directory: build/linux
+      run: |
+        tar czf ../../Solitaire-Linux.tar.gz *
+
+    - name: Upload Linux Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-artifacts
+        path: Solitaire-Linux.tar.gz
+
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Download Windows Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-artifacts
+        path: windows-artifacts
+
+    - name: Download Linux Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-artifacts
+        path: linux-artifacts
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          windows-artifacts/Solitaire.msi
+          windows-artifacts/solitaire.exe
+          linux-artifacts/Solitaire-Linux.tar.gz
+        tag_name: ${{ github.ref == 'refs/heads/main' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}
+        name: ${{ github.ref == 'refs/heads/main' && format('Release {0}', github.run_number) || format('Dev Build {0}', github.run_number) }}
+        draft: false
+        prerelease: ${{ github.ref != 'refs/heads/main' }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        body: |
+          ${{ github.ref == 'refs/heads/main' && 'Release build' || 'Development build' }}
+          Commit: ${{ github.sha }}
+          Build number: ${{ github.run_number }}
+          
+          This release includes both Windows and Linux versions:
+          - Windows installer (Solitaire.msi)
+          - Windows portable (solitaire.exe)
+          - Linux version (Solitaire-Linux.tar.gz)
+
+    - name: Output Release URL
+      if: success()
+      run: |
+        echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref == 'refs/heads/main' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}"
