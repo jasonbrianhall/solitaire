@@ -66,29 +66,31 @@ void SolitaireGame::initializeGame() {
 }
 
 bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
-  if (pile_index < 0)
+    if (pile_index < 0)
+        return false;
+
+    // Can drag from waste pile only top card
+    if (pile_index == 1) {
+        return !waste_.empty() &&
+               static_cast<size_t>(card_index) == waste_.size() - 1;
+    }
+
+    // Can drag from foundation only top card
+    if (pile_index >= 2 && pile_index <= 5) {
+        const auto& pile = foundation_[pile_index - 2];
+        return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
+    }
+
+    // Can drag from tableau if cards are face up
+    if (pile_index >= 6 && pile_index <= 12) {
+        const auto& pile = tableau_[pile_index - 6];
+        return !pile.empty() && 
+               card_index >= 0 &&
+               static_cast<size_t>(card_index) < pile.size() &&
+               pile[card_index].face_up;  // Make sure card is face up
+    }
+
     return false;
-
-  // Can drag from waste pile only top card
-  if (pile_index == 1) {
-    return !waste_.empty() &&
-           static_cast<size_t>(card_index) == waste_.size() - 1;
-  }
-
-  // Can drag from foundation only top card
-  if (pile_index >= 2 && pile_index <= 5) {
-    const auto &pile = foundation_[pile_index - 2];
-    return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
-  }
-
-  // Can drag from tableau if cards are face up
-  if (pile_index >= 6 && pile_index <= 12) {
-    const auto &pile = tableau_[pile_index - 6];
-    return !pile.empty() && card_index >= 0 &&
-           static_cast<size_t>(card_index) < pile.size();
-  }
-
-  return false;
 }
 
 std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
@@ -276,6 +278,11 @@ gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
         if (auto back_img = game->deck_.getCardBackImage()) {
             game->drawCard(cr, x, y, &(*back_img));
         }
+    } else {
+        // Draw empty stock pile outline
+        cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+        cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
+        cairo_stroke(cr);
     }
 
     // Draw waste pile
@@ -310,6 +317,13 @@ gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
         const auto& pile = game->tableau_[i];
         
         for (size_t j = 0; j < pile.size(); j++) {
+            // Don't draw cards that are being dragged
+            if (game->dragging_ && game->drag_source_pile_ >= 6 && 
+                game->drag_source_pile_ - 6 == static_cast<int>(i) && 
+                j >= static_cast<size_t>(game->tableau_[i].size() - game->drag_cards_.size())) {
+                continue;
+            }
+            
             // Calculate y position relative to tableau base for each card
             int current_y = tableau_base_y + j * VERT_SPACING;
             
@@ -326,8 +340,21 @@ gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
         }
     }
 
+    // Draw dragged cards
+    if (game->dragging_ && !game->drag_cards_.empty()) {
+        int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
+        int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
+        
+        for (size_t i = 0; i < game->drag_cards_.size(); i++) {
+            if (auto img = game->deck_.getCardImage(game->drag_cards_[i])) {
+                game->drawCard(cr, drag_x, drag_y + i * VERT_SPACING, &(*img));
+            }
+        }
+    }
+
     return TRUE;
 }
+
 
 std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
     const std::vector<TableauCard>& tableau_cards, int start_index) {
@@ -365,12 +392,19 @@ gboolean SolitaireGame::onButtonPress(GtkWidget* widget, GdkEventButton* event, 
     if (event->button == 1) { // Left click
         auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
+        if (pile_index == 0) { // Stock pile
+            game->handleStockPileClick();
+            return TRUE;
+        }
+
         if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
             game->dragging_ = true;
             game->drag_source_pile_ = pile_index;
             game->drag_start_x_ = event->x;
             game->drag_start_y_ = event->y;
             game->drag_cards_ = game->getDragCards(pile_index, card_index);
+            game->drag_offset_x_ = event->x - (CARD_SPACING + (pile_index >= 6 ? (pile_index - 6) : (pile_index == 1 ? 1 : pile_index)) * (CARD_WIDTH + CARD_SPACING));
+            game->drag_offset_y_ = event->y - (pile_index >= 6 ? (CARD_SPACING + CARD_HEIGHT + VERT_SPACING + card_index * VERT_SPACING) : CARD_SPACING);
         }
     }
 
@@ -384,6 +418,8 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
         auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
 
         if (target_pile >= 0) {
+            bool move_successful = false;
+            
             // Handle dropping on tableau piles
             if (target_pile >= 6 && target_pile <= 12) {
                 auto& tableau_pile = game->tableau_[target_pile - 6];
@@ -395,6 +431,11 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
                     if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
                         auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
                         source_tableau.erase(source_tableau.end() - game->drag_cards_.size(), source_tableau.end());
+                        
+                        // Flip over the new top card if there is one
+                        if (!source_tableau.empty() && !source_tableau.back().face_up) {
+                            source_tableau.back().face_up = true;
+                        }
                     } else {
                         auto& source = game->getPileReference(game->drag_source_pile_);
                         source.erase(source.end() - game->drag_cards_.size(), source.end());
@@ -404,6 +445,7 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
                     for (const auto& card : game->drag_cards_) {
                         tableau_pile.emplace_back(card, true);
                     }
+                    move_successful = true;
                 }
             } else {
                 // Handle dropping on non-tableau piles
@@ -412,45 +454,68 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
                     if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
                         auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
                         source_tableau.erase(source_tableau.end() - game->drag_cards_.size(), source_tableau.end());
+                        
+                        // Flip over the new top card if there is one
+                        if (!source_tableau.empty() && !source_tableau.back().face_up) {
+                            source_tableau.back().face_up = true;
+                        }
                     } else {
                         auto& source = game->getPileReference(game->drag_source_pile_);
                         source.erase(source.end() - game->drag_cards_.size(), source.end());
                     }
                     target.insert(target.end(), game->drag_cards_.begin(), game->drag_cards_.end());
+                    move_successful = true;
                 }
+            }
+
+            // Only check win condition if a move was actually made
+            if (move_successful && game->checkWinCondition()) {
+                GtkWidget* dialog = gtk_message_dialog_new(
+                    GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+                    GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
+                gtk_dialog_run(GTK_DIALOG(dialog));
+                gtk_widget_destroy(dialog);
+
+                game->initializeGame();
             }
         }
 
         game->dragging_ = false;
         game->drag_cards_.clear();
         game->drag_source_pile_ = -1;
-
         gtk_widget_queue_draw(game->game_area_);
-
-        if (game->checkWinCondition()) {
-            GtkWidget* dialog = gtk_message_dialog_new(
-                GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-                GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-            gtk_dialog_run(GTK_DIALOG(dialog));
-            gtk_widget_destroy(dialog);
-
-            game->initializeGame();
-            gtk_widget_queue_draw(game->game_area_);
-        }
     }
 
     return TRUE;
 }
 
-gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
-                                       gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+void SolitaireGame::handleStockPileClick() {
+    if (stock_.empty()) {
+        // If stock is empty, move all waste cards back to stock in reverse order
+        while (!waste_.empty()) {
+            stock_.push_back(waste_.back());
+            waste_.pop_back();
+        }
+    } else {
+        // Deal up to 3 cards from stock to waste
+        for (int i = 0; i < 3 && !stock_.empty(); i++) {
+            waste_.push_back(stock_.back());
+            stock_.pop_back();
+        }
+    }
+    refreshDisplay();
+}
 
-  if (game->dragging_) {
-    gtk_widget_queue_draw(game->game_area_);
-  }
+gboolean SolitaireGame::onMotionNotify(GtkWidget* widget, GdkEventMotion* event, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
 
-  return TRUE;
+    if (game->dragging_) {
+        game->drag_start_x_ = event->x;
+        game->drag_start_y_ = event->y;
+        gtk_widget_queue_draw(game->game_area_);
+    }
+
+    return TRUE;
 }
 
 std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
@@ -501,29 +566,31 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
 }
 
 bool SolitaireGame::canMoveToPile(
-    const std::vector<cardlib::Card> &cards,
-    const std::vector<cardlib::Card> &target) const {
-  if (cards.empty())
-    return false;
+    const std::vector<cardlib::Card>& cards,
+    const std::vector<cardlib::Card>& target) const {
+    if (cards.empty())
+        return false;
 
-  // Moving to foundation pile
-  if (target.empty()) {
-    return cards[0].rank == cardlib::Rank::ACE;
-  }
+    const auto& moving_card = cards[0];
 
-  const auto &target_card = target.back();
-  const auto &moving_card = cards[0];
+    // Moving to an empty pile
+    if (target.empty()) {
+        // For tableau: only allow kings on empty spaces
+        return static_cast<int>(moving_card.rank) == static_cast<int>(cardlib::Rank::KING);
+    }
 
-  // Moving to tableau pile
-  bool opposite_color = ((target_card.suit == cardlib::Suit::HEARTS ||
-                          target_card.suit == cardlib::Suit::DIAMONDS) !=
-                         (moving_card.suit == cardlib::Suit::HEARTS ||
-                          moving_card.suit == cardlib::Suit::DIAMONDS));
+    const auto& target_card = target.back();
+    
+    // Moving to tableau pile
+    bool opposite_color = ((target_card.suit == cardlib::Suit::HEARTS ||
+                           target_card.suit == cardlib::Suit::DIAMONDS) !=
+                          (moving_card.suit == cardlib::Suit::HEARTS ||
+                           moving_card.suit == cardlib::Suit::DIAMONDS));
 
-  bool lower_rank = static_cast<int>(moving_card.rank) ==
-                    static_cast<int>(target_card.rank) - 1;
+    bool lower_rank = static_cast<int>(moving_card.rank) ==
+                     static_cast<int>(target_card.rank) - 1;
 
-  return opposite_color && lower_rank;
+    return opposite_color && lower_rank;
 }
 
 bool SolitaireGame::canMoveToFoundation(const cardlib::Card &card,

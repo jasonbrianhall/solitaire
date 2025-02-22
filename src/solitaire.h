@@ -34,7 +34,7 @@ private:
 
     // Method to get cards for dragging
     std::vector<cardlib::Card> getDragCards(int pile_index, int card_index);
-
+    void handleStockPileClick();
     void drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage* img) const;
     void flipTopTableauCard(int);
     // Drag and drop state
@@ -81,6 +81,9 @@ private:
     void refreshDisplay();
     std::vector<cardlib::Card>& getPileReference(int pile_index);
     bool isValidDragSource(int pile_index, int card_index) const;
+    double drag_offset_x_;
+    double drag_offset_y_;
+
 };
 
 #endif // SOLITAIRE_H
