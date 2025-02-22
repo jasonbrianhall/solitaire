@@ -1037,16 +1037,6 @@ void SolitaireGame::setupMenuBar() {
       this);
   gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawThreeItem);
 
-  // Code to test the game so it's easier to win
-  /*GtkWidget* testModeItem = gtk_menu_item_new_with_label("Test Layout");
-  g_signal_connect(G_OBJECT(testModeItem), "activate",
-      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-          SolitaireGame* game = static_cast<SolitaireGame*>(data);
-          game->dealTestLayout();
-          game->refreshDisplay();
-      }), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), testModeItem); */
-
   // Set initial state
   gtk_check_menu_item_set_active(
       GTK_CHECK_MENU_ITEM(draw_three_mode_ ? drawThreeItem : drawOneItem),
@@ -1054,95 +1044,95 @@ void SolitaireGame::setupMenuBar() {
 
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
 
-    GtkWidget* cardBackMenu = gtk_menu_new();
-    GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Card Back");
-    gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
-
+  // Card Back menu - only show on non-Windows platforms
 #ifndef _WIN32
-    // Select custom back option (crashes Windows so disabled until I can figure out why)
-    GtkWidget* selectBackItem = gtk_menu_item_new_with_label("Select Custom Back");
-    g_signal_connect(G_OBJECT(selectBackItem), "activate",
-        G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-            SolitaireGame* game = static_cast<SolitaireGame*>(data);
-            
-            GtkWidget* dialog = gtk_file_chooser_dialog_new("Select Card Back",
-                GTK_WINDOW(game->window_),
-                GTK_FILE_CHOOSER_ACTION_OPEN,
-                "_Cancel", GTK_RESPONSE_CANCEL,
-                "_Open", GTK_RESPONSE_ACCEPT,
-                NULL);
-                
-            GtkFileFilter* filter = gtk_file_filter_new();
-            gtk_file_filter_set_name(filter, "Image Files");
-            gtk_file_filter_add_pattern(filter, "*.png");
-            gtk_file_filter_add_pattern(filter, "*.jpg");
-            gtk_file_filter_add_pattern(filter, "*.jpeg");
-            gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-            
-            if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-                char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-                if (game->setCustomCardBack(filename)) {
-                    game->refreshCardCache();  // Clear and rebuild the cache
-                    game->refreshDisplay();    // Redraw the screen
-                } else {
-                    GtkWidget* error_dialog = gtk_message_dialog_new(
-                        GTK_WINDOW(game->window_),
-                        GTK_DIALOG_DESTROY_WITH_PARENT,
-                        GTK_MESSAGE_ERROR,
-                        GTK_BUTTONS_OK,
-                        "Failed to load image file");
-                    gtk_dialog_run(GTK_DIALOG(error_dialog));
-                    gtk_widget_destroy(error_dialog);
-                }
-                g_free(filename);
-            }
-            gtk_widget_destroy(dialog);
-        }), this);
-    gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
+  GtkWidget* cardBackMenu = gtk_menu_new();
+  GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Card Back");
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
 
-    // Reset to default back option
-    GtkWidget* resetBackItem = gtk_menu_item_new_with_label("Reset to Default Back");
-    g_signal_connect(G_OBJECT(resetBackItem), "activate",
-        G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-            SolitaireGame* game = static_cast<SolitaireGame*>(data);
-            game->resetToDefaultBack();
-        }), this);
-    gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
+  // Select custom back option
+  GtkWidget* selectBackItem = gtk_menu_item_new_with_label("Select Custom Back");
+  g_signal_connect(G_OBJECT(selectBackItem), "activate",
+      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
+          SolitaireGame* game = static_cast<SolitaireGame*>(data);
+          
+          GtkWidget* dialog = gtk_file_chooser_dialog_new("Select Card Back",
+              GTK_WINDOW(game->window_),
+              GTK_FILE_CHOOSER_ACTION_OPEN,
+              "_Cancel", GTK_RESPONSE_CANCEL,
+              "_Open", GTK_RESPONSE_ACCEPT,
+              NULL);
+              
+          GtkFileFilter* filter = gtk_file_filter_new();
+          gtk_file_filter_set_name(filter, "Image Files");
+          gtk_file_filter_add_pattern(filter, "*.png");
+          gtk_file_filter_add_pattern(filter, "*.jpg");
+          gtk_file_filter_add_pattern(filter, "*.jpeg");
+          gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+          
+          if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+              char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+              if (game->setCustomCardBack(filename)) {
+                  game->refreshCardCache();
+                  game->refreshDisplay();
+              } else {
+                  GtkWidget* error_dialog = gtk_message_dialog_new(
+                      GTK_WINDOW(game->window_),
+                      GTK_DIALOG_DESTROY_WITH_PARENT,
+                      GTK_MESSAGE_ERROR,
+                      GTK_BUTTONS_OK,
+                      "Failed to load image file");
+                  gtk_dialog_run(GTK_DIALOG(error_dialog));
+                  gtk_widget_destroy(error_dialog);
+              }
+              g_free(filename);
+          }
+          gtk_widget_destroy(dialog);
+      }), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
+
+  // Reset to default back option
+  GtkWidget* resetBackItem = gtk_menu_item_new_with_label("Reset to Default Back");
+  g_signal_connect(G_OBJECT(resetBackItem), "activate",
+      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
+          SolitaireGame* game = static_cast<SolitaireGame*>(data);
+          game->resetToDefaultBack();
+      }), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
+
+  // Add the Card Back submenu to the Game menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
 #endif
 
-
-    // Add the Card Back submenu to the Game menu
-    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
-
-    GtkWidget* loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
-    g_signal_connect(G_OBJECT(loadDeckItem), "activate",
-        G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-            SolitaireGame* game = static_cast<SolitaireGame*>(data);
-            
-            GtkWidget* dialog = gtk_file_chooser_dialog_new("Load Deck",
-                GTK_WINDOW(game->window_),
-                GTK_FILE_CHOOSER_ACTION_OPEN,
-                "_Cancel", GTK_RESPONSE_CANCEL,
-                "_Open", GTK_RESPONSE_ACCEPT,
-                NULL);
-                
-            // Add file filter for .zip files
-            GtkFileFilter* filter = gtk_file_filter_new();
-            gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
-            gtk_file_filter_add_pattern(filter, "*.zip");
-            gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-            
-            if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-                char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-                if (game->loadDeck(filename)) {
-                    game->refreshDisplay();
-                }
-                g_free(filename);
-            }
-            
-            gtk_widget_destroy(dialog);
-        }), this);
-    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
+  // Load Deck option
+  GtkWidget* loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
+  g_signal_connect(G_OBJECT(loadDeckItem), "activate",
+      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
+          SolitaireGame* game = static_cast<SolitaireGame*>(data);
+          
+          GtkWidget* dialog = gtk_file_chooser_dialog_new("Load Deck",
+              GTK_WINDOW(game->window_),
+              GTK_FILE_CHOOSER_ACTION_OPEN,
+              "_Cancel", GTK_RESPONSE_CANCEL,
+              "_Open", GTK_RESPONSE_ACCEPT,
+              NULL);
+              
+          GtkFileFilter* filter = gtk_file_filter_new();
+          gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
+          gtk_file_filter_add_pattern(filter, "*.zip");
+          gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+          
+          if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+              char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+              if (game->loadDeck(filename)) {
+                  game->refreshDisplay();
+              }
+              g_free(filename);
+          }
+          
+          gtk_widget_destroy(dialog);
+      }), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
 
   // Separator
   GtkWidget *sep = gtk_separator_menu_item_new();
