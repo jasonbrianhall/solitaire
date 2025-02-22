@@ -1037,8 +1037,13 @@ void SolitaireGame::setupMenuBar() {
 
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
 
-    GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Select Card Back");
-    g_signal_connect(G_OBJECT(cardBackItem), "activate",
+    GtkWidget* cardBackMenu = gtk_menu_new();
+    GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Card Back");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
+
+    // Select custom back option
+    GtkWidget* selectBackItem = gtk_menu_item_new_with_label("Select Custom Back");
+    g_signal_connect(G_OBJECT(selectBackItem), "activate",
         G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
             SolitaireGame* game = static_cast<SolitaireGame*>(data);
             
@@ -1049,7 +1054,6 @@ void SolitaireGame::setupMenuBar() {
                 "_Open", GTK_RESPONSE_ACCEPT,
                 NULL);
                 
-            // Add file filter for images
             GtkFileFilter* filter = gtk_file_filter_new();
             gtk_file_filter_set_name(filter, "Image Files");
             gtk_file_filter_add_pattern(filter, "*.png");
@@ -1060,7 +1064,8 @@ void SolitaireGame::setupMenuBar() {
             if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
                 char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
                 if (game->setCustomCardBack(filename)) {
-                    game->refreshDisplay();
+                    game->refreshCardCache();  // Clear and rebuild the cache
+                    game->refreshDisplay();    // Redraw the screen
                 } else {
                     GtkWidget* error_dialog = gtk_message_dialog_new(
                         GTK_WINDOW(game->window_),
@@ -1073,9 +1078,20 @@ void SolitaireGame::setupMenuBar() {
                 }
                 g_free(filename);
             }
-            
             gtk_widget_destroy(dialog);
         }), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
+
+    // Reset to default back option
+    GtkWidget* resetBackItem = gtk_menu_item_new_with_label("Reset to Default Back");
+    g_signal_connect(G_OBJECT(resetBackItem), "activate",
+        G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
+            SolitaireGame* game = static_cast<SolitaireGame*>(data);
+            game->resetToDefaultBack();
+        }), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
+
+    // Add the Card Back submenu to the Game menu
     gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
 
     GtkWidget* loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
@@ -1402,4 +1418,62 @@ void SolitaireGame::cleanupResources() {
     
     // Clean up card cache
     cleanupCardCache();
+}
+
+void SolitaireGame::resetToDefaultBack() {
+    clearCustomBack();
+    refreshCardCache();
+    refreshDisplay();
+}
+
+void SolitaireGame::clearCustomBack() {
+    custom_back_path_.clear();
+    
+    // Remove the custom back from cache if it exists
+    auto it = card_surface_cache_.find("custom_back");
+    if (it != card_surface_cache_.end()) {
+        cairo_surface_destroy(it->second);
+        card_surface_cache_.erase(it);
+    }
+    
+    // Update settings file
+    saveSettings();
+}
+
+void SolitaireGame::refreshCardCache() {
+    // Clean up existing cache
+    cleanupCardCache();
+    
+    // Rebuild the cache
+    initializeCardCache();
+    
+    // If we have a custom back, reload it
+    if (!custom_back_path_.empty()) {
+        GError* error = nullptr;
+        GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(custom_back_path_.c_str(), &error);
+        
+        if (pixbuf) {
+            GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
+                pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+                
+            if (scaled) {
+                cairo_surface_t* surface = cairo_image_surface_create(
+                    CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+                cairo_t* surface_cr = cairo_create(surface);
+                
+                gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
+                cairo_paint(surface_cr);
+                cairo_destroy(surface_cr);
+                
+                card_surface_cache_["custom_back"] = surface;
+                
+                g_object_unref(scaled);
+            }
+            g_object_unref(pixbuf);
+        }
+        
+        if (error) {
+            g_error_free(error);
+        }
+    }
 }

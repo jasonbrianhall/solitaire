@@ -125,8 +125,12 @@ private:
   void initializeSettingsDir();
   bool setCustomCardBack(const std::string& path);
 
-    bool loadDeck(const std::string& path);
-    void cleanupResources();
+  bool loadDeck(const std::string& path);
+  void cleanupResources();
+
+    void resetToDefaultBack();
+    void clearCustomBack();
+    void refreshCardCache();
 
 };
 
