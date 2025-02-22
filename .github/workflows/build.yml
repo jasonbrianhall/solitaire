@@ -100,7 +100,7 @@ jobs:
         </Wix>
         EOL
 
-        wixl -v installer.wxs -o ../Solitaire-GTK.msi
+        wixl -v installer.wxs -o Solitaire-GTK.msi
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
