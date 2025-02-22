@@ -68,7 +68,6 @@ This will:
 - **Left Click + Drag**: Move cards (revolutionary, we know)
 - **Right Click**: Automatically move a card to its foundation (for the lazy among us)
 - **Left Click on Stock**: Draw new cards (draw one or three, depending on your mode)
-- **Double Click**: For when you're too excited to right-click
 
 ### Game Rules
 
