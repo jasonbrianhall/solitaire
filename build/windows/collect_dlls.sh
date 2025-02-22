@@ -38,6 +38,9 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     exit 1
 fi
 
+# Derive GTK directory from DLL directory (typically /mingw64/bin -> /mingw64)
+GTK_DIR=$(dirname "$DLL_SOURCE_DIR")
+
 # Function to get direct dependencies of a file
 get_dependencies() {
     local file="$1"
@@ -54,6 +57,64 @@ dll_exists() {
 declare -A processed_dlls
 declare -a dlls_to_process
 declare -a missing_dlls
+
+# Create necessary GTK directories
+echo "Creating GTK directory structure..."
+mkdir -p "$OUTPUT_DIR/share/glib-2.0/schemas"
+mkdir -p "$OUTPUT_DIR/share/icons"
+mkdir -p "$OUTPUT_DIR/share/themes"
+mkdir -p "$OUTPUT_DIR/lib/gdk-pixbuf-2.0"
+mkdir -p "$OUTPUT_DIR/lib/gtk-3.0"
+
+# Copy GTK related files
+echo "Copying GTK files..."
+echo "Looking for schemas in: $GTK_DIR/share/glib-2.0/schemas/"
+ls -l "$GTK_DIR/share/glib-2.0/schemas/" || echo "Directory not found"
+
+# Try multiple possible locations for gschemas.compiled
+SCHEMA_LOCATIONS=(
+    "$GTK_DIR/share/glib-2.0/schemas/gschemas.compiled"
+    "$DLL_SOURCE_DIR/../share/glib-2.0/schemas/gschemas.compiled"
+    "/usr/x86_64-w64-mingw32/sys-root/mingw/share/glib-2.0/schemas/gschemas.compiled"
+    "/mingw64/share/glib-2.0/schemas/gschemas.compiled"
+)
+
+SCHEMA_FOUND=0
+for schema_path in "${SCHEMA_LOCATIONS[@]}"; do
+    echo "Checking for schema at: $schema_path"
+    if [ -f "$schema_path" ]; then
+        echo "Found schema file at: $schema_path"
+        cp "$schema_path" "$OUTPUT_DIR/share/glib-2.0/schemas/"
+        SCHEMA_FOUND=1
+        break
+    fi
+done
+
+if [ $SCHEMA_FOUND -eq 0 ]; then
+    echo "Warning: Could not find gschemas.compiled in any of the expected locations"
+fi
+
+# Copy theme-related files if they exist
+if [ -d "$GTK_DIR/share/icons/hicolor" ]; then
+    cp -r "$GTK_DIR/share/icons/hicolor" "$OUTPUT_DIR/share/icons/"
+fi
+if [ -d "$GTK_DIR/share/themes/default" ]; then
+    cp -r "$GTK_DIR/share/themes/default" "$OUTPUT_DIR/share/themes/"
+fi
+if [ -d "$GTK_DIR/share/themes/emacs" ]; then
+    cp -r "$GTK_DIR/share/themes/emacs" "$OUTPUT_DIR/share/themes/"
+fi
+
+# Create GTK settings file
+cat > "$OUTPUT_DIR/settings.ini" << EOF
+[Settings]
+gtk-theme-name = default
+gtk-icon-theme-name = hicolor
+gtk-font-name = Segoe UI 9
+gtk-menu-images = true
+gtk-button-images = true
+gtk-toolbar-style = both-horiz
+EOF
 
 # Get initial dependencies
 echo "Analyzing dependencies for $(basename "$EXE_PATH")..."
