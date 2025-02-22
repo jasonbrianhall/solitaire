@@ -4,12 +4,18 @@
 
 SolitaireGame::SolitaireGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
-      window_(nullptr), game_area_(nullptr) {
-  initializeGame();
+      window_(nullptr), game_area_(nullptr), 
+      buffer_surface_(nullptr), buffer_cr_(nullptr) {
+    initializeGame();
 }
 
 SolitaireGame::~SolitaireGame() {
-  // GTK cleanup will handle widget destruction
+    if (buffer_cr_) {
+        cairo_destroy(buffer_cr_);
+    }
+    if (buffer_surface_) {
+        cairo_surface_destroy(buffer_surface_);
+    }
 }
 
 void SolitaireGame::run(int argc, char **argv) {
@@ -108,56 +114,81 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
   throw std::out_of_range("Invalid pile index");
 }
 
-void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage* img) const {
-    if (!img || img->data.empty()) {
-        std::cerr << "Invalid card image data" << std::endl;
-        return;
-    }
-
-    GError* error = nullptr;
-    GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
-    if (!loader) {
-        std::cerr << "Failed to create pixbuf loader" << std::endl;
-        return;
-    }
-
-    // Write the image data
-    if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error)) {
-        std::cerr << "Failed to write image data: " << (error ? error->message : "unknown error") << std::endl;
-        if (error) g_error_free(error);
-        g_object_unref(loader);
-        return;
-    }
-
-    // Close the loader
-    if (!gdk_pixbuf_loader_close(loader, &error)) {
-        std::cerr << "Failed to close loader: " << (error ? error->message : "unknown error") << std::endl;
-        if (error) g_error_free(error);
-        g_object_unref(loader);
-        return;
-    }
-
-    // Get the pixbuf and scale it
-    GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-    if (original_pixbuf) {
-        // Scale the pixbuf to our desired card size
-        GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
-            original_pixbuf,
-            CARD_WIDTH,
-            CARD_HEIGHT,
-            GDK_INTERP_BILINEAR
-        );
-
-        if (scaled_pixbuf) {
-            // Draw the scaled pixbuf
-            gdk_cairo_set_source_pixbuf(cr, scaled_pixbuf, x, y);
-            cairo_paint(cr);
-            g_object_unref(scaled_pixbuf);
+void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* card, bool face_up) {
+    if (face_up && card) {
+        if (auto img = deck_.getCardImage(*card)) {
+            GError* error = nullptr;
+            GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+            
+            if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error)) {
+                std::cerr << "Failed to write image data: " << (error ? error->message : "unknown error") << std::endl;
+                if (error) g_error_free(error);
+                g_object_unref(loader);
+                return;
+            }
+            
+            if (!gdk_pixbuf_loader_close(loader, &error)) {
+                std::cerr << "Failed to close loader: " << (error ? error->message : "unknown error") << std::endl;
+                if (error) g_error_free(error);
+                g_object_unref(loader);
+                return;
+            }
+            
+            GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+            if (original_pixbuf) {
+                GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
+                    original_pixbuf,
+                    CARD_WIDTH,
+                    CARD_HEIGHT,
+                    GDK_INTERP_BILINEAR
+                );
+                
+                if (scaled_pixbuf) {
+                    gdk_cairo_set_source_pixbuf(cr, scaled_pixbuf, x, y);
+                    cairo_paint(cr);
+                    g_object_unref(scaled_pixbuf);
+                }
+            }
+            g_object_unref(loader);
+        }
+    } else {
+        // Draw card back
+        if (auto back_img = deck_.getCardBackImage()) {
+            GError* error = nullptr;
+            GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+            
+            if (!gdk_pixbuf_loader_write(loader, back_img->data.data(), back_img->data.size(), &error)) {
+                std::cerr << "Failed to write image data: " << (error ? error->message : "unknown error") << std::endl;
+                if (error) g_error_free(error);
+                g_object_unref(loader);
+                return;
+            }
+            
+            if (!gdk_pixbuf_loader_close(loader, &error)) {
+                std::cerr << "Failed to close loader: " << (error ? error->message : "unknown error") << std::endl;
+                if (error) g_error_free(error);
+                g_object_unref(loader);
+                return;
+            }
+            
+            GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+            if (original_pixbuf) {
+                GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
+                    original_pixbuf,
+                    CARD_WIDTH,
+                    CARD_HEIGHT,
+                    GDK_INTERP_BILINEAR
+                );
+                
+                if (scaled_pixbuf) {
+                    gdk_cairo_set_source_pixbuf(cr, scaled_pixbuf, x, y);
+                    cairo_paint(cr);
+                    g_object_unref(scaled_pixbuf);
+                }
+            }
+            g_object_unref(loader);
         }
     }
-
-    // Clean up
-    g_object_unref(loader);  // This will also free the original pixbuf
 }
 
 void SolitaireGame::deal() {
@@ -264,48 +295,58 @@ GtkWidget *SolitaireGame::createCardWidget(const cardlib::Card &card,
 gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
     SolitaireGame* game = static_cast<SolitaireGame*>(data);
     
-    // Clear background
+    // Get the widget dimensions
     GtkAllocation allocation;
     gtk_widget_get_allocation(widget, &allocation);
-    cairo_set_source_rgb(cr, 0.0, 0.5, 0.0);  // Green table
-    cairo_rectangle(cr, 0, 0, allocation.width, allocation.height);
-    cairo_fill(cr);
+    
+    // Create or resize buffer surface if needed
+    if (!game->buffer_surface_ || 
+        cairo_image_surface_get_width(game->buffer_surface_) != allocation.width ||
+        cairo_image_surface_get_height(game->buffer_surface_) != allocation.height) {
+        
+        if (game->buffer_surface_) {
+            cairo_surface_destroy(game->buffer_surface_);
+            cairo_destroy(game->buffer_cr_);
+        }
+        
+        game->buffer_surface_ = cairo_image_surface_create(
+            CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
+        game->buffer_cr_ = cairo_create(game->buffer_surface_);
+    }
+    
+    // Clear buffer with green background
+    cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.5, 0.0);
+    cairo_paint(game->buffer_cr_);
 
     // Draw stock pile
     int x = CARD_SPACING;
     int y = CARD_SPACING;
     if (!game->stock_.empty()) {
-        if (auto back_img = game->deck_.getCardBackImage()) {
-            game->drawCard(cr, x, y, &(*back_img));
-        }
+        game->drawCard(game->buffer_cr_, x, y, nullptr, false);  // Draw card back
     } else {
         // Draw empty stock pile outline
-        cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
-        cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-        cairo_stroke(cr);
+        cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+        cairo_rectangle(game->buffer_cr_, x, y, CARD_WIDTH, CARD_HEIGHT);
+        cairo_stroke(game->buffer_cr_);
     }
 
     // Draw waste pile
     x += CARD_WIDTH + CARD_SPACING;
     if (!game->waste_.empty()) {
         const auto& top_card = game->waste_.back();
-        if (auto img = game->deck_.getCardImage(top_card)) {
-            game->drawCard(cr, x, y, &(*img));
-        }
+        game->drawCard(game->buffer_cr_, x, y, &top_card, true);
     }
 
     // Draw foundation piles
     x = 3 * (CARD_WIDTH + CARD_SPACING);
     for (const auto& pile : game->foundation_) {
-        cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
-        cairo_rectangle(cr, x, y, CARD_WIDTH, CARD_HEIGHT);
-        cairo_stroke(cr);
+        cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+        cairo_rectangle(game->buffer_cr_, x, y, CARD_WIDTH, CARD_HEIGHT);
+        cairo_stroke(game->buffer_cr_);
         
         if (!pile.empty()) {
             const auto& top_card = pile.back();
-            if (auto img = game->deck_.getCardImage(top_card)) {
-                game->drawCard(cr, x, y, &(*img));
-            }
+            game->drawCard(game->buffer_cr_, x, y, &top_card, true);
         }
         x += CARD_WIDTH + CARD_SPACING;
     }
@@ -315,6 +356,13 @@ gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
     for (size_t i = 0; i < game->tableau_.size(); i++) {
         x = CARD_SPACING + i * (CARD_WIDTH + CARD_SPACING);
         const auto& pile = game->tableau_[i];
+        
+        // Draw empty pile outline
+        if (pile.empty()) {
+            cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+            cairo_rectangle(game->buffer_cr_, x, tableau_base_y, CARD_WIDTH, CARD_HEIGHT);
+            cairo_stroke(game->buffer_cr_);
+        }
         
         for (size_t j = 0; j < pile.size(); j++) {
             // Don't draw cards that are being dragged
@@ -328,15 +376,8 @@ gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
             int current_y = tableau_base_y + j * VERT_SPACING;
             
             const auto& tableau_card = pile[j];
-            if (tableau_card.face_up) {
-                if (auto img = game->deck_.getCardImage(tableau_card.card)) {
-                    game->drawCard(cr, x, current_y, &(*img));
-                }
-            } else {
-                if (auto back_img = game->deck_.getCardBackImage()) {
-                    game->drawCard(cr, x, current_y, &(*back_img));
-                }
-            }
+            game->drawCard(game->buffer_cr_, x, current_y, 
+                         &tableau_card.card, tableau_card.face_up);
         }
     }
 
@@ -346,15 +387,18 @@ gboolean SolitaireGame::onDraw(GtkWidget* widget, cairo_t* cr, gpointer data) {
         int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
         
         for (size_t i = 0; i < game->drag_cards_.size(); i++) {
-            if (auto img = game->deck_.getCardImage(game->drag_cards_[i])) {
-                game->drawCard(cr, drag_x, drag_y + i * VERT_SPACING, &(*img));
-            }
+            game->drawCard(game->buffer_cr_, drag_x, 
+                         drag_y + i * VERT_SPACING, 
+                         &game->drag_cards_[i], true);
         }
     }
 
+    // Copy buffer to window
+    cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
+    cairo_paint(cr);
+    
     return TRUE;
 }
-
 
 std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
     const std::vector<TableauCard>& tableau_cards, int start_index) {
@@ -671,4 +715,73 @@ int main(int argc, char **argv) {
   SolitaireGame game;
   game.run(argc, argv);
   return 0;
+}
+
+void SolitaireGame::initializeCardCache() {
+    // Pre-load all card images into cairo surfaces
+    for (const auto& card : deck_.getAllCards()) {
+        if (auto img = deck_.getCardImage(card)) {
+            GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+            gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), nullptr);
+            gdk_pixbuf_loader_close(loader, nullptr);
+            
+            GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+            GdkPixbuf* scaled = gdk_pixbuf_scale_simple(pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+            
+            // Create cairo surface from pixbuf
+            cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+            cairo_t* cr = cairo_create(surface);
+            gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+            cairo_paint(cr);
+            cairo_destroy(cr);
+            
+            // Store in cache
+            std::string key = std::to_string(static_cast<int>(card.suit)) + 
+                            std::to_string(static_cast<int>(card.rank));
+            card_surface_cache_[key] = surface;
+            
+            g_object_unref(scaled);
+            g_object_unref(loader);
+        }
+    }
+    
+    // Cache card back
+    if (auto back_img = deck_.getCardBackImage()) {
+        GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+        gdk_pixbuf_loader_write(loader, back_img->data.data(), back_img->data.size(), nullptr);
+        gdk_pixbuf_loader_close(loader, nullptr);
+        
+        GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+        GdkPixbuf* scaled = gdk_pixbuf_scale_simple(pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+        
+        cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+        cairo_t* cr = cairo_create(surface);
+        gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+        cairo_paint(cr);
+        cairo_destroy(cr);
+        
+        card_surface_cache_["back"] = surface;
+        
+        g_object_unref(scaled);
+        g_object_unref(loader);
+    }
+}
+
+void SolitaireGame::cleanupCardCache() {
+    for (auto& [key, surface] : card_surface_cache_) {
+        cairo_surface_destroy(surface);
+    }
+    card_surface_cache_.clear();
+}
+
+cairo_surface_t* SolitaireGame::getCardSurface(const cardlib::Card& card) {
+    std::string key = std::to_string(static_cast<int>(card.suit)) + 
+                     std::to_string(static_cast<int>(card.rank));
+    auto it = card_surface_cache_.find(key);
+    return it != card_surface_cache_.end() ? it->second : nullptr;
+}
+
+cairo_surface_t* SolitaireGame::getCardBackSurface() {
+    auto it = card_surface_cache_.find("back");
+    return it != card_surface_cache_.end() ? it->second : nullptr;
 }

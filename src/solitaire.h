@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 
 struct TableauCard {
     cardlib::Card card;
@@ -35,7 +36,7 @@ private:
     // Method to get cards for dragging
     std::vector<cardlib::Card> getDragCards(int pile_index, int card_index);
     void handleStockPileClick();
-    void drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage* img) const;
+    void drawCard(cairo_t* cr, int x, int y, const cardlib::Card* card, bool face_up);
     void flipTopTableauCard(int);
     // Drag and drop state
     bool dragging_;
@@ -85,6 +86,18 @@ private:
     bool isValidDragSource(int pile_index, int card_index) const;
     double drag_offset_x_;
     double drag_offset_y_;
+
+    std::unordered_map<std::string, cairo_surface_t*> card_surface_cache_;
+    
+    // Double buffering surface
+    cairo_surface_t* buffer_surface_;
+    cairo_t* buffer_cr_;
+    
+    // Methods for image caching
+    void initializeCardCache();
+    void cleanupCardCache();
+    cairo_surface_t* getCardSurface(const cardlib::Card& card);
+    cairo_surface_t* getCardBackSurface();
 
 };
 
