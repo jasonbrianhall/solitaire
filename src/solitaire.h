@@ -28,6 +28,13 @@ private:
     std::vector<cardlib::Card> waste_;          // Faced-up cards from stock
     std::vector<std::vector<cardlib::Card>> foundation_; // 4 piles for aces
     std::vector<std::vector<TableauCard>> tableau_;
+
+    // Helper function to convert TableauCard vector to Card vector
+    std::vector<cardlib::Card> getTableauCardsAsCards(const std::vector<TableauCard>& tableau_cards, int start_index);
+
+    // Method to get cards for dragging
+    std::vector<cardlib::Card> getDragCards(int pile_index, int card_index);
+
     void drawCard(cairo_t* cr, int x, int y, const cardlib::CardImage* img) const;
     void flipTopTableauCard(int);
     // Drag and drop state
