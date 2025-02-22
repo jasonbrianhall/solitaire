@@ -117,7 +117,8 @@ int ThirtyOneGame::getBestSuitValue(const std::vector<cardlib::Card>& hand) cons
                 value = 11;
             } else if (card.rank == cardlib::Rank::KING || 
                       card.rank == cardlib::Rank::QUEEN ||
-                      card.rank == cardlib::Rank::JACK) {
+                      card.rank == cardlib::Rank::JACK || 
+                      card.rank == cardlib::Rank::TEN) {
                 value = 10;
             } else {
                 value = static_cast<int>(card.rank);
