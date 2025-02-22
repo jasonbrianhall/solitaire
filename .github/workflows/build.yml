@@ -2,7 +2,7 @@ name: Build Solitaire
 
 on:
   push:
-    branches: [ dev, main ]
+    branches: [ dev, master ]
   pull_request:
     branches: [ dev ]
 
@@ -175,13 +175,13 @@ jobs:
           windows-artifacts/Solitaire.msi
           windows-artifacts/solitaire.exe
           linux-artifacts/Solitaire-Linux.tar.gz
-        tag_name: ${{ github.ref == 'refs/heads/main' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}
-        name: ${{ github.ref == 'refs/heads/main' && format('Release {0}', github.run_number) || format('Dev Build {0}', github.run_number) }}
+        tag_name: ${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}
+        name: ${{ github.ref == 'refs/heads/master' && format('Release {0}', github.run_number) || format('Dev Build {0}', github.run_number) }}
         draft: false
-        prerelease: ${{ github.ref != 'refs/heads/main' }}
+        prerelease: ${{ github.ref != 'refs/heads/master' }}
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
-          ${{ github.ref == 'refs/heads/main' && 'Release build' || 'Development build' }}
+          ${{ github.ref == 'refs/heads/master' && 'Release build' || 'Development build' }}
           Commit: ${{ github.sha }}
           Build number: ${{ github.run_number }}
           
@@ -193,4 +193,4 @@ jobs:
     - name: Output Release URL
       if: success()
       run: |
-        echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref == 'refs/heads/main' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}"
+        echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}"
