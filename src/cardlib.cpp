@@ -181,6 +181,30 @@ void Deck::loadCardsFromZip(const std::string &zip_path) {
   }
 }
 
+void Deck::replaceCardBackImage(const std::string &image_path) {
+  // Clear the current card back image
+  card_back_image_ = std::nullopt;
+
+  // Load the new card back image
+  std::ifstream file(image_path, std::ios::binary);
+  if (!file.is_open()) {
+    throw std::runtime_error("Failed to open image file: " + image_path);
+  }
+
+  std::vector<unsigned char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  file.close();
+
+  if (buffer.empty()) {
+    throw std::runtime_error("Image file is empty: " + image_path);
+  }
+
+  CardImage back_img;
+  back_img.filename = image_path;
+  back_img.data = std::move(buffer);
+  back_img.card_info = std::nullopt;
+  card_back_image_ = std::move(back_img);
+}
+
 std::optional<Card> Deck::parseFilename(const std::string &filename) {
   Card card;
   card.is_alternate_art = false;
