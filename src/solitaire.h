@@ -99,6 +99,15 @@ private:
     cairo_surface_t* getCardSurface(const cardlib::Card& card);
     cairo_surface_t* getCardBackSurface();
 
+    void setupMenuBar();
+    static void onNewGame(GtkWidget* widget, gpointer data);
+    static void onQuit(GtkWidget* widget, gpointer data);
+    static void onAbout(GtkWidget* widget, gpointer data);
+    GtkWidget* vbox_;  // Vertical box to hold menu and game area
+
+    bool draw_three_mode_;  // True for draw 3, false for draw 1
+    bool tryMoveToFoundation(const cardlib::Card& card);
+
 };
 
 #endif // SOLITAIRE_H

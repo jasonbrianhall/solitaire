@@ -5,7 +5,8 @@
 SolitaireGame::SolitaireGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
       window_(nullptr), game_area_(nullptr), 
-      buffer_surface_(nullptr), buffer_cr_(nullptr) {
+      buffer_surface_(nullptr), buffer_cr_(nullptr),
+      draw_three_mode_(true) {  // Initialize draw mode
     initializeGame();
 }
 
@@ -233,35 +234,6 @@ void SolitaireGame::flipTopTableauCard(int pile_index) {
   }
 }
 
-void SolitaireGame::setupWindow() {
-  window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
-  gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
-  g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit),
-                   NULL);
-}
-
-void SolitaireGame::setupGameArea() {
-  game_area_ = gtk_drawing_area_new();
-  gtk_container_add(GTK_CONTAINER(window_), game_area_);
-
-  // Enable mouse event handling
-  gtk_widget_add_events(game_area_, GDK_BUTTON_PRESS_MASK |
-                                        GDK_BUTTON_RELEASE_MASK |
-                                        GDK_POINTER_MOTION_MASK);
-
-  // Connect signals
-  g_signal_connect(G_OBJECT(game_area_), "draw", G_CALLBACK(onDraw), this);
-  g_signal_connect(G_OBJECT(game_area_), "button-press-event",
-                   G_CALLBACK(onButtonPress), this);
-  g_signal_connect(G_OBJECT(game_area_), "button-release-event",
-                   G_CALLBACK(onButtonRelease), this);
-  g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
-                   G_CALLBACK(onMotionNotify), this);
-
-  gtk_widget_show_all(window_);
-}
-
 GtkWidget *SolitaireGame::createCardWidget(const cardlib::Card &card,
                                            bool face_up) {
   if (face_up) {
@@ -451,6 +423,51 @@ gboolean SolitaireGame::onButtonPress(GtkWidget* widget, GdkEventButton* event, 
             game->drag_offset_y_ = event->y - (pile_index >= 6 ? (CARD_SPACING + CARD_HEIGHT + VERT_SPACING + card_index * VERT_SPACING) : CARD_SPACING);
         }
     }
+    else if (event->button == 3) { // Right click
+        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+        
+        // Try to move card to foundation
+        if (pile_index >= 0) {
+            const cardlib::Card* card = nullptr;
+            bool card_moved = false;
+
+            // Get the card based on pile type
+            if (pile_index == 1 && !game->waste_.empty()) {
+                card = &game->waste_.back();
+                if (game->tryMoveToFoundation(*card)) {
+                    game->waste_.pop_back();
+                    card_moved = true;
+                }
+            }
+            else if (pile_index >= 6 && pile_index <= 12) {
+                auto& tableau_pile = game->tableau_[pile_index - 6];
+                if (!tableau_pile.empty() && tableau_pile.back().face_up) {
+                    card = &tableau_pile.back().card;
+                    if (game->tryMoveToFoundation(*card)) {
+                        tableau_pile.pop_back();
+                        // Flip new top card if needed
+                        if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
+                            tableau_pile.back().face_up = true;
+                        }
+                        card_moved = true;
+                    }
+                }
+            }
+
+            if (card_moved) {
+                if (game->checkWinCondition()) {
+                    GtkWidget* dialog = gtk_message_dialog_new(
+                        GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+                        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
+                    gtk_dialog_run(GTK_DIALOG(dialog));
+                    gtk_widget_destroy(dialog);
+                    game->initializeGame();
+                }
+                gtk_widget_queue_draw(game->game_area_);
+            }
+        }
+        return TRUE;
+    }
 
     return TRUE;
 }
@@ -549,13 +566,26 @@ void SolitaireGame::handleStockPileClick() {
             waste_.pop_back();
         }
     } else {
-        // Deal up to 3 cards from stock to waste
-        for (int i = 0; i < 3 && !stock_.empty(); i++) {
+        // Deal cards based on mode
+        int cards_to_deal = draw_three_mode_ ? 3 : 1;
+        for (int i = 0; i < cards_to_deal && !stock_.empty(); i++) {
             waste_.push_back(stock_.back());
             stock_.pop_back();
         }
     }
     refreshDisplay();
+}
+
+bool SolitaireGame::tryMoveToFoundation(const cardlib::Card& card) {
+    // Try each foundation pile
+    for (size_t i = 0; i < foundation_.size(); i++) {
+        std::vector<cardlib::Card> cards = {card};
+        if (canMoveToPile(cards, foundation_[i], true)) {
+            foundation_[i].push_back(card);
+            return true;
+        }
+    }
+    return false;
 }
 
 gboolean SolitaireGame::onMotionNotify(GtkWidget* widget, GdkEventMotion* event, gpointer data) {
@@ -784,4 +814,196 @@ cairo_surface_t* SolitaireGame::getCardSurface(const cardlib::Card& card) {
 cairo_surface_t* SolitaireGame::getCardBackSurface() {
     auto it = card_surface_cache_.find("back");
     return it != card_surface_cache_.end() ? it->second : nullptr;
+}
+
+
+void SolitaireGame::setupWindow() {
+    window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
+    gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
+    g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    
+    // Create vertical box
+    vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add(GTK_CONTAINER(window_), vbox_);
+    
+    // Setup menu bar
+    setupMenuBar();
+}
+
+void SolitaireGame::setupGameArea() {
+    game_area_ = gtk_drawing_area_new();
+    gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
+
+    // Enable mouse event handling
+    gtk_widget_add_events(game_area_, GDK_BUTTON_PRESS_MASK |
+                                    GDK_BUTTON_RELEASE_MASK |
+                                    GDK_POINTER_MOTION_MASK);
+
+    // Connect signals
+    g_signal_connect(G_OBJECT(game_area_), "draw", G_CALLBACK(onDraw), this);
+    g_signal_connect(G_OBJECT(game_area_), "button-press-event",
+                    G_CALLBACK(onButtonPress), this);
+    g_signal_connect(G_OBJECT(game_area_), "button-release-event",
+                    G_CALLBACK(onButtonRelease), this);
+    g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
+                    G_CALLBACK(onMotionNotify), this);
+
+    gtk_widget_show_all(window_);
+}
+
+void SolitaireGame::setupMenuBar() {
+    GtkWidget* menubar = gtk_menu_bar_new();
+    gtk_box_pack_start(GTK_BOX(vbox_), menubar, FALSE, FALSE, 0);
+
+    // Game menu
+    GtkWidget* gameMenu = gtk_menu_new();
+    GtkWidget* gameMenuItem = gtk_menu_item_new_with_label("Game");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameMenuItem), gameMenu);
+    
+    // New Game
+    GtkWidget* newGameItem = gtk_menu_item_new_with_label("New Game");
+    g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
+    
+    // Draw Mode submenu
+    GtkWidget* drawModeItem = gtk_menu_item_new_with_label("Draw Mode");
+    GtkWidget* drawModeMenu = gtk_menu_new();
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(drawModeItem), drawModeMenu);
+    
+    // Draw One option
+    GtkWidget* drawOneItem = gtk_radio_menu_item_new_with_label(nullptr, "Draw One");
+    GSList* group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
+    g_signal_connect(G_OBJECT(drawOneItem), "activate", 
+        G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
+            if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                static_cast<SolitaireGame*>(data)->draw_three_mode_ = false;
+            }
+        }), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawOneItem);
+    
+    // Draw Three option
+    GtkWidget* drawThreeItem = gtk_radio_menu_item_new_with_label(group, "Draw Three");
+    g_signal_connect(G_OBJECT(drawThreeItem), "activate",
+        G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
+            if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                static_cast<SolitaireGame*>(data)->draw_three_mode_ = true;
+            }
+        }), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawThreeItem);
+    
+    // Set initial state
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(
+        draw_three_mode_ ? drawThreeItem : drawOneItem), TRUE);
+    
+    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
+    
+    // Separator
+    GtkWidget* sep = gtk_separator_menu_item_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
+    
+    // Quit
+    GtkWidget* quitItem = gtk_menu_item_new_with_label("Quit");
+    g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
+    
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
+
+    // Help menu
+    GtkWidget* helpMenu = gtk_menu_new();
+    GtkWidget* helpMenuItem = gtk_menu_item_new_with_label("Help");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(helpMenuItem), helpMenu);
+    
+    // About
+    GtkWidget* aboutItem = gtk_menu_item_new_with_label("About");
+    g_signal_connect(G_OBJECT(aboutItem), "activate", G_CALLBACK(onAbout), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), aboutItem);
+    
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), helpMenuItem);
+}
+
+void SolitaireGame::onNewGame(GtkWidget* widget, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
+    game->initializeGame();
+    game->refreshDisplay();
+}
+
+void SolitaireGame::onQuit(GtkWidget* widget, gpointer data) {
+    gtk_main_quit();
+}
+
+void SolitaireGame::onAbout(GtkWidget* /* widget */, gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
+    
+    // Create custom dialog instead of about dialog for more control
+    GtkWidget* dialog = gtk_dialog_new_with_buttons(
+        "About Solitaire",
+        GTK_WINDOW(game->window_),
+        static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
+        "OK",
+        GTK_RESPONSE_OK,
+        NULL);
+
+    // Create and configure the content area
+    GtkWidget* content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+    
+    // Add program name with larger font
+    GtkWidget* name_label = gtk_label_new(NULL);
+    const char* name_markup = "<span size='x-large' weight='bold'>Solitaire</span>";
+    gtk_label_set_markup(GTK_LABEL(name_label), name_markup);
+    gtk_container_add(GTK_CONTAINER(content_area), name_label);
+
+    // Add version
+    GtkWidget* version_label = gtk_label_new("Version 1.0");
+    gtk_container_add(GTK_CONTAINER(content_area), version_label);
+
+    // Add game instructions in a scrolled window
+    GtkWidget* instructions_text = gtk_text_view_new();
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(instructions_text), GTK_WRAP_WORD);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(instructions_text), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(instructions_text), FALSE);
+    
+    GtkTextBuffer* buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
+    const char* instructions = 
+        "How to Play Solitaire:\n\n"
+        "Objective:\n"
+        "Build four ordered card piles at the top of the screen, one for each suit (♣,♦,♥,♠), "
+        "starting with Aces and ending with Kings.\n\n"
+        "Game Setup:\n"
+        "- Seven columns of cards are dealt from left to right\n"
+        "- Each column contains one more card than the column to its left\n"
+        "- The top card of each column is face up\n"
+        "- Remaining cards form the draw pile in the upper left\n\n"
+        "Rules:\n"
+        "1. In the main playing area, stack cards in descending order (King to Ace) with alternating colors\n"
+        "2. Move single cards or stacks of cards between columns\n"
+        "3. When you move a card that was covering a face-down card, the face-down card is flipped over\n"
+        "4. Click the draw pile to reveal new cards when you need them\n"
+        "5. Build the four suit piles at the top in ascending order, starting with Aces\n"
+        "6. Empty spaces in the main playing area can only be filled with Kings\n\n"
+        "Controls:\n"
+        "- Left-click and drag to move cards\n"
+        "- Double-click to automatically move cards to the suit piles at the top\n"
+        "- Right-click to draw new cards\n\n"
+        "Written by Jason Hall\n"
+        "Licensed under the MIT License\n"
+        "https://github.com/jasonbrianhall/minesweeper";
+    
+    gtk_text_buffer_set_text(buffer, instructions, -1);
+    
+    GtkWidget* scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                 GTK_POLICY_AUTOMATIC,
+                                 GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(scrolled_window, -1, 300);
+    gtk_container_add(GTK_CONTAINER(scrolled_window), instructions_text);
+    gtk_container_add(GTK_CONTAINER(content_area), scrolled_window);
+
+    // Show all widgets before running the dialog
+    gtk_widget_show_all(dialog);
+    
+    // Run dialog and destroy it when done
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
 }
