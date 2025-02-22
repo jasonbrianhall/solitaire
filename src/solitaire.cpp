@@ -123,28 +123,38 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
 }
 
 void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* card, bool face_up) {
+    std::ofstream log("cardback_debug.log", std::ios_base::app);
+    log << "\n--- drawCard called ---\n";
+    log << "Drawing card at x=" << x << ", y=" << y << ", face_up=" << face_up << std::endl;
+    
     if (face_up && card) {
-        // Check cache first for face-up card
+        log << "Drawing face-up card" << std::endl;
         std::string key = std::to_string(static_cast<int>(card->suit)) + 
                          std::to_string(static_cast<int>(card->rank));
         auto it = card_surface_cache_.find(key);
         
         if (it == card_surface_cache_.end()) {
-            // Not in cache, need to create it
+            log << "Card not in cache, creating it" << std::endl;
             if (auto img = deck_.getCardImage(*card)) {
                 GError* error = nullptr;
                 GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
                 
                 if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error)) {
-                    std::cerr << "Failed to write image data: " << (error ? error->message : "unknown error") << std::endl;
-                    if (error) g_error_free(error);
+                    log << "Failed to write image data" << std::endl;
+                    if (error) {
+                        log << "Error: " << error->message << std::endl;
+                        g_error_free(error);
+                    }
                     g_object_unref(loader);
                     return;
                 }
                 
                 if (!gdk_pixbuf_loader_close(loader, &error)) {
-                    std::cerr << "Failed to close loader: " << (error ? error->message : "unknown error") << std::endl;
-                    if (error) g_error_free(error);
+                    log << "Failed to close loader" << std::endl;
+                    if (error) {
+                        log << "Error: " << error->message << std::endl;
+                        g_error_free(error);
+                    }
                     g_object_unref(loader);
                     return;
                 }
@@ -159,7 +169,6 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
                     );
                     
                     if (scaled_pixbuf) {
-                        // Create cairo surface from pixbuf
                         cairo_surface_t* surface = cairo_image_surface_create(
                             CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
                         cairo_t* surface_cr = cairo_create(surface);
@@ -168,7 +177,6 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
                         cairo_paint(surface_cr);
                         cairo_destroy(surface_cr);
                         
-                        // Store in cache
                         card_surface_cache_[key] = surface;
                         
                         g_object_unref(scaled_pixbuf);
@@ -180,111 +188,124 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
             }
         }
         
-        // Draw the cached surface if we have it
         if (it != card_surface_cache_.end()) {
             cairo_set_source_surface(cr, it->second, x, y);
             cairo_paint(cr);
         }
     } else {
-        // For card back, first check if we have a custom back cached
+        log << "Drawing card back" << std::endl;
         auto custom_it = card_surface_cache_.find("custom_back");
         
-        if (!custom_back_path_.empty() && custom_it == card_surface_cache_.end()) {
-            // Need to create custom back cache
-            GError* error = nullptr;
-            GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(custom_back_path_.c_str(), &error);
+        if (!custom_back_path_.empty()) {
+            log << "Have custom back path: " << custom_back_path_ << std::endl;
             
-            if (pixbuf) {
-                GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
-                    pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+            if (custom_it == card_surface_cache_.end()) {
+                log << "Need to create custom back cache" << std::endl;
+                std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
+                if (file.is_open()) {
+                    std::streamsize size = file.tellg();
+                    file.seekg(0, std::ios::beg);
                     
-                if (scaled) {
-                    // Create and cache the surface
-                    cairo_surface_t* surface = cairo_image_surface_create(
-                        CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
-                    cairo_t* surface_cr = cairo_create(surface);
-                    
-                    gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
-                    cairo_paint(surface_cr);
-                    cairo_destroy(surface_cr);
-                    
-                    card_surface_cache_["custom_back"] = surface;
-                    custom_it = card_surface_cache_.find("custom_back");
-                    
-                    g_object_unref(scaled);
+                    std::vector<char> buffer(size);
+                    if (file.read(buffer.data(), size)) {
+                        GError* error = nullptr;
+                        GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+                        
+                        if (gdk_pixbuf_loader_write(loader, (const guchar*)buffer.data(), size, &error)) {
+                            gdk_pixbuf_loader_close(loader, &error);
+                            
+                            GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+                            if (original_pixbuf) {
+                                GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
+                                    original_pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+                                    
+                                if (scaled) {
+                                    cairo_surface_t* surface = cairo_image_surface_create(
+                                        CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+                                    cairo_t* surface_cr = cairo_create(surface);
+                                    
+                                    gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
+                                    cairo_paint(surface_cr);
+                                    cairo_destroy(surface_cr);
+                                    
+                                    card_surface_cache_["custom_back"] = surface;
+                                    custom_it = card_surface_cache_.find("custom_back");
+                                    
+                                    g_object_unref(scaled);
+                                }
+                            }
+                        }
+                        
+                        if (error) {
+                            log << "Error creating custom back: " << error->message << std::endl;
+                            g_error_free(error);
+                        }
+                        g_object_unref(loader);
+                    }
                 }
-                g_object_unref(pixbuf);
-            }
-            
-            if (error) {
-                g_error_free(error);
             }
         }
         
-        // If we have a valid custom back, use it
         if (custom_it != card_surface_cache_.end()) {
+            log << "Using custom back surface" << std::endl;
             cairo_set_source_surface(cr, custom_it->second, x, y);
             cairo_paint(cr);
+            log << "Painted custom back" << std::endl;
+            log.flush();
             return;
         }
         
-        // Fall back to default back if needed
+        log << "Using default back" << std::endl;
         auto default_it = card_surface_cache_.find("back");
         if (default_it == card_surface_cache_.end()) {
-            // Need to create default back cache
             if (auto back_img = deck_.getCardBackImage()) {
                 GError* error = nullptr;
                 GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
                 
-                if (!gdk_pixbuf_loader_write(loader, back_img->data.data(), back_img->data.size(), &error)) {
-                    std::cerr << "Failed to write image data: " << (error ? error->message : "unknown error") << std::endl;
-                    if (error) g_error_free(error);
-                    g_object_unref(loader);
-                    return;
-                }
-                
-                if (!gdk_pixbuf_loader_close(loader, &error)) {
-                    std::cerr << "Failed to close loader: " << (error ? error->message : "unknown error") << std::endl;
-                    if (error) g_error_free(error);
-                    g_object_unref(loader);
-                    return;
-                }
-                
-                GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-                if (original_pixbuf) {
-                    GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
-                        original_pixbuf,
-                        CARD_WIDTH,
-                        CARD_HEIGHT,
-                        GDK_INTERP_BILINEAR
-                    );
+                if (gdk_pixbuf_loader_write(loader, back_img->data.data(), back_img->data.size(), &error)) {
+                    gdk_pixbuf_loader_close(loader, &error);
                     
-                    if (scaled_pixbuf) {
-                        // Create and cache the surface
-                        cairo_surface_t* surface = cairo_image_surface_create(
-                            CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
-                        cairo_t* surface_cr = cairo_create(surface);
+                    GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+                    if (original_pixbuf) {
+                        GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
+                            original_pixbuf,
+                            CARD_WIDTH,
+                            CARD_HEIGHT,
+                            GDK_INTERP_BILINEAR
+                        );
                         
-                        gdk_cairo_set_source_pixbuf(surface_cr, scaled_pixbuf, 0, 0);
-                        cairo_paint(surface_cr);
-                        cairo_destroy(surface_cr);
-                        
-                        card_surface_cache_["back"] = surface;
-                        default_it = card_surface_cache_.find("back");
-                        
-                        g_object_unref(scaled_pixbuf);
+                        if (scaled_pixbuf) {
+                            cairo_surface_t* surface = cairo_image_surface_create(
+                                CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+                            cairo_t* surface_cr = cairo_create(surface);
+                            
+                            gdk_cairo_set_source_pixbuf(surface_cr, scaled_pixbuf, 0, 0);
+                            cairo_paint(surface_cr);
+                            cairo_destroy(surface_cr);
+                            
+                            card_surface_cache_["back"] = surface;
+                            default_it = card_surface_cache_.find("back");
+                            
+                            g_object_unref(scaled_pixbuf);
+                        }
                     }
+                }
+                
+                if (error) {
+                    log << "Error creating default back: " << error->message << std::endl;
+                    g_error_free(error);
                 }
                 g_object_unref(loader);
             }
         }
         
-        // Draw the default back if we have it
         if (default_it != card_surface_cache_.end()) {
             cairo_set_source_surface(cr, default_it->second, x, y);
             cairo_paint(cr);
         }
     }
+    log << "Finished drawing card" << std::endl;
+    log.flush();
 }
 
 void SolitaireGame::deal() {
@@ -867,9 +888,20 @@ bool SolitaireGame::checkWinCondition() const {
 
 // Function to refresh the display
 void SolitaireGame::refreshDisplay() {
-  if (game_area_) {
-    gtk_widget_queue_draw(game_area_);
-  }
+    std::ofstream log("cardback_debug.log", std::ios_base::app);
+    log << "\n--- refreshDisplay called ---\n";
+    log.flush();
+    
+    if (game_area_) {
+        log << "About to queue draw" << std::endl;
+        log.flush();
+        gtk_widget_queue_draw(game_area_);
+        log << "Queued draw" << std::endl;
+        log.flush();
+    } else {
+        log << "game_area_ is null" << std::endl;
+        log.flush();
+    }
 }
 
 int main(int argc, char **argv) {
@@ -935,10 +967,17 @@ void SolitaireGame::initializeCardCache() {
 }
 
 void SolitaireGame::cleanupCardCache() {
-  for (auto &[key, surface] : card_surface_cache_) {
-    cairo_surface_destroy(surface);
-  }
-  card_surface_cache_.clear();
+    std::ofstream log("cardback_debug.log", std::ios_base::app);
+    log << "\n--- cleanupCardCache called ---\n";
+    log.flush();
+    
+    for (auto &[key, surface] : card_surface_cache_) {
+        cairo_surface_destroy(surface);
+    }
+    card_surface_cache_.clear();
+    
+    log << "Finished cleanup" << std::endl;
+    log.flush();
 }
 
 cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
@@ -1045,7 +1084,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
 
   // Card Back menu - only show on non-Windows platforms
-#ifndef _WIN32
+//#ifndef _WIN32
   GtkWidget* cardBackMenu = gtk_menu_new();
   GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Card Back");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
@@ -1102,7 +1141,7 @@ void SolitaireGame::setupMenuBar() {
 
   // Add the Card Back submenu to the Game menu
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
-#endif
+//#endif
 
   // Load Deck option
   GtkWidget* loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
@@ -1375,22 +1414,85 @@ void SolitaireGame::saveSettings() {
 }
 
 bool SolitaireGame::setCustomCardBack(const std::string& path) {
-    // Try to load the image first to validate it
-    GError* error = nullptr;
-    GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(path.c_str(), &error);
+    std::ofstream log("cardback_debug.log", std::ios_base::app);
+    log << "\n--- New setCustomCardBack attempt ---\n";
     
-    if (!pixbuf) {
-        if (error) {
-            std::cerr << "Error loading image: " << error->message << std::endl;
-            g_error_free(error);
-        }
+    // First read the entire file into memory
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        log << "Could not open file" << std::endl;
         return false;
     }
-    g_object_unref(pixbuf);
-
-    custom_back_path_ = path;
-    saveSettings();
-    return true;
+    
+    // Store original path
+    std::string old_path = custom_back_path_;
+    log << "Stored old path: " << old_path << std::endl;
+    
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size)) {
+        log << "Could not read file" << std::endl;
+        return false;
+    }
+    
+    log << "Read file into memory, size: " << size << std::endl;
+    
+    // Now create pixbuf from memory
+    GError* error = nullptr;
+    GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
+    
+    if (!gdk_pixbuf_loader_write(loader, (const guchar*)buffer.data(), size, &error)) {
+        log << "Failed to write to loader" << std::endl;
+        if (error) {
+            log << "Error: " << error->message << std::endl;
+            g_error_free(error);
+        }
+        g_object_unref(loader);
+        return false;
+    }
+    
+    if (!gdk_pixbuf_loader_close(loader, &error)) {
+        log << "Failed to close loader" << std::endl;
+        if (error) {
+            log << "Error: " << error->message << std::endl;
+            g_error_free(error);
+        }
+        g_object_unref(loader);
+        return false;
+    }
+    
+    GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+    if (!pixbuf) {
+        log << "Failed to get pixbuf from loader" << std::endl;
+        g_object_unref(loader);
+        return false;
+    }
+    
+    log << "Successfully created pixbuf" << std::endl;
+    g_object_unref(loader);  // This will also unreference the pixbuf
+    
+    try {
+        log << "About to set custom_back_path_" << std::endl;
+        custom_back_path_ = path;
+        log << "Set custom_back_path_ to: " << custom_back_path_ << std::endl;
+        
+        log << "About to save settings" << std::endl;
+        saveSettings();
+        log << "Saved settings" << std::endl;
+        
+        log << "About to return true" << std::endl;
+        log.flush();
+        return true;
+        
+    } catch (const std::exception& e) {
+        log << "Exception during final steps: " << e.what() << std::endl;
+        custom_back_path_ = old_path;  // Restore old path
+        log << "Restored old path" << std::endl;
+        log.flush();
+        return false;
+    }
 }
 
 bool SolitaireGame::loadDeck(const std::string& path) {
@@ -1454,39 +1556,68 @@ void SolitaireGame::clearCustomBack() {
 }
 
 void SolitaireGame::refreshCardCache() {
+    std::ofstream log("cardback_debug.log", std::ios_base::app);
+    log << "\n--- refreshCardCache called ---\n";
+    log.flush();
+    
     // Clean up existing cache
     cleanupCardCache();
+    log << "Cleaned up old cache" << std::endl;
+    log.flush();
     
     // Rebuild the cache
     initializeCardCache();
+    log << "Initialized new cache" << std::endl;
+    log.flush();
     
     // If we have a custom back, reload it
     if (!custom_back_path_.empty()) {
-        GError* error = nullptr;
-        GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(custom_back_path_.c_str(), &error);
+        log << "Loading custom back from: " << custom_back_path_ << std::endl;
+        log.flush();
         
-        if (pixbuf) {
-            GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
-                pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+        std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
+        if (file.is_open()) {
+            std::streamsize size = file.tellg();
+            file.seekg(0, std::ios::beg);
+            
+            std::vector<char> buffer(size);
+            if (file.read(buffer.data(), size)) {
+                GError* error = nullptr;
+                GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
                 
-            if (scaled) {
-                cairo_surface_t* surface = cairo_image_surface_create(
-                    CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
-                cairo_t* surface_cr = cairo_create(surface);
+                if (gdk_pixbuf_loader_write(loader, (const guchar*)buffer.data(), size, &error)) {
+                    gdk_pixbuf_loader_close(loader, &error);
+                    
+                    GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+                    if (original_pixbuf) {
+                        GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
+                            original_pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+                            
+                        if (scaled) {
+                            cairo_surface_t* surface = cairo_image_surface_create(
+                                CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+                            cairo_t* surface_cr = cairo_create(surface);
+                            
+                            gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
+                            cairo_paint(surface_cr);
+                            cairo_destroy(surface_cr);
+                            
+                            card_surface_cache_["custom_back"] = surface;
+                            
+                            g_object_unref(scaled);
+                        }
+                    }
+                }
                 
-                gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
-                cairo_paint(surface_cr);
-                cairo_destroy(surface_cr);
-                
-                card_surface_cache_["custom_back"] = surface;
-                
-                g_object_unref(scaled);
+                if (error) {
+                    log << "Error loading custom back: " << error->message << std::endl;
+                    g_error_free(error);
+                }
+                g_object_unref(loader);
             }
-            g_object_unref(pixbuf);
-        }
-        
-        if (error) {
-            g_error_free(error);
         }
     }
+    
+    log << "Finished refreshing card cache" << std::endl;
+    log.flush();
 }
