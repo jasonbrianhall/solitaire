@@ -32,8 +32,6 @@ jobs:
       working-directory: build/windows
       run: |
         cp ../../icon.ico .
-        chmod +x collect_dlls.sh
-        ./collect_dlls.sh
 
     - name: Create ZIP Archive
       working-directory: build/windows
