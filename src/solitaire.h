@@ -117,6 +117,17 @@ private:
   bool tryMoveToFoundation(const cardlib::Card &card);
 
   void dealTestLayout();
+  
+  std::string settings_dir_;
+  std::string custom_back_path_;
+  bool loadSettings();
+  void saveSettings();
+  void initializeSettingsDir();
+  bool setCustomCardBack(const std::string& path);
+
+    bool loadDeck(const std::string& path);
+    void cleanupResources();
+
 };
 
 #endif // SOLITAIRE_H
