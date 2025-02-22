@@ -520,16 +520,33 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
       game->drag_start_x_ = event->x;
       game->drag_start_y_ = event->y;
       game->drag_cards_ = game->getDragCards(pile_index, card_index);
-      game->drag_offset_x_ =
-          event->x - (CARD_SPACING +
-                      (pile_index >= 6 ? (pile_index - 6)
-                                       : (pile_index == 1 ? 1 : pile_index)) *
-                          (CARD_WIDTH + CARD_SPACING));
-      game->drag_offset_y_ =
-          event->y - (pile_index >= 6
-                          ? (CARD_SPACING + CARD_HEIGHT + VERT_SPACING +
-                             card_index * VERT_SPACING)
-                          : CARD_SPACING);
+
+      // Calculate x offset based on pile type
+      int x_offset_multiplier;
+      if (pile_index >= 6) {
+        // Tableau piles
+        x_offset_multiplier = pile_index - 6;
+      } else if (pile_index >= 2 && pile_index <= 5) {
+        // Foundation piles - adjust for spacing after waste pile
+        x_offset_multiplier = pile_index + 1;
+      } else if (pile_index == 1) {
+        // Waste pile
+        x_offset_multiplier = 1;
+      } else {
+        // Stock pile
+        x_offset_multiplier = 0;
+      }
+
+      game->drag_offset_x_ = event->x - (CARD_SPACING + x_offset_multiplier * (CARD_WIDTH + CARD_SPACING));
+
+      // Calculate y offset
+      if (pile_index >= 6) {
+        // Tableau piles - account for vertical position within the pile
+        game->drag_offset_y_ = event->y - (CARD_SPACING + CARD_HEIGHT + VERT_SPACING + card_index * VERT_SPACING);
+      } else {
+        // All other piles are in the top row
+        game->drag_offset_y_ = event->y - CARD_SPACING;
+      }
     }
   } else if (event->button == 3) { // Right click
     auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
