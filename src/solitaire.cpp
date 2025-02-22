@@ -1058,7 +1058,8 @@ void SolitaireGame::setupMenuBar() {
     GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Card Back");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
 
-    // Select custom back option
+#ifndef _WIN32
+    // Select custom back option (crashes Windows so disabled until I can figure out why)
     GtkWidget* selectBackItem = gtk_menu_item_new_with_label("Select Custom Back");
     g_signal_connect(G_OBJECT(selectBackItem), "activate",
         G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
@@ -1107,6 +1108,8 @@ void SolitaireGame::setupMenuBar() {
             game->resetToDefaultBack();
         }), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
+#endif
+
 
     // Add the Card Back submenu to the Game menu
     gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
