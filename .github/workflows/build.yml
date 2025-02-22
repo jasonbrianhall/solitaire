@@ -53,7 +53,7 @@ jobs:
         cat > installer.wxs << 'EOL'
         <?xml version="1.0" encoding="UTF-8"?>
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-          <Product Id="*" Name="Solitaire" Language="1033" Version="1.0.0" Manufacturer="Jason Hall" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801">
+          <Product Id="*" Name="Solitaire" Language="1033" Version="1.0.${{ github.run_number }}" Manufacturer="Jason Hall" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801"> 
             <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
             <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
             <MediaTemplate EmbedCab="yes" />
