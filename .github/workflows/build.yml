@@ -48,53 +48,7 @@ jobs:
           fi
         done)
 
-        # Generate entries for GTK related files and directories
-        GTK_ENTRIES=""
-        
-        # Add share directory structure
-        if [ -d "share" ]; then
-          GTK_ENTRIES+="<Directory Id=\"ShareFolder\" Name=\"share\">"
-          
-          # Add glib-2.0 schemas
-          if [ -d "share/glib-2.0/schemas" ]; then
-            GTK_ENTRIES+="
-              <Directory Id=\"GLibFolder\" Name=\"glib-2.0\">
-                <Directory Id=\"SchemasFolder\" Name=\"schemas\">
-                  <Component Id=\"GtkSchemas\" Guid=\"*\">
-                    <File Id=\"GSchemas\" Name=\"gschemas.compiled\" Source=\"share/glib-2.0/schemas/gschemas.compiled\"/>
-                  </Component>
-                </Directory>
-              </Directory>"
-          fi
-          
-          # Add icons
-          if [ -d "share/icons" ]; then
-            GTK_ENTRIES+="
-              <Directory Id=\"IconsFolder\" Name=\"icons\">
-                <Directory Id=\"HicolorFolder\" Name=\"hicolor\">
-                  <Component Id=\"GtkIcons\" Guid=\"*\">
-                    <File Id=\"IconsIndex\" Name=\"index.theme\" Source=\"share/icons/hicolor/index.theme\"/>
-                  </Component>
-                </Directory>
-              </Directory>"
-          fi
-          
-          # Add themes
-          if [ -d "share/themes" ]; then
-            GTK_ENTRIES+="
-              <Directory Id=\"ThemesFolder\" Name=\"themes\">
-                <Directory Id=\"DefaultTheme\" Name=\"default\">
-                  <Component Id=\"GtkThemes\" Guid=\"*\">
-                    <File Id=\"ThemeIndex\" Name=\"index.theme\" Source=\"share/themes/default/index.theme\"/>
-                  </Component>
-                </Directory>
-              </Directory>"
-          fi
-          
-          GTK_ENTRIES+="</Directory>"
-        fi
-
-        # Create the WXS file with the generated entries
+        # Create the WXS file
         cat > installer.wxs << EOL
         <?xml version="1.0" encoding="UTF-8"?>
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
@@ -114,7 +68,37 @@ jobs:
                     <File Id="README" Name="README.md" Source="../../README.md"/>
                     <File Id="LICENSE" Name="LICENSE.md" Source="../../LICENSE.md"/>
                   </Component>
-                  $GTK_ENTRIES
+                  <Directory Id="LibDir" Name="lib">
+                    <Directory Id="GdkPixbuf" Name="gdk-pixbuf-2.0">
+                      <Component Id="GdkPixbufDir" Guid="*">
+                        <CreateFolder />
+                      </Component>
+                    </Directory>
+                    <Directory Id="Gtk3" Name="gtk-3.0">
+                      <Component Id="Gtk3Dir" Guid="*">
+                        <CreateFolder />
+                      </Component>
+                    </Directory>
+                  </Directory>
+                  <Directory Id="ShareDir" Name="share">
+                    <Directory Id="GLib2" Name="glib-2.0">
+                      <Directory Id="Schemas" Name="schemas">
+                        <Component Id="GtkSchemas" Guid="*">
+                          <File Id="GSchemas" Name="gschemas.compiled" Source="share/glib-2.0/schemas/gschemas.compiled"/>
+                        </Component>
+                      </Directory>
+                    </Directory>
+                    <Directory Id="Icons" Name="icons">
+                      <Component Id="IconsDir" Guid="*">
+                        <CreateFolder />
+                      </Component>
+                    </Directory>
+                    <Directory Id="Themes" Name="themes">
+                      <Component Id="ThemesDir" Guid="*">
+                        <CreateFolder />
+                      </Component>
+                    </Directory>
+                  </Directory>
                 </Directory>
               </Directory>
               <Directory Id="ProgramMenuFolder">
@@ -135,8 +119,10 @@ jobs:
               <ComponentRef Id="MainExecutable" />
               <ComponentRef Id="ApplicationShortcuts" />
               <ComponentRef Id="GtkSchemas" />
-              <ComponentRef Id="GtkIcons" />
-              <ComponentRef Id="GtkThemes" />
+              <ComponentRef Id="GdkPixbufDir" />
+              <ComponentRef Id="Gtk3Dir" />
+              <ComponentRef Id="IconsDir" />
+              <ComponentRef Id="ThemesDir" />
             </Feature>
             <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
           </Product>
