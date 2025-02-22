@@ -1283,12 +1283,10 @@ void SolitaireGame::initializeSettingsDir() {
     std::string app_dir;
     
     #ifdef _WIN32
-        // Currently Broken; will fix later
-        return;
         home_dir = getenv("USERPROFILE");
         if (home_dir) {
-            //app_dir = std::string(home_dir) + "\\AppData\\Local\\Solitaire";
-            app_dir = std::string(home_dir) + "/.config/solitaire";
+            app_dir = std::string(home_dir) + "\\AppData\\Local\\Solitaire";
+            //app_dir = std::string(home_dir) + "/.config/solitaire";
         }
     #else
         home_dir = getenv("HOME");
