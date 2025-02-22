@@ -43,13 +43,14 @@ jobs:
         # Generate the DLL entries
         DLL_ENTRIES=$(for f in *.dll; do 
           if [ -f "$f" ]; then
+            # Create a safe ID by removing invalid characters
             SAFE_ID=$(echo "$f" | sed 's/[^a-zA-Z0-9]/_/g')
             echo "<File Id=\"$SAFE_ID\" Name=\"$f\" Source=\"$f\"/>"
           fi
         done)
 
-        # Create the WXS file
-        cat > installer.wxs << EOL
+        # Create the WXS file with the generated DLL entries
+        cat > installer.wxs << 'EOL'
         <?xml version="1.0" encoding="UTF-8"?>
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
           <Product Id="*" Name="Solitaire GTK" Language="1033" Version="1.0.0" Manufacturer="Your Name" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801">
@@ -64,18 +65,24 @@ jobs:
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
                     <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
                     <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
-                    $DLL_ENTRIES
+        EOL
+
+        # Add the generated DLL entries
+        echo "$DLL_ENTRIES" >> installer.wxs
+
+        # Complete the WXS file
+        cat >> installer.wxs << 'EOL'
                     <File Id="README" Name="README.md" Source="../../README.md"/>
                     <File Id="LICENSE" Name="LICENSE.md" Source="../../LICENSE.md"/>
                   </Component>
                   <Directory Id="LibDir" Name="lib">
                     <Directory Id="GdkPixbuf" Name="gdk-pixbuf-2.0">
-                      <Component Id="GdkPixbufDir" Guid="*">
+                      <Component Id="GdkPixbufDir" Guid="E5F7B982-D93A-4A42-A3B2-642D3F9E3F48">
                         <CreateFolder />
                       </Component>
                     </Directory>
                     <Directory Id="Gtk3" Name="gtk-3.0">
-                      <Component Id="Gtk3Dir" Guid="*">
+                      <Component Id="Gtk3Dir" Guid="F8D4C159-8E2B-4B47-B9A3-753D2F9E4F59">
                         <CreateFolder />
                       </Component>
                     </Directory>
@@ -83,18 +90,18 @@ jobs:
                   <Directory Id="ShareDir" Name="share">
                     <Directory Id="GLib2" Name="glib-2.0">
                       <Directory Id="Schemas" Name="schemas">
-                        <Component Id="GtkSchemas" Guid="*">
+                        <Component Id="GtkSchemas" Guid="A7C3D845-B6E1-4C53-8D1E-864F2F9E5F60">
                           <File Id="GSchemas" Name="gschemas.compiled" Source="share/glib-2.0/schemas/gschemas.compiled"/>
                         </Component>
                       </Directory>
                     </Directory>
                     <Directory Id="Icons" Name="icons">
-                      <Component Id="IconsDir" Guid="*">
+                      <Component Id="IconsDir" Guid="B9E5F371-A4C2-4D64-92F4-975E3F9E6F71">
                         <CreateFolder />
                       </Component>
                     </Directory>
                     <Directory Id="Themes" Name="themes">
-                      <Component Id="ThemesDir" Guid="*">
+                      <Component Id="ThemesDir" Guid="C2F6G482-B5D3-4E75-A3F5-086G4F9E7F82">
                         <CreateFolder />
                       </Component>
                     </Directory>
@@ -130,7 +137,6 @@ jobs:
         EOL
 
         wixl -v installer.wxs -o ../../Solitaire-GTK.msi
-
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
