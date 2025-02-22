@@ -102,7 +102,7 @@ jobs:
             <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
           </Product>
         </Wix>
-EOL
+        EOL
 
         wixl -v installer.wxs -o ../Solitaire-GTK.msi
 
