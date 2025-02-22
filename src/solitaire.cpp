@@ -944,9 +944,13 @@ void SolitaireGame::onAbout(GtkWidget* /* widget */, gpointer data) {
         GTK_RESPONSE_OK,
         NULL);
 
+    // Set minimum dialog size
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 500);
+
     // Create and configure the content area
     GtkWidget* content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+    gtk_container_set_border_width(GTK_CONTAINER(content_area), 24);
+    gtk_widget_set_margin_bottom(content_area, 12);
     
     // Add program name with larger font
     GtkWidget* name_label = gtk_label_new(NULL);
@@ -957,12 +961,15 @@ void SolitaireGame::onAbout(GtkWidget* /* widget */, gpointer data) {
     // Add version
     GtkWidget* version_label = gtk_label_new("Version 1.0");
     gtk_container_add(GTK_CONTAINER(content_area), version_label);
+    gtk_widget_set_margin_bottom(version_label, 12);
 
     // Add game instructions in a scrolled window
     GtkWidget* instructions_text = gtk_text_view_new();
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(instructions_text), GTK_WRAP_WORD);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(instructions_text), FALSE);
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(instructions_text), FALSE);
+    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(instructions_text), 12);
+    gtk_text_view_set_right_margin(GTK_TEXT_VIEW(instructions_text), 12);
     
     GtkTextBuffer* buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
     const char* instructions = 
@@ -996,7 +1003,10 @@ void SolitaireGame::onAbout(GtkWidget* /* widget */, gpointer data) {
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
                                  GTK_POLICY_AUTOMATIC,
                                  GTK_POLICY_AUTOMATIC);
-    gtk_widget_set_size_request(scrolled_window, -1, 300);
+    
+    // Set the size of the scrolled window to be larger
+    gtk_widget_set_size_request(scrolled_window, 550, 400);
+    
     gtk_container_add(GTK_CONTAINER(scrolled_window), instructions_text);
     gtk_container_add(GTK_CONTAINER(content_area), scrolled_window);
 
