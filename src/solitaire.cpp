@@ -123,38 +123,24 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
 }
 
 void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* card, bool face_up) {
-    std::ofstream log("cardback_debug.log", std::ios_base::app);
-    log << "\n--- drawCard called ---\n";
-    log << "Drawing card at x=" << x << ", y=" << y << ", face_up=" << face_up << std::endl;
-    
     if (face_up && card) {
-        log << "Drawing face-up card" << std::endl;
         std::string key = std::to_string(static_cast<int>(card->suit)) + 
                          std::to_string(static_cast<int>(card->rank));
         auto it = card_surface_cache_.find(key);
         
         if (it == card_surface_cache_.end()) {
-            log << "Card not in cache, creating it" << std::endl;
             if (auto img = deck_.getCardImage(*card)) {
                 GError* error = nullptr;
                 GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
                 
                 if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error)) {
-                    log << "Failed to write image data" << std::endl;
-                    if (error) {
-                        log << "Error: " << error->message << std::endl;
-                        g_error_free(error);
-                    }
+                    if (error) g_error_free(error);
                     g_object_unref(loader);
                     return;
                 }
                 
                 if (!gdk_pixbuf_loader_close(loader, &error)) {
-                    log << "Failed to close loader" << std::endl;
-                    if (error) {
-                        log << "Error: " << error->message << std::endl;
-                        g_error_free(error);
-                    }
+                    if (error) g_error_free(error);
                     g_object_unref(loader);
                     return;
                 }
@@ -193,14 +179,10 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
             cairo_paint(cr);
         }
     } else {
-        log << "Drawing card back" << std::endl;
         auto custom_it = card_surface_cache_.find("custom_back");
         
         if (!custom_back_path_.empty()) {
-            log << "Have custom back path: " << custom_back_path_ << std::endl;
-            
             if (custom_it == card_surface_cache_.end()) {
-                log << "Need to create custom back cache" << std::endl;
                 std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
                 if (file.is_open()) {
                     std::streamsize size = file.tellg();
@@ -236,10 +218,7 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
                             }
                         }
                         
-                        if (error) {
-                            log << "Error creating custom back: " << error->message << std::endl;
-                            g_error_free(error);
-                        }
+                        if (error) g_error_free(error);
                         g_object_unref(loader);
                     }
                 }
@@ -247,15 +226,11 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
         }
         
         if (custom_it != card_surface_cache_.end()) {
-            log << "Using custom back surface" << std::endl;
             cairo_set_source_surface(cr, custom_it->second, x, y);
             cairo_paint(cr);
-            log << "Painted custom back" << std::endl;
-            log.flush();
             return;
         }
         
-        log << "Using default back" << std::endl;
         auto default_it = card_surface_cache_.find("back");
         if (default_it == card_surface_cache_.end()) {
             if (auto back_img = deck_.getCardBackImage()) {
@@ -291,10 +266,7 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
                     }
                 }
                 
-                if (error) {
-                    log << "Error creating default back: " << error->message << std::endl;
-                    g_error_free(error);
-                }
+                if (error) g_error_free(error);
                 g_object_unref(loader);
             }
         }
@@ -304,8 +276,6 @@ void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
             cairo_paint(cr);
         }
     }
-    log << "Finished drawing card" << std::endl;
-    log.flush();
 }
 
 void SolitaireGame::deal() {
@@ -888,19 +858,8 @@ bool SolitaireGame::checkWinCondition() const {
 
 // Function to refresh the display
 void SolitaireGame::refreshDisplay() {
-    std::ofstream log("cardback_debug.log", std::ios_base::app);
-    log << "\n--- refreshDisplay called ---\n";
-    log.flush();
-    
     if (game_area_) {
-        log << "About to queue draw" << std::endl;
-        log.flush();
         gtk_widget_queue_draw(game_area_);
-        log << "Queued draw" << std::endl;
-        log.flush();
-    } else {
-        log << "game_area_ is null" << std::endl;
-        log.flush();
     }
 }
 
@@ -967,17 +926,10 @@ void SolitaireGame::initializeCardCache() {
 }
 
 void SolitaireGame::cleanupCardCache() {
-    std::ofstream log("cardback_debug.log", std::ios_base::app);
-    log << "\n--- cleanupCardCache called ---\n";
-    log.flush();
-    
     for (auto &[key, surface] : card_surface_cache_) {
         cairo_surface_destroy(surface);
     }
     card_surface_cache_.clear();
-    
-    log << "Finished cleanup" << std::endl;
-    log.flush();
 }
 
 cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
@@ -1414,39 +1366,31 @@ void SolitaireGame::saveSettings() {
 }
 
 bool SolitaireGame::setCustomCardBack(const std::string& path) {
-    std::ofstream log("cardback_debug.log", std::ios_base::app);
-    log << "\n--- New setCustomCardBack attempt ---\n";
     
     // First read the entire file into memory
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        log << "Could not open file" << std::endl;
         return false;
     }
     
     // Store original path
     std::string old_path = custom_back_path_;
-    log << "Stored old path: " << old_path << std::endl;
     
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
     
     std::vector<char> buffer(size);
     if (!file.read(buffer.data(), size)) {
-        log << "Could not read file" << std::endl;
         return false;
     }
     
-    log << "Read file into memory, size: " << size << std::endl;
     
     // Now create pixbuf from memory
     GError* error = nullptr;
     GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
     
     if (!gdk_pixbuf_loader_write(loader, (const guchar*)buffer.data(), size, &error)) {
-        log << "Failed to write to loader" << std::endl;
         if (error) {
-            log << "Error: " << error->message << std::endl;
             g_error_free(error);
         }
         g_object_unref(loader);
@@ -1454,9 +1398,7 @@ bool SolitaireGame::setCustomCardBack(const std::string& path) {
     }
     
     if (!gdk_pixbuf_loader_close(loader, &error)) {
-        log << "Failed to close loader" << std::endl;
         if (error) {
-            log << "Error: " << error->message << std::endl;
             g_error_free(error);
         }
         g_object_unref(loader);
@@ -1465,32 +1407,21 @@ bool SolitaireGame::setCustomCardBack(const std::string& path) {
     
     GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
     if (!pixbuf) {
-        log << "Failed to get pixbuf from loader" << std::endl;
         g_object_unref(loader);
         return false;
     }
     
-    log << "Successfully created pixbuf" << std::endl;
     g_object_unref(loader);  // This will also unreference the pixbuf
     
     try {
-        log << "About to set custom_back_path_" << std::endl;
         custom_back_path_ = path;
-        log << "Set custom_back_path_ to: " << custom_back_path_ << std::endl;
         
-        log << "About to save settings" << std::endl;
         saveSettings();
-        log << "Saved settings" << std::endl;
         
-        log << "About to return true" << std::endl;
-        log.flush();
         return true;
         
     } catch (const std::exception& e) {
-        log << "Exception during final steps: " << e.what() << std::endl;
         custom_back_path_ = old_path;  // Restore old path
-        log << "Restored old path" << std::endl;
-        log.flush();
         return false;
     }
 }
@@ -1556,24 +1487,14 @@ void SolitaireGame::clearCustomBack() {
 }
 
 void SolitaireGame::refreshCardCache() {
-    std::ofstream log("cardback_debug.log", std::ios_base::app);
-    log << "\n--- refreshCardCache called ---\n";
-    log.flush();
-    
     // Clean up existing cache
     cleanupCardCache();
-    log << "Cleaned up old cache" << std::endl;
-    log.flush();
     
     // Rebuild the cache
     initializeCardCache();
-    log << "Initialized new cache" << std::endl;
-    log.flush();
     
     // If we have a custom back, reload it
     if (!custom_back_path_.empty()) {
-        log << "Loading custom back from: " << custom_back_path_ << std::endl;
-        log.flush();
         
         std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
         if (file.is_open()) {
@@ -1610,7 +1531,6 @@ void SolitaireGame::refreshCardCache() {
                 }
                 
                 if (error) {
-                    log << "Error loading custom back: " << error->message << std::endl;
                     g_error_free(error);
                 }
                 g_object_unref(loader);
@@ -1618,6 +1538,4 @@ void SolitaireGame::refreshCardCache() {
         }
     }
     
-    log << "Finished refreshing card cache" << std::endl;
-    log.flush();
 }
