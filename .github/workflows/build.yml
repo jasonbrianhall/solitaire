@@ -23,7 +23,6 @@ jobs:
       run: |
         dnf -y install mingw64-gcc mingw64-gcc-c++ mingw64-gtk3 mingw64-gtkmm30 wine wine-devel wixl binutils make zip unzip libzip-devel mingw64-libzip
 
-
     - name: Build GTK Version
       run: |
         make windows
@@ -44,61 +43,105 @@ jobs:
         # Generate the DLL entries
         DLL_ENTRIES=$(for f in *.dll; do 
           if [ -f "$f" ]; then
-            # Create a safe ID by removing invalid characters
             SAFE_ID=$(echo "$f" | sed 's/[^a-zA-Z0-9]/_/g')
             echo "<File Id=\"$SAFE_ID\" Name=\"$f\" Source=\"$f\"/>"
           fi
         done)
 
-        # Create the WXS file with the generated DLL entries
-        cat > installer.wxs << 'EOL'
-        <?xml version="1.0" encoding="UTF-8"?>
-        <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-          <Product Id="*" Name="Solitaire GTK" Language="1033" Version="1.0.0" Manufacturer="Your Name" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801">
-            <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
-            <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
-            <MediaTemplate EmbedCab="yes" />
-            <Directory Id="TARGETDIR" Name="SourceDir">
-              <Directory Id="ProgramFilesFolder">
-                <Directory Id="INSTALLFOLDER" Name="Solitaire GTK">
-                  <Component Id="MainExecutable" Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23">
-                    <File Id="MainEXE" Name="solitaire.exe" Source="solitaire.exe" KeyPath="yes"/>
-                    <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
-                    <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
-        EOL
-
-        # Add the generated DLL entries
-        echo "$DLL_ENTRIES" >> installer.wxs
-
-        # Complete the WXS file
-        cat >> installer.wxs << 'EOL'
-                    <File Id="README" Name="README.md" Source="../../README.md"/>
-                    <File Id="LICENSE" Name="LICENSE.md" Source="../../LICENSE.md"/>
+        # Generate entries for GTK related files and directories
+        GTK_ENTRIES=""
+        
+        # Add share directory structure
+        if [ -d "share" ]; then
+          GTK_ENTRIES+="<Directory Id=\"ShareFolder\" Name=\"share\">"
+          
+          # Add glib-2.0 schemas
+          if [ -d "share/glib-2.0/schemas" ]; then
+            GTK_ENTRIES+="
+              <Directory Id=\"GLibFolder\" Name=\"glib-2.0\">
+                <Directory Id=\"SchemasFolder\" Name=\"schemas\">
+                  <Component Id=\"GtkSchemas\" Guid=\"*\">
+                    <File Id=\"GSchemas\" Name=\"gschemas.compiled\" Source=\"share/glib-2.0/schemas/gschemas.compiled\"/>
                   </Component>
                 </Directory>
-              </Directory>
-              <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="Solitaire GTK">
-                  <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
-                    <Shortcut Id="ApplicationStartMenu" 
-                             Name="Solitaire GTK" 
-                             Target="[INSTALLFOLDER]solitaire.exe" 
-                             WorkingDirectory="INSTALLFOLDER"
-                             Icon="SolitaireIcon"/>
-                    <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
-                    <RegistryValue Root="HKCU" Key="Software\SolitaireGTK" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+              </Directory>"
+          fi
+          
+          # Add icons
+          if [ -d "share/icons" ]; then
+            GTK_ENTRIES+="
+              <Directory Id=\"IconsFolder\" Name=\"icons\">
+                <Directory Id=\"HicolorFolder\" Name=\"hicolor\">
+                  <Component Id=\"GtkIcons\" Guid=\"*\">
+                    <File Id=\"IconsIndex\" Name=\"index.theme\" Source=\"share/icons/hicolor/index.theme\"/>
                   </Component>
                 </Directory>
-              </Directory>
-            </Directory>
-            <Feature Id="ProductFeature" Title="Solitaire GTK" Level="1">
-              <ComponentRef Id="MainExecutable" />
-              <ComponentRef Id="ApplicationShortcuts" />
-            </Feature>
-            <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
-          </Product>
-        </Wix>
-        EOL
+              </Directory>"
+          fi
+          
+          # Add themes
+          if [ -d "share/themes" ]; then
+            GTK_ENTRIES+="
+              <Directory Id=\"ThemesFolder\" Name=\"themes\">
+                <Directory Id=\"DefaultTheme\" Name=\"default\">
+                  <Component Id=\"GtkThemes\" Guid=\"*\">
+                    <File Id=\"ThemeIndex\" Name=\"index.theme\" Source=\"share/themes/default/index.theme\"/>
+                  </Component>
+                </Directory>
+              </Directory>"
+          fi
+          
+          GTK_ENTRIES+="</Directory>"
+        fi
+
+        # Create the WXS file with the generated entries
+        cat > installer.wxs << EOL
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Solitaire GTK" Language="1033" Version="1.0.0" Manufacturer="Your Name" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="Solitaire GTK">
+          <Component Id="MainExecutable" Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23">
+            <File Id="MainEXE" Name="solitaire.exe" Source="solitaire.exe" KeyPath="yes"/>
+            <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
+            <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
+            <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
+            $DLL_ENTRIES
+            <File Id="README" Name="README.md" Source="../../README.md"/>
+            <File Id="LICENSE" Name="LICENSE.md" Source="../../LICENSE.md"/>
+          </Component>
+          $GTK_ENTRIES
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Solitaire GTK">
+          <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
+            <Shortcut Id="ApplicationStartMenu" 
+                     Name="Solitaire GTK" 
+                     Target="[INSTALLFOLDER]solitaire.exe" 
+                     WorkingDirectory="INSTALLFOLDER"
+                     Icon="SolitaireIcon"/>
+            <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
+            <RegistryValue Root="HKCU" Key="Software\SolitaireGTK" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+    <Feature Id="ProductFeature" Title="Solitaire GTK" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="ApplicationShortcuts" />
+      <ComponentRef Id="GtkSchemas" />
+      <ComponentRef Id="GtkIcons" />
+      <ComponentRef Id="GtkThemes" />
+    </Feature>
+    <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
+  </Product>
+</Wix>
+EOL
 
         wixl -v installer.wxs -o ../../Solitaire-GTK.msi
 
@@ -143,8 +186,3 @@ jobs:
           This release includes:
           - Windows GTK installer (Solitaire-GTK.msi)
           - Windows GTK portable version (Solitaire-GTK.zip)
-
-    - name: Output Release URL
-      if: success()
-      run: |
-        echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}"
