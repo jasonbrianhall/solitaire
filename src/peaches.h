@@ -34,7 +34,6 @@ public:
     ThirtyOneGame();  // Default constructor with 3 AI opponents
     ThirtyOneGame(const std::vector<std::string>& player_names);  // Custom players constructor
     ~ThirtyOneGame();
-    
     void run(int argc, char** argv);
 
 private:
@@ -139,6 +138,8 @@ private:
     int getBestSuitValue(const std::vector<cardlib::Card>& hand) const;
     
     int ai_speed_ms_;  // Configurable AI speed
+    bool has_drawn_card_;  // Track if player has drawn a card this turn
+
 };
 
 #endif // PEACHES_H

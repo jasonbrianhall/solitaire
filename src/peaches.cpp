@@ -6,14 +6,16 @@ ThirtyOneGame::ThirtyOneGame()
     : waiting_for_ai_(false), game_paused_(false), ai_timer_id_(0),
       dragging_(false), drag_source_pile_(-1), drag_card_index_(-1),
       window_(nullptr), game_area_(nullptr), buffer_surface_(nullptr),
-      buffer_cr_(nullptr), ai_speed_ms_(AI_MOVE_DELAY_MS) {
+      buffer_cr_(nullptr), ai_speed_ms_(AI_MOVE_DELAY_MS),
+      has_drawn_card_(false) {
     
     rng_.seed(std::chrono::system_clock::now().time_since_epoch().count());
     
+    // Initialize with human player and AI players with personalized names
     players_.emplace_back("Player", PlayerType::HUMAN);
-    players_.emplace_back("AI Conservative", PlayerType::AI_CONSERVATIVE);
-    players_.emplace_back("AI Aggressive", PlayerType::AI_AGGRESSIVE);
-    players_.emplace_back("AI Balanced", PlayerType::AI_BALANCED);
+    players_.emplace_back("Ellie", PlayerType::AI_CONSERVATIVE);
+    players_.emplace_back("Ariel", PlayerType::AI_AGGRESSIVE);
+    players_.emplace_back("Skylar", PlayerType::AI_BALANCED);
     
     try {
         deck_ = cardlib::Deck("cards.zip");
@@ -67,6 +69,7 @@ void ThirtyOneGame::run(int argc, char** argv) {
 }
 
 void ThirtyOneGame::startNewRound() {
+    has_drawn_card_ = false;
     deck_.reset();
     deck_.shuffle();
     
@@ -151,23 +154,32 @@ bool ThirtyOneGame::hasTwoFaceCardsAndAce(const std::vector<cardlib::Card>& hand
 }
 
 void ThirtyOneGame::drawFromDeck() {
-    if (auto card = deck_.drawCard()) {
-        players_[current_player_].hand.push_back(*card);
+    if (!has_drawn_card_) {
+        if (auto card = deck_.drawCard()) {
+            players_[current_player_].hand.push_back(*card);
+            has_drawn_card_ = true;
+            refreshDisplay();
+        }
     }
 }
 
 void ThirtyOneGame::drawFromDiscard() {
-    if (!discard_pile_.empty()) {
+    if (!has_drawn_card_ && !discard_pile_.empty()) {
         players_[current_player_].hand.push_back(discard_pile_.back());
         discard_pile_.pop_back();
+        has_drawn_card_ = true;
+        refreshDisplay();
     }
 }
 
 void ThirtyOneGame::discard(int card_index) {
+    if (!has_drawn_card_) return;  // Must draw before discarding
+    
     auto& current_hand = players_[current_player_].hand;
     if (card_index >= 0 && static_cast<size_t>(card_index) < current_hand.size()) {
         discard_pile_.push_back(current_hand[card_index]);
         current_hand.erase(current_hand.begin() + card_index);
+        has_drawn_card_ = false;  // Reset for next player
         nextPlayer();
     }
 }
@@ -356,6 +368,7 @@ int ThirtyOneGame::getOptimalSuitForHand(const std::vector<cardlib::Card>& hand)
 }
 
 void ThirtyOneGame::nextPlayer() {
+    has_drawn_card_ = false;  // Reset for next player
     do {
         current_player_ = (current_player_ + 1) % players_.size();
     } while (players_[current_player_].tokens < 0);
