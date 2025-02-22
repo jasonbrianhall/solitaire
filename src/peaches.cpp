@@ -676,6 +676,11 @@ bool ThirtyOneGame::isValidDragSource(int pile_index, int card_index) const {
 gboolean ThirtyOneGame::onButtonPress(GtkWidget* widget, GdkEventButton* event, gpointer data) {
     ThirtyOneGame* game = static_cast<ThirtyOneGame*>(data);
 
+    // Check if it's an AI's turn - if so, ignore player input
+    if (game->players_[game->current_player_].type != PlayerType::HUMAN) {
+        return TRUE;
+    }
+
     if (event->button == 1) {
         auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
@@ -724,6 +729,11 @@ gboolean ThirtyOneGame::onButtonPress(GtkWidget* widget, GdkEventButton* event, 
 gboolean ThirtyOneGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event, gpointer data) {
     ThirtyOneGame* game = static_cast<ThirtyOneGame*>(data);
 
+    // Check if it's an AI's turn - if so, ignore player input
+    if (game->players_[game->current_player_].type != PlayerType::HUMAN) {
+        return TRUE;
+    }
+
     if (event->button == 1 && game->dragging_) {
         auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
 
@@ -746,6 +756,10 @@ gboolean ThirtyOneGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
 
 gboolean ThirtyOneGame::onMotionNotify(GtkWidget* widget, GdkEventMotion* event, gpointer data) {
     ThirtyOneGame* game = static_cast<ThirtyOneGame*>(data);
+
+    if (game->players_[game->current_player_].type != PlayerType::HUMAN) {
+        return TRUE;
+    }
 
     if (game->dragging_) {
         game->drag_start_x_ = event->x;
