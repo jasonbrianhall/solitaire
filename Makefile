@@ -15,7 +15,7 @@ SRCS = src/solitaire.cpp src/cardlib.cpp
 OBJS_LINUX = $(SRCS:.cpp=.o)
 OBJS_WIN = $(SRCS:.cpp=.win.o)
 TARGET_LINUX = solitaire
-TARGET_WIN = solitaire_gtk.exe
+TARGET_WIN = solitaire.exe
 
 # Build directories
 BUILD_DIR = build
