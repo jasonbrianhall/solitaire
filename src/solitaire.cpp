@@ -420,13 +420,38 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
         if (target_pile >= 0) {
             bool move_successful = false;
             
+            // Handle dropping on foundation piles (index 2-5)
+            if (target_pile >= 2 && target_pile <= 5) {
+                auto& foundation_pile = game->foundation_[target_pile - 2];
+                if (game->canMoveToPile(game->drag_cards_, foundation_pile, true)) {
+                    // Remove card from source
+                    if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
+                        auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
+                        source_tableau.pop_back();
+                        
+                        // Flip over the new top card if there is one
+                        if (!source_tableau.empty() && !source_tableau.back().face_up) {
+                            source_tableau.back().face_up = true;
+                        }
+                    } else {
+                        auto& source = game->getPileReference(game->drag_source_pile_);
+                        source.pop_back();
+                    }
+
+                    // Add to foundation
+                    foundation_pile.push_back(game->drag_cards_[0]);
+                    move_successful = true;
+                }
+            }
             // Handle dropping on tableau piles (index 6-12)
-            if (target_pile >= 6 && target_pile <= 12) {
+            else if (target_pile >= 6 && target_pile <= 12) {
                 auto& tableau_pile = game->tableau_[target_pile - 6];
-                if (game->canMoveToPile(game->drag_cards_, 
-                    tableau_pile.empty() ? std::vector<cardlib::Card>() : 
-                    std::vector<cardlib::Card>{tableau_pile.back().card})) {
-                    
+                std::vector<cardlib::Card> target_cards;
+                if (!tableau_pile.empty()) {
+                    target_cards = {tableau_pile.back().card};
+                }
+                
+                if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
                     // Remove cards from source
                     if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
                         auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
@@ -448,41 +473,18 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
                     move_successful = true;
                 }
             }
-            // Handle dropping on foundation piles (index 2-5)
-            else if (target_pile >= 2 && target_pile <= 5) {
-                if (game->drag_cards_.size() == 1) {  // Only allow single cards
-                    auto& foundation_pile = game->foundation_[target_pile - 2];
-                    if (game->canMoveToPile(game->drag_cards_, foundation_pile)) {
-                        // Remove card from source
-                        if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-                            auto& source_tableau = game->tableau_[game->drag_source_pile_ - 6];
-                            source_tableau.pop_back();  // Remove single card
-                            
-                            // Flip over the new top card if there is one
-                            if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                                source_tableau.back().face_up = true;
-                            }
-                        } else {
-                            auto& source = game->getPileReference(game->drag_source_pile_);
-                            source.pop_back();
-                        }
 
-                        // Add to foundation
-                        foundation_pile.push_back(game->drag_cards_[0]);
-                        move_successful = true;
-                    }
+            if (move_successful) {
+                if (game->checkWinCondition()) {
+                    GtkWidget* dialog = gtk_message_dialog_new(
+                        GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+                        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
+                    gtk_dialog_run(GTK_DIALOG(dialog));
+                    gtk_widget_destroy(dialog);
+
+                    game->initializeGame();
                 }
-            }
-
-            // Only check win condition if a move was actually made
-            if (move_successful && game->checkWinCondition()) {
-                GtkWidget* dialog = gtk_message_dialog_new(
-                    GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-                    GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-                gtk_dialog_run(GTK_DIALOG(dialog));
-                gtk_widget_destroy(dialog);
-
-                game->initializeGame();
+                gtk_widget_queue_draw(game->game_area_);
             }
         }
 
@@ -494,6 +496,7 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget* widget, GdkEventButton* event
 
     return TRUE;
 }
+
 void SolitaireGame::handleStockPileClick() {
     if (stock_.empty()) {
         // If stock is empty, move all waste cards back to stock in reverse order
@@ -575,25 +578,45 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
 
 bool SolitaireGame::canMoveToPile(
     const std::vector<cardlib::Card>& cards,
-    const std::vector<cardlib::Card>& target) const {
+    const std::vector<cardlib::Card>& target,
+    bool is_foundation) const {
+    
     if (cards.empty())
         return false;
 
     const auto& moving_card = cards[0];
 
-    // Moving to an empty pile
+    // Foundation pile rules
+    if (is_foundation) {
+        // Only single cards can go to foundation
+        if (cards.size() != 1) {
+            return false;
+        }
+
+        // For empty foundation, only accept aces
+        if (target.empty()) {
+            return moving_card.rank == cardlib::Rank::ACE;
+        }
+
+        // For non-empty foundation, must be same suit and next rank up
+        const auto& target_card = target.back();
+        return moving_card.suit == target_card.suit &&
+               static_cast<int>(moving_card.rank) == static_cast<int>(target_card.rank) + 1;
+    }
+
+    // Tableau pile rules
     if (target.empty()) {
-        // For tableau: only allow kings on empty spaces
+        // Only kings can go to empty tableau spots
         return static_cast<int>(moving_card.rank) == static_cast<int>(cardlib::Rank::KING);
     }
 
     const auto& target_card = target.back();
     
-    // Moving to tableau pile
+    // Must be opposite color and one rank lower
     bool opposite_color = ((target_card.suit == cardlib::Suit::HEARTS ||
-                           target_card.suit == cardlib::Suit::DIAMONDS) !=
-                          (moving_card.suit == cardlib::Suit::HEARTS ||
-                           moving_card.suit == cardlib::Suit::DIAMONDS));
+                          target_card.suit == cardlib::Suit::DIAMONDS) !=
+                         (moving_card.suit == cardlib::Suit::HEARTS ||
+                          moving_card.suit == cardlib::Suit::DIAMONDS));
 
     bool lower_rank = static_cast<int>(moving_card.rank) ==
                      static_cast<int>(target_card.rank) - 1;

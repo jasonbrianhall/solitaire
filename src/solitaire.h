@@ -65,7 +65,9 @@ private:
     GtkWidget* createCardWidget(const cardlib::Card& card, bool face_up);
 
     // Game logic
-    bool canMoveToPile(const std::vector<cardlib::Card>& cards, const std::vector<cardlib::Card>& target) const;
+    bool canMoveToPile(const std::vector<cardlib::Card>& cards, 
+                   const std::vector<cardlib::Card>& target,
+                   bool is_foundation = false) const;
     bool canMoveToFoundation(const cardlib::Card& card, int foundation_index) const;
     void moveCards(std::vector<cardlib::Card>& from, std::vector<cardlib::Card>& to, size_t count);
     bool checkWinCondition() const;
