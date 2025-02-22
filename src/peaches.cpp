@@ -14,8 +14,11 @@ ThirtyOneGame::ThirtyOneGame()
     // Initialize with human player and AI players with personalized names
     players_.emplace_back("Player", PlayerType::HUMAN);
     players_.emplace_back("Ellie", PlayerType::AI_CONSERVATIVE);
-    players_.emplace_back("Ariel", PlayerType::AI_AGGRESSIVE);
-    players_.emplace_back("Skylar", PlayerType::AI_BALANCED);
+    players_.emplace_back("Ariel", PlayerType::AI_CONSERVATIVE);
+    players_.emplace_back("Skylar", PlayerType::AI_CONSERVATIVE);
+
+    //players_.emplace_back("Ariel", PlayerType::AI_AGGRESSIVE);
+    //players_.emplace_back("Skylar", PlayerType::AI_BALANCED);
     
     try {
         deck_ = cardlib::Deck("cards.zip");
@@ -145,7 +148,9 @@ bool ThirtyOneGame::hasTwoFaceCardsAndAce(const std::vector<cardlib::Card>& hand
             ace_count++;
         } else if (card.rank == cardlib::Rank::KING || 
                    card.rank == cardlib::Rank::QUEEN ||
-                   card.rank == cardlib::Rank::JACK) {
+                   card.rank == cardlib::Rank::JACK ||
+                   card.rank == cardlib::Rank::TEN ) {
+
             face_count++;
         }
     }
@@ -232,7 +237,9 @@ void ThirtyOneGame::performAITurn() {
     if (ai_player.type == PlayerType::HUMAN) return;
     
     int current_value = calculateHandValue(ai_player.hand);
-    
+    printf("Current value is %i\n", current_value);
+    // Check for special combinations first
+    printf("Checking if player has 31 or 33\n");
     if (hasThreeAces(ai_player.hand) || 
         hasTwoFaceCardsAndAce(ai_player.hand) || 
         current_value == 31) {
@@ -240,17 +247,25 @@ void ThirtyOneGame::performAITurn() {
         return;
     }
     
+    // Check if we should knock
+    printf("Checking if player should knock\n");
     if (shouldAIKnock(ai_player)) {
         knock();
         return;
     }
     
-    if (!discard_pile_.empty() && shouldAITakeDiscard(ai_player)) {
-        drawFromDiscard();
-    } else {
-        drawFromDeck();
+    // Draw a card if we haven't yet
+    printf("Drawing a Card\n");
+    if (!has_drawn_card_) {
+        if (!discard_pile_.empty() && shouldAITakeDiscard(ai_player)) {
+            drawFromDiscard();
+        } else {
+            drawFromDeck();
+        }
     }
     
+    // Always discard after drawing
+    printf("Discarding Card\n");
     auto [should_discard, discard_index] = getBestDiscardForAI(ai_player);
     if (should_discard) {
         discard(discard_index);
