@@ -31,7 +31,6 @@ jobs:
     - name: Copy Resources and Collect DLLs
       working-directory: build/windows
       run: |
-        cp ../../cards/cards.zip .
         cp ../../icon.ico .
         chmod +x collect_dlls.sh
         ./collect_dlls.sh
