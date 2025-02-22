@@ -30,6 +30,7 @@ void SolitaireGame::initializeGame() {
     for (const auto& path : paths) {
       try {
         deck_ = cardlib::Deck(path);
+        deck_.removeJokers();
         loaded = true;
         break;
       } catch (const std::exception& e) {
@@ -40,7 +41,7 @@ void SolitaireGame::initializeGame() {
     if (!loaded) {
       throw std::runtime_error("Could not find cards.zip in any search path");
     }
-
+    
     deck_.shuffle();
 
     // Clear all piles

@@ -70,7 +70,7 @@ public:
     std::optional<Card> peekBottomCard() const;
     std::optional<CardImage> getCardBackImage() const;
 
-    
+    void removeJokers();
     // Image operations
     std::optional<CardImage> getCardImage(const Card& card) const;
     

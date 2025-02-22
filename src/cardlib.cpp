@@ -234,6 +234,15 @@ std::optional<Card> Deck::parseFilename(const std::string& filename) {
     return card;
 }
 
+void Deck::removeJokers() {
+    cards_.erase(
+        std::remove_if(cards_.begin(), cards_.end(),
+            [](const Card& card) { return card.rank == Rank::JOKER; }),
+        cards_.end()
+    );
+    include_jokers_ = false;
+}
+
 // Utility functions implementation
 std::string suitToString(Suit suit) {
     switch (suit) {
