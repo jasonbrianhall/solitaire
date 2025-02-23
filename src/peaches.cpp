@@ -239,6 +239,7 @@ void ThirtyOneGame::performAITurn() {
     
     int current_value = calculateHandValue(ai_player.hand);
     printf("Current value is %i\n", current_value);
+    
     // Check for special combinations first
     printf("Checking if player has 31 or 33\n");
     if (hasThreeAces(ai_player.hand) || 
@@ -273,6 +274,7 @@ void ThirtyOneGame::performAITurn() {
     }
     
     refreshDisplay();
+    // Don't set waiting_for_ai_ to false here anymore
 }
 
 bool ThirtyOneGame::shouldAIKnock(const Player& ai_player) const {
@@ -391,7 +393,12 @@ void ThirtyOneGame::nextPlayer() {
     
     if (players_[current_player_].type != PlayerType::HUMAN) {
         waiting_for_ai_ = true;
+        if (ai_timer_id_ > 0) {
+            g_source_remove(ai_timer_id_);
+        }
         ai_timer_id_ = g_timeout_add(ai_speed_ms_, onAITimer, this);
+    } else {
+        waiting_for_ai_ = false;
     }
     
     refreshDisplay();
@@ -603,7 +610,6 @@ gboolean ThirtyOneGame::onAITimer(gpointer data) {
     ThirtyOneGame* game = static_cast<ThirtyOneGame*>(data);
     if (!game->game_paused_ && game->waiting_for_ai_) {
         game->performAITurn();
-        game->waiting_for_ai_ = false;
         game->ai_timer_id_ = 0;
         return G_SOURCE_REMOVE;
     }
