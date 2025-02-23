@@ -331,10 +331,8 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
         cairo_stroke(game->buffer_cr_);
     }
 
-    // Update the rest of the drawing code to use current dimensions
-    x += game->current_card_width_ + game->current_card_spacing_;
-    
     // Draw waste pile
+    x += game->current_card_width_ + game->current_card_spacing_;
     if (!game->waste_.empty()) {
         const auto &top_card = game->waste_.back();
         game->drawCard(game->buffer_cr_, x, y, &top_card, true);
@@ -342,15 +340,26 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
 
     // Draw foundation piles
     x = 3 * (game->current_card_width_ + game->current_card_spacing_);
-    for (const auto &pile : game->foundation_) {
+    for (size_t i = 0; i < game->foundation_.size(); i++) {
         cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
         cairo_rectangle(game->buffer_cr_, x, y, 
                        game->current_card_width_, game->current_card_height_);
         cairo_stroke(game->buffer_cr_);
 
+        const auto &pile = game->foundation_[i];
         if (!pile.empty()) {
-            const auto &top_card = pile.back();
-            game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+            // Only draw the topmost non-animated card
+            if (game->win_animation_active_) {
+                for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
+                    if (!game->animated_foundation_cards_[i][j]) {
+                        game->drawCard(game->buffer_cr_, x, y, &pile[j], true);
+                        break;
+                    }
+                }
+            } else {
+                const auto &top_card = pile.back();
+                game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+            }
         }
         x += game->current_card_width_ + game->current_card_spacing_;
     }
@@ -400,31 +409,31 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
         }
     }
 
-
+    // Draw animated cards for win animation
+    if (game->win_animation_active_) {
+        for (const auto& anim_card : game->animated_cards_) {
+            if (!anim_card.active) continue;
+            
+            cairo_save(game->buffer_cr_);
+            
+            // Move to card center for rotation
+            cairo_translate(game->buffer_cr_, 
+                          anim_card.x + game->current_card_width_ / 2,
+                          anim_card.y + game->current_card_height_ / 2);
+            cairo_rotate(game->buffer_cr_, anim_card.rotation);
+            cairo_translate(game->buffer_cr_,
+                          -game->current_card_width_ / 2,
+                          -game->current_card_height_ / 2);
+            
+            // Draw the card
+            game->drawCard(game->buffer_cr_, 0, 0, &anim_card.card, true);
+            
+            cairo_restore(game->buffer_cr_);
+        }
+    }
 
     // Copy buffer to window
     cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
-if (game->win_animation_active_) {
-    for (const auto& anim_card : game->animated_cards_) {
-        if (!anim_card.active) continue;
-        
-        cairo_save(game->buffer_cr_);
-        
-        // Move to card center for rotation
-        cairo_translate(game->buffer_cr_, 
-                      anim_card.x + game->current_card_width_ / 2,
-                      anim_card.y + game->current_card_height_ / 2);
-        cairo_rotate(game->buffer_cr_, anim_card.rotation);
-        cairo_translate(game->buffer_cr_,
-                      -game->current_card_width_ / 2,
-                      -game->current_card_height_ / 2);
-        
-        // Draw the card
-        game->drawCard(game->buffer_cr_, 0, 0, &anim_card.card, true);
-        
-        cairo_restore(game->buffer_cr_);
-    }
-}
     cairo_paint(cr);
 
     return TRUE;
@@ -1623,9 +1632,17 @@ void SolitaireGame::startWinAnimation() {
     launch_timer_ = 0;
     animated_cards_.clear();
     
+    // Initialize tracking for animated cards
+    animated_foundation_cards_.clear();
+    animated_foundation_cards_.resize(4);  // 4 foundation piles
+    for (size_t i = 0; i < 4; i++) {
+        animated_foundation_cards_[i].resize(13, false);  // 13 cards per pile
+    }
+    
     // Set up animation timer
     animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
 }
+
 
 void SolitaireGame::stopWinAnimation() {
     if (!win_animation_active_) return;
@@ -1636,6 +1653,7 @@ void SolitaireGame::stopWinAnimation() {
         animation_timer_id_ = 0;
     }
     animated_cards_.clear();
+    animated_foundation_cards_.clear();
     cards_launched_ = 0;
     
     // Start new game
@@ -1643,15 +1661,19 @@ void SolitaireGame::stopWinAnimation() {
     refreshDisplay();
 }
 
+
 void SolitaireGame::launchNextCard() {
     if (cards_launched_ >= 52) return;
     
     // Calculate which foundation pile and card to launch
     int pile_index = cards_launched_ / 13;
-    int card_index = 12 - (cards_launched_ % 13); // Start from top of pile
+    int card_index = cards_launched_ % 13;  // Start from bottom (Ace) of pile
     
     if (pile_index < foundation_.size() && card_index >= 0 && 
         card_index < static_cast<int>(foundation_[pile_index].size())) {
+        
+        // Mark card as animated
+        animated_foundation_cards_[pile_index][card_index] = true;
         
         // Calculate start position
         double start_x = current_card_spacing_ + (3 + pile_index) * 

@@ -30,7 +30,7 @@ private:
     static constexpr int BASE_CARD_HEIGHT = 145;
     static constexpr int BASE_CARD_SPACING = 20;
     static constexpr int BASE_VERT_SPACING = 30;
-
+    std::vector<std::vector<bool>> animated_foundation_cards_;
     // Current dynamic dimensions
     int current_card_width_;
     int current_card_height_;
