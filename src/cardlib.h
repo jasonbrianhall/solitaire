@@ -1,12 +1,12 @@
 #ifndef CARDLIB_H
 #define CARDLIB_H
 
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <random>
 #include <string>
 #include <vector>
-#include <fstream>
 
 namespace cardlib {
 
@@ -74,7 +74,6 @@ public:
   void includeJokers(bool include = true);
   void setAlternateArt(bool use_alternate = true);
   void replaceCardBackImage(const std::string &image_path);
-
 
 private:
   std::vector<Card> cards_;

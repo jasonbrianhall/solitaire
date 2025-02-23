@@ -24,24 +24,24 @@ public:
 
 private:
   // Game state
-    static constexpr int BASE_WINDOW_WIDTH = 1024;
-    static constexpr int BASE_WINDOW_HEIGHT = 768;
-    static constexpr int BASE_CARD_WIDTH = 100;
-    static constexpr int BASE_CARD_HEIGHT = 145;
-    static constexpr int BASE_CARD_SPACING = 20;
-    static constexpr int BASE_VERT_SPACING = 30;
-    std::vector<std::vector<bool>> animated_foundation_cards_;
-    // Current dynamic dimensions
-    int current_card_width_;
-    int current_card_height_;
-    int current_card_spacing_;
-    int current_vert_spacing_;
+  static constexpr int BASE_WINDOW_WIDTH = 1024;
+  static constexpr int BASE_WINDOW_HEIGHT = 768;
+  static constexpr int BASE_CARD_WIDTH = 100;
+  static constexpr int BASE_CARD_HEIGHT = 145;
+  static constexpr int BASE_CARD_SPACING = 20;
+  static constexpr int BASE_VERT_SPACING = 30;
+  std::vector<std::vector<bool>> animated_foundation_cards_;
+  // Current dynamic dimensions
+  int current_card_width_;
+  int current_card_height_;
+  int current_card_spacing_;
+  int current_vert_spacing_;
 
-    // New method declarations
-    void updateCardDimensions(int window_width, int window_height);
-    double getScaleFactor(int window_width, int window_height) const;
+  // New method declarations
+  void updateCardDimensions(int window_width, int window_height);
+  double getScaleFactor(int window_width, int window_height) const;
 
-struct AnimatedCard {
+  struct AnimatedCard {
     cardlib::Card card;
     double x;
     double y;
@@ -50,25 +50,23 @@ struct AnimatedCard {
     double rotation;
     double rotation_velocity;
     bool active;
-};
+  };
 
-bool win_animation_active_ = false;
-std::vector<AnimatedCard> animated_cards_;
-guint animation_timer_id_ = 0;
-static constexpr double GRAVITY = 0.8;
-static constexpr double BOUNCE_FACTOR = -0.7;
-static constexpr int ANIMATION_INTERVAL = 16; // ~60 FPS
-int cards_launched_ = 0;
-double launch_timer_ = 0;
+  bool win_animation_active_ = false;
+  std::vector<AnimatedCard> animated_cards_;
+  guint animation_timer_id_ = 0;
+  static constexpr double GRAVITY = 0.8;
+  static constexpr double BOUNCE_FACTOR = -0.7;
+  static constexpr int ANIMATION_INTERVAL = 16; // ~60 FPS
+  int cards_launched_ = 0;
+  double launch_timer_ = 0;
 
-void startWinAnimation();
-void updateWinAnimation();
-static gboolean onAnimationTick(gpointer data);
-void stopWinAnimation();
-void launchNextCard();
+  void startWinAnimation();
+  void updateWinAnimation();
+  static gboolean onAnimationTick(gpointer data);
+  void stopWinAnimation();
+  void launchNextCard();
 
-
-  
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile
   std::vector<cardlib::Card> waste_; // Faced-up cards from stock
@@ -162,21 +160,20 @@ void launchNextCard();
   bool tryMoveToFoundation(const cardlib::Card &card);
 
   void dealTestLayout();
-  
+
   std::string settings_dir_;
   std::string custom_back_path_;
   bool loadSettings();
   void saveSettings();
   void initializeSettingsDir();
-  bool setCustomCardBack(const std::string& path);
+  bool setCustomCardBack(const std::string &path);
 
-  bool loadDeck(const std::string& path);
+  bool loadDeck(const std::string &path);
   void cleanupResources();
 
-    void resetToDefaultBack();
-    void clearCustomBack();
-    void refreshCardCache();
-
+  void resetToDefaultBack();
+  void clearCustomBack();
+  void refreshCardCache();
 };
 
 #endif // SOLITAIRE_H

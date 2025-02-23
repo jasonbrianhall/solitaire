@@ -1,12 +1,11 @@
 #include "solitaire.h"
 #include <algorithm>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <direct.h>
 #endif
-
 
 SolitaireGame::SolitaireGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
@@ -16,9 +15,9 @@ SolitaireGame::SolitaireGame()
       current_card_height_(BASE_CARD_HEIGHT),
       current_card_spacing_(BASE_CARD_SPACING),
       current_vert_spacing_(BASE_VERT_SPACING) {
-    initializeGame();
-    initializeSettingsDir();
-    loadSettings();
+  initializeGame();
+  initializeSettingsDir();
+  loadSettings();
 }
 
 SolitaireGame::~SolitaireGame() {
@@ -125,99 +124,109 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
   throw std::out_of_range("Invalid pile index");
 }
 
-void SolitaireGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* card, bool face_up) {
-    if (face_up && card) {
-        std::string key = std::to_string(static_cast<int>(card->suit)) + 
-                         std::to_string(static_cast<int>(card->rank));
-        auto it = card_surface_cache_.find(key);
-        
-        if (it == card_surface_cache_.end()) {
-            if (auto img = deck_.getCardImage(*card)) {
-                GError* error = nullptr;
-                GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
-                
-                if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), &error)) {
-                    if (error) g_error_free(error);
-                    g_object_unref(loader);
-                    return;
-                }
-                
-                if (!gdk_pixbuf_loader_close(loader, &error)) {
-                    if (error) g_error_free(error);
-                    g_object_unref(loader);
-                    return;
-                }
-                
-                GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-                if (original_pixbuf) {
-                    GdkPixbuf* scaled_pixbuf = gdk_pixbuf_scale_simple(
-                        original_pixbuf,
-                        current_card_width_,  // Use current dimensions
-                        current_card_height_,
-                        GDK_INTERP_BILINEAR
-                    );
-                    
-                    if (scaled_pixbuf) {
-                        cairo_surface_t* surface = cairo_image_surface_create(
-                            CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
-                        cairo_t* surface_cr = cairo_create(surface);
-                        
-                        gdk_cairo_set_source_pixbuf(surface_cr, scaled_pixbuf, 0, 0);
-                        cairo_paint(surface_cr);
-                        cairo_destroy(surface_cr);
-                        
-                        card_surface_cache_[key] = surface;
-                        
-                        g_object_unref(scaled_pixbuf);
-                    }
-                }
-                g_object_unref(loader);
-                
-                it = card_surface_cache_.find(key);
-            }
-        }
-        
-        if (it != card_surface_cache_.end()) {
-            // Scale the surface to the current card dimensions
-            cairo_save(cr);
-            cairo_scale(cr, 
-                       (double)current_card_width_ / cairo_image_surface_get_width(it->second),
-                       (double)current_card_height_ / cairo_image_surface_get_height(it->second));
-            cairo_set_source_surface(cr, it->second, 
-                                   x * cairo_image_surface_get_width(it->second) / current_card_width_,
-                                   y * cairo_image_surface_get_height(it->second) / current_card_height_);
-            cairo_paint(cr);
-            cairo_restore(cr);
-        }
-    } else {
-        auto custom_it = card_surface_cache_.find("custom_back");
-        auto default_it = card_surface_cache_.find("back");
-        cairo_surface_t* back_surface = nullptr;
+void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
+                             const cardlib::Card *card, bool face_up) {
+  if (face_up && card) {
+    std::string key = std::to_string(static_cast<int>(card->suit)) +
+                      std::to_string(static_cast<int>(card->rank));
+    auto it = card_surface_cache_.find(key);
 
-        if (!custom_back_path_.empty() && custom_it != card_surface_cache_.end()) {
-            back_surface = custom_it->second;
-        } else if (default_it != card_surface_cache_.end()) {
-            back_surface = default_it->second;
+    if (it == card_surface_cache_.end()) {
+      if (auto img = deck_.getCardImage(*card)) {
+        GError *error = nullptr;
+        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+
+        if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
+                                     &error)) {
+          if (error)
+            g_error_free(error);
+          g_object_unref(loader);
+          return;
         }
 
-        if (back_surface) {
-            // Scale the surface to the current card dimensions
-            cairo_save(cr);
-            cairo_scale(cr, 
-                       (double)current_card_width_ / cairo_image_surface_get_width(back_surface),
-                       (double)current_card_height_ / cairo_image_surface_get_height(back_surface));
-            cairo_set_source_surface(cr, back_surface,
-                                   x * cairo_image_surface_get_width(back_surface) / current_card_width_,
-                                   y * cairo_image_surface_get_height(back_surface) / current_card_height_);
-            cairo_paint(cr);
-            cairo_restore(cr);
-        } else {
-            // Draw a placeholder rectangle if no back image is available
-            cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
-            cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
-            cairo_stroke(cr);
+        if (!gdk_pixbuf_loader_close(loader, &error)) {
+          if (error)
+            g_error_free(error);
+          g_object_unref(loader);
+          return;
         }
+
+        GdkPixbuf *original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+        if (original_pixbuf) {
+          GdkPixbuf *scaled_pixbuf = gdk_pixbuf_scale_simple(
+              original_pixbuf,
+              current_card_width_, // Use current dimensions
+              current_card_height_, GDK_INTERP_BILINEAR);
+
+          if (scaled_pixbuf) {
+            cairo_surface_t *surface = cairo_image_surface_create(
+                CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+            cairo_t *surface_cr = cairo_create(surface);
+
+            gdk_cairo_set_source_pixbuf(surface_cr, scaled_pixbuf, 0, 0);
+            cairo_paint(surface_cr);
+            cairo_destroy(surface_cr);
+
+            card_surface_cache_[key] = surface;
+
+            g_object_unref(scaled_pixbuf);
+          }
+        }
+        g_object_unref(loader);
+
+        it = card_surface_cache_.find(key);
+      }
     }
+
+    if (it != card_surface_cache_.end()) {
+      // Scale the surface to the current card dimensions
+      cairo_save(cr);
+      cairo_scale(cr,
+                  (double)current_card_width_ /
+                      cairo_image_surface_get_width(it->second),
+                  (double)current_card_height_ /
+                      cairo_image_surface_get_height(it->second));
+      cairo_set_source_surface(cr, it->second,
+                               x * cairo_image_surface_get_width(it->second) /
+                                   current_card_width_,
+                               y * cairo_image_surface_get_height(it->second) /
+                                   current_card_height_);
+      cairo_paint(cr);
+      cairo_restore(cr);
+    }
+  } else {
+    auto custom_it = card_surface_cache_.find("custom_back");
+    auto default_it = card_surface_cache_.find("back");
+    cairo_surface_t *back_surface = nullptr;
+
+    if (!custom_back_path_.empty() && custom_it != card_surface_cache_.end()) {
+      back_surface = custom_it->second;
+    } else if (default_it != card_surface_cache_.end()) {
+      back_surface = default_it->second;
+    }
+
+    if (back_surface) {
+      // Scale the surface to the current card dimensions
+      cairo_save(cr);
+      cairo_scale(cr,
+                  (double)current_card_width_ /
+                      cairo_image_surface_get_width(back_surface),
+                  (double)current_card_height_ /
+                      cairo_image_surface_get_height(back_surface));
+      cairo_set_source_surface(
+          cr, back_surface,
+          x * cairo_image_surface_get_width(back_surface) / current_card_width_,
+          y * cairo_image_surface_get_height(back_surface) /
+              current_card_height_);
+      cairo_paint(cr);
+      cairo_restore(cr);
+    } else {
+      // Draw a placeholder rectangle if no back image is available
+      cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+      cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+      cairo_stroke(cr);
+    }
+  }
 }
 
 void SolitaireGame::deal() {
@@ -293,150 +302,152 @@ GtkWidget *SolitaireGame::createCardWidget(const cardlib::Card &card,
 }
 
 gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
-    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
-    // Get the widget dimensions
-    GtkAllocation allocation;
-    gtk_widget_get_allocation(widget, &allocation);
+  // Get the widget dimensions
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(widget, &allocation);
 
-    // Create or resize buffer surface if needed
-    if (!game->buffer_surface_ ||
-        cairo_image_surface_get_width(game->buffer_surface_) != allocation.width ||
-        cairo_image_surface_get_height(game->buffer_surface_) != allocation.height) {
+  // Create or resize buffer surface if needed
+  if (!game->buffer_surface_ ||
+      cairo_image_surface_get_width(game->buffer_surface_) !=
+          allocation.width ||
+      cairo_image_surface_get_height(game->buffer_surface_) !=
+          allocation.height) {
 
-        if (game->buffer_surface_) {
-            cairo_surface_destroy(game->buffer_surface_);
-            cairo_destroy(game->buffer_cr_);
+    if (game->buffer_surface_) {
+      cairo_surface_destroy(game->buffer_surface_);
+      cairo_destroy(game->buffer_cr_);
+    }
+
+    game->buffer_surface_ = cairo_image_surface_create(
+        CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
+    game->buffer_cr_ = cairo_create(game->buffer_surface_);
+  }
+
+  // Clear buffer with green background
+  cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.5, 0.0);
+  cairo_paint(game->buffer_cr_);
+
+  // Draw stock pile
+  int x = game->current_card_spacing_;
+  int y = game->current_card_spacing_;
+  if (!game->stock_.empty()) {
+    game->drawCard(game->buffer_cr_, x, y, nullptr, false);
+  } else {
+    // Draw empty stock pile outline
+    cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+    cairo_rectangle(game->buffer_cr_, x, y, game->current_card_width_,
+                    game->current_card_height_);
+    cairo_stroke(game->buffer_cr_);
+  }
+
+  // Draw waste pile
+  x += game->current_card_width_ + game->current_card_spacing_;
+  if (!game->waste_.empty()) {
+    const auto &top_card = game->waste_.back();
+    game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+  }
+
+  // Draw foundation piles
+  x = 3 * (game->current_card_width_ + game->current_card_spacing_);
+  for (size_t i = 0; i < game->foundation_.size(); i++) {
+    cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+    cairo_rectangle(game->buffer_cr_, x, y, game->current_card_width_,
+                    game->current_card_height_);
+    cairo_stroke(game->buffer_cr_);
+
+    const auto &pile = game->foundation_[i];
+    if (!pile.empty()) {
+      // Only draw the topmost non-animated card
+      if (game->win_animation_active_) {
+        for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
+          if (!game->animated_foundation_cards_[i][j]) {
+            game->drawCard(game->buffer_cr_, x, y, &pile[j], true);
+            break;
+          }
         }
-
-        game->buffer_surface_ = cairo_image_surface_create(
-            CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
-        game->buffer_cr_ = cairo_create(game->buffer_surface_);
-    }
-
-    // Clear buffer with green background
-    cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.5, 0.0);
-    cairo_paint(game->buffer_cr_);
-
-    // Draw stock pile
-    int x = game->current_card_spacing_;
-    int y = game->current_card_spacing_;
-    if (!game->stock_.empty()) {
-        game->drawCard(game->buffer_cr_, x, y, nullptr, false);
-    } else {
-        // Draw empty stock pile outline
-        cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-        cairo_rectangle(game->buffer_cr_, x, y, 
-                       game->current_card_width_, game->current_card_height_);
-        cairo_stroke(game->buffer_cr_);
-    }
-
-    // Draw waste pile
-    x += game->current_card_width_ + game->current_card_spacing_;
-    if (!game->waste_.empty()) {
-        const auto &top_card = game->waste_.back();
+      } else {
+        const auto &top_card = pile.back();
         game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+      }
+    }
+    x += game->current_card_width_ + game->current_card_spacing_;
+  }
+
+  // Draw tableau piles
+  const int tableau_base_y = game->current_card_spacing_ +
+                             game->current_card_height_ +
+                             game->current_vert_spacing_;
+
+  for (size_t i = 0; i < game->tableau_.size(); i++) {
+    x = game->current_card_spacing_ +
+        i * (game->current_card_width_ + game->current_card_spacing_);
+    const auto &pile = game->tableau_[i];
+
+    // Draw empty pile outline
+    if (pile.empty()) {
+      cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+      cairo_rectangle(game->buffer_cr_, x, tableau_base_y,
+                      game->current_card_width_, game->current_card_height_);
+      cairo_stroke(game->buffer_cr_);
     }
 
-    // Draw foundation piles
-    x = 3 * (game->current_card_width_ + game->current_card_spacing_);
-    for (size_t i = 0; i < game->foundation_.size(); i++) {
-        cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-        cairo_rectangle(game->buffer_cr_, x, y, 
-                       game->current_card_width_, game->current_card_height_);
-        cairo_stroke(game->buffer_cr_);
+    for (size_t j = 0; j < pile.size(); j++) {
+      if (game->dragging_ && game->drag_source_pile_ >= 6 &&
+          game->drag_source_pile_ - 6 == static_cast<int>(i) &&
+          j >= static_cast<size_t>(game->tableau_[i].size() -
+                                   game->drag_cards_.size())) {
+        continue;
+      }
 
-        const auto &pile = game->foundation_[i];
-        if (!pile.empty()) {
-            // Only draw the topmost non-animated card
-            if (game->win_animation_active_) {
-                for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-                    if (!game->animated_foundation_cards_[i][j]) {
-                        game->drawCard(game->buffer_cr_, x, y, &pile[j], true);
-                        break;
-                    }
-                }
-            } else {
-                const auto &top_card = pile.back();
-                game->drawCard(game->buffer_cr_, x, y, &top_card, true);
-            }
-        }
-        x += game->current_card_width_ + game->current_card_spacing_;
+      int current_y = tableau_base_y + j * game->current_vert_spacing_;
+      const auto &tableau_card = pile[j];
+      game->drawCard(game->buffer_cr_, x, current_y, &tableau_card.card,
+                     tableau_card.face_up);
     }
+  }
 
-    // Draw tableau piles
-    const int tableau_base_y = game->current_card_spacing_ + 
-                              game->current_card_height_ + 
-                              game->current_vert_spacing_;
+  // Draw dragged cards
+  if (game->dragging_ && !game->drag_cards_.empty()) {
+    int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
+    int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
 
-    for (size_t i = 0; i < game->tableau_.size(); i++) {
-        x = game->current_card_spacing_ + 
-            i * (game->current_card_width_ + game->current_card_spacing_);
-        const auto &pile = game->tableau_[i];
-
-        // Draw empty pile outline
-        if (pile.empty()) {
-            cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-            cairo_rectangle(game->buffer_cr_, x, tableau_base_y,
-                          game->current_card_width_, game->current_card_height_);
-            cairo_stroke(game->buffer_cr_);
-        }
-
-        for (size_t j = 0; j < pile.size(); j++) {
-            if (game->dragging_ && game->drag_source_pile_ >= 6 &&
-                game->drag_source_pile_ - 6 == static_cast<int>(i) &&
-                j >= static_cast<size_t>(game->tableau_[i].size() - 
-                                       game->drag_cards_.size())) {
-                continue;
-            }
-
-            int current_y = tableau_base_y + j * game->current_vert_spacing_;
-            const auto &tableau_card = pile[j];
-            game->drawCard(game->buffer_cr_, x, current_y, 
-                          &tableau_card.card, tableau_card.face_up);
-        }
+    for (size_t i = 0; i < game->drag_cards_.size(); i++) {
+      game->drawCard(game->buffer_cr_, drag_x,
+                     drag_y + i * game->current_vert_spacing_,
+                     &game->drag_cards_[i], true);
     }
+  }
 
-    // Draw dragged cards
-    if (game->dragging_ && !game->drag_cards_.empty()) {
-        int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
-        int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
+  // Draw animated cards for win animation
+  if (game->win_animation_active_) {
+    for (const auto &anim_card : game->animated_cards_) {
+      if (!anim_card.active)
+        continue;
 
-        for (size_t i = 0; i < game->drag_cards_.size(); i++) {
-            game->drawCard(game->buffer_cr_, drag_x, 
-                          drag_y + i * game->current_vert_spacing_,
-                          &game->drag_cards_[i], true);
-        }
+      cairo_save(game->buffer_cr_);
+
+      // Move to card center for rotation
+      cairo_translate(game->buffer_cr_,
+                      anim_card.x + game->current_card_width_ / 2,
+                      anim_card.y + game->current_card_height_ / 2);
+      cairo_rotate(game->buffer_cr_, anim_card.rotation);
+      cairo_translate(game->buffer_cr_, -game->current_card_width_ / 2,
+                      -game->current_card_height_ / 2);
+
+      // Draw the card
+      game->drawCard(game->buffer_cr_, 0, 0, &anim_card.card, true);
+
+      cairo_restore(game->buffer_cr_);
     }
+  }
 
-    // Draw animated cards for win animation
-    if (game->win_animation_active_) {
-        for (const auto& anim_card : game->animated_cards_) {
-            if (!anim_card.active) continue;
-            
-            cairo_save(game->buffer_cr_);
-            
-            // Move to card center for rotation
-            cairo_translate(game->buffer_cr_, 
-                          anim_card.x + game->current_card_width_ / 2,
-                          anim_card.y + game->current_card_height_ / 2);
-            cairo_rotate(game->buffer_cr_, anim_card.rotation);
-            cairo_translate(game->buffer_cr_,
-                          -game->current_card_width_ / 2,
-                          -game->current_card_height_ / 2);
-            
-            // Draw the card
-            game->drawCard(game->buffer_cr_, 0, 0, &anim_card.card, true);
-            
-            cairo_restore(game->buffer_cr_);
-        }
-    }
+  // Copy buffer to window
+  cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
+  cairo_paint(cr);
 
-    // Copy buffer to window
-    cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
-    cairo_paint(cr);
-
-    return TRUE;
+  return TRUE;
 }
 
 std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
@@ -471,107 +482,110 @@ std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
   return std::vector<cardlib::Card>();
 }
 
-gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
+                                      gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
-    if (event->button == 1) { // Left click
-        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+  if (event->button == 1) { // Left click
+    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
-        if (pile_index == 0) { // Stock pile
-            game->handleStockPileClick();
-            return TRUE;
-        }
-
-        if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
-            game->dragging_ = true;
-            game->drag_source_pile_ = pile_index;
-            game->drag_start_x_ = event->x;
-            game->drag_start_y_ = event->y;
-            game->drag_cards_ = game->getDragCards(pile_index, card_index);
-
-            // Calculate x offset based on pile type
-            int x_offset_multiplier;
-            if (pile_index >= 6) {
-                // Tableau piles
-                x_offset_multiplier = pile_index - 6;
-            } else if (pile_index >= 2 && pile_index <= 5) {
-                // Foundation piles - adjust for spacing after waste pile
-                x_offset_multiplier = pile_index + 1;
-            } else if (pile_index == 1) {
-                // Waste pile
-                x_offset_multiplier = 1;
-            } else {
-                // Stock pile
-                x_offset_multiplier = 0;
-            }
-
-            game->drag_offset_x_ = event->x - (game->current_card_spacing_ + 
-                x_offset_multiplier * (game->current_card_width_ + game->current_card_spacing_));
-
-            // Calculate y offset
-            if (pile_index >= 6) {
-                // Tableau piles - account for vertical position within the pile
-                game->drag_offset_y_ = event->y - (game->current_card_spacing_ + 
-                    game->current_card_height_ + game->current_vert_spacing_ + 
-                    card_index * game->current_vert_spacing_);
-            } else {
-                // All other piles are in the top row
-                game->drag_offset_y_ = event->y - game->current_card_spacing_;
-            }
-        }
-    } else if (event->button == 3) { // Right click
-        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-        // Try to move card to foundation
-        if (pile_index >= 0) {
-            const cardlib::Card *card = nullptr;
-            bool card_moved = false;
-
-            // Get the card based on pile type
-            if (pile_index == 1 && !game->waste_.empty()) {
-                card = &game->waste_.back();
-                if (game->tryMoveToFoundation(*card)) {
-                    game->waste_.pop_back();
-                    card_moved = true;
-                }
-            } else if (pile_index >= 6 && pile_index <= 12) {
-                auto &tableau_pile = game->tableau_[pile_index - 6];
-                if (!tableau_pile.empty() && tableau_pile.back().face_up) {
-                    card = &tableau_pile.back().card;
-                    if (game->tryMoveToFoundation(*card)) {
-                        tableau_pile.pop_back();
-                        // Flip new top card if needed
-                        if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-                            tableau_pile.back().face_up = true;
-                        }
-                        card_moved = true;
-                    }
-                }
-            }
-
-            if (card_moved) {
-                /*if (game->checkWinCondition()) {
-                    GtkWidget *dialog = gtk_message_dialog_new(
-                        GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-                        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-                    gtk_dialog_run(GTK_DIALOG(dialog));
-                    gtk_widget_destroy(dialog);
-                    game->initializeGame();
-                }
-                gtk_widget_queue_draw(game->game_area_);*/
-                   if (game->checkWinCondition()) {
-        game->startWinAnimation();  // Start animation instead of showing dialog
-    }
-    gtk_widget_queue_draw(game->game_area_);
-            }
-            
-        }
-        return TRUE;
+    if (pile_index == 0) { // Stock pile
+      game->handleStockPileClick();
+      return TRUE;
     }
 
+    if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
+      game->dragging_ = true;
+      game->drag_source_pile_ = pile_index;
+      game->drag_start_x_ = event->x;
+      game->drag_start_y_ = event->y;
+      game->drag_cards_ = game->getDragCards(pile_index, card_index);
+
+      // Calculate x offset based on pile type
+      int x_offset_multiplier;
+      if (pile_index >= 6) {
+        // Tableau piles
+        x_offset_multiplier = pile_index - 6;
+      } else if (pile_index >= 2 && pile_index <= 5) {
+        // Foundation piles - adjust for spacing after waste pile
+        x_offset_multiplier = pile_index + 1;
+      } else if (pile_index == 1) {
+        // Waste pile
+        x_offset_multiplier = 1;
+      } else {
+        // Stock pile
+        x_offset_multiplier = 0;
+      }
+
+      game->drag_offset_x_ =
+          event->x - (game->current_card_spacing_ +
+                      x_offset_multiplier * (game->current_card_width_ +
+                                             game->current_card_spacing_));
+
+      // Calculate y offset
+      if (pile_index >= 6) {
+        // Tableau piles - account for vertical position within the pile
+        game->drag_offset_y_ =
+            event->y -
+            (game->current_card_spacing_ + game->current_card_height_ +
+             game->current_vert_spacing_ +
+             card_index * game->current_vert_spacing_);
+      } else {
+        // All other piles are in the top row
+        game->drag_offset_y_ = event->y - game->current_card_spacing_;
+      }
+    }
+  } else if (event->button == 3) { // Right click
+    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+
+    // Try to move card to foundation
+    if (pile_index >= 0) {
+      const cardlib::Card *card = nullptr;
+      bool card_moved = false;
+
+      // Get the card based on pile type
+      if (pile_index == 1 && !game->waste_.empty()) {
+        card = &game->waste_.back();
+        if (game->tryMoveToFoundation(*card)) {
+          game->waste_.pop_back();
+          card_moved = true;
+        }
+      } else if (pile_index >= 6 && pile_index <= 12) {
+        auto &tableau_pile = game->tableau_[pile_index - 6];
+        if (!tableau_pile.empty() && tableau_pile.back().face_up) {
+          card = &tableau_pile.back().card;
+          if (game->tryMoveToFoundation(*card)) {
+            tableau_pile.pop_back();
+            // Flip new top card if needed
+            if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
+              tableau_pile.back().face_up = true;
+            }
+            card_moved = true;
+          }
+        }
+      }
+
+      if (card_moved) {
+        /*if (game->checkWinCondition()) {
+            GtkWidget *dialog = gtk_message_dialog_new(
+                GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+                GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've
+        won!"); gtk_dialog_run(GTK_DIALOG(dialog)); gtk_widget_destroy(dialog);
+            game->initializeGame();
+        }
+        gtk_widget_queue_draw(game->game_area_);*/
+        if (game->checkWinCondition()) {
+          game->startWinAnimation(); // Start animation instead of showing
+                                     // dialog
+        }
+        gtk_widget_queue_draw(game->game_area_);
+      }
+    }
     return TRUE;
-}
+  }
 
+  return TRUE;
+}
 
 gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
                                         GdkEventButton *event, gpointer data) {
@@ -652,10 +666,11 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
         gtk_widget_queue_draw(game->game_area_);
       }*/
         if (game->checkWinCondition()) {
-            game->startWinAnimation();  // Start animation instead of showing dialog
+          game->startWinAnimation(); // Start animation instead of showing
+                                     // dialog
         }
-    gtk_widget_queue_draw(game->game_area_);
-}
+        gtk_widget_queue_draw(game->game_area_);
+      }
     }
 
     game->dragging_ = false;
@@ -711,55 +726,62 @@ gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
 }
 
 std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
-    // Check stock pile
-    if (x >= current_card_spacing_ && x <= current_card_spacing_ + current_card_width_ &&
-        y >= current_card_spacing_ && y <= current_card_spacing_ + current_card_height_) {
-        return {0, stock_.empty() ? -1 : 0};
-    }
+  // Check stock pile
+  if (x >= current_card_spacing_ &&
+      x <= current_card_spacing_ + current_card_width_ &&
+      y >= current_card_spacing_ &&
+      y <= current_card_spacing_ + current_card_height_) {
+    return {0, stock_.empty() ? -1 : 0};
+  }
 
-    // Check waste pile
-    if (x >= 2 * current_card_spacing_ + current_card_width_ &&
-        x <= 2 * current_card_spacing_ + 2 * current_card_width_ && 
-        y >= current_card_spacing_ && y <= current_card_spacing_ + current_card_height_) {
-        return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
-    }
+  // Check waste pile
+  if (x >= 2 * current_card_spacing_ + current_card_width_ &&
+      x <= 2 * current_card_spacing_ + 2 * current_card_width_ &&
+      y >= current_card_spacing_ &&
+      y <= current_card_spacing_ + current_card_height_) {
+    return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
+  }
 
-    // Check foundation piles
-    int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
-    for (int i = 0; i < 4; i++) {
-        if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
-            y >= current_card_spacing_ && y <= current_card_spacing_ + current_card_height_) {
-            return {2 + i, foundation_[i].empty()
-                            ? -1
-                            : static_cast<int>(foundation_[i].size() - 1)};
+  // Check foundation piles
+  int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
+  for (int i = 0; i < 4; i++) {
+    if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
+        y >= current_card_spacing_ &&
+        y <= current_card_spacing_ + current_card_height_) {
+      return {2 + i, foundation_[i].empty()
+                         ? -1
+                         : static_cast<int>(foundation_[i].size() - 1)};
+    }
+    foundation_x += current_card_width_ + current_card_spacing_;
+  }
+
+  // Check tableau piles - check from top card down
+  int tableau_y =
+      current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+  for (int i = 0; i < 7; i++) {
+    int pile_x = current_card_spacing_ +
+                 i * (current_card_width_ + current_card_spacing_);
+    if (x >= pile_x && x <= pile_x + current_card_width_) {
+      const auto &pile = tableau_[i];
+      if (pile.empty() && y >= tableau_y &&
+          y <= tableau_y + current_card_height_) {
+        return {6 + i, -1};
+      }
+
+      // Check cards from top to bottom
+      for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
+        int card_y = tableau_y + j * current_vert_spacing_;
+        if (y >= card_y && y <= card_y + current_card_height_) {
+          if (pile[j].face_up) {
+            return {6 + i, j};
+          }
+          break; // Hit a face-down card, stop checking
         }
-        foundation_x += current_card_width_ + current_card_spacing_;
+      }
     }
+  }
 
-    // Check tableau piles - check from top card down
-    int tableau_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-    for (int i = 0; i < 7; i++) {
-        int pile_x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
-        if (x >= pile_x && x <= pile_x + current_card_width_) {
-            const auto &pile = tableau_[i];
-            if (pile.empty() && y >= tableau_y && y <= tableau_y + current_card_height_) {
-                return {6 + i, -1};
-            }
-
-            // Check cards from top to bottom
-            for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-                int card_y = tableau_y + j * current_vert_spacing_;
-                if (y >= card_y && y <= card_y + current_card_height_) {
-                    if (pile[j].face_up) {
-                        return {6 + i, j};
-                    }
-                    break; // Hit a face-down card, stop checking
-                }
-            }
-        }
-    }
-
-    return {-1, -1};
+  return {-1, -1};
 }
 bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                                   const std::vector<cardlib::Card> &target,
@@ -848,9 +870,9 @@ bool SolitaireGame::checkWinCondition() const {
 
 // Function to refresh the display
 void SolitaireGame::refreshDisplay() {
-    if (game_area_) {
-        gtk_widget_queue_draw(game_area_);
-    }
+  if (game_area_) {
+    gtk_widget_queue_draw(game_area_);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -860,64 +882,67 @@ int main(int argc, char **argv) {
 }
 
 void SolitaireGame::initializeCardCache() {
-    // Pre-load all card images into cairo surfaces with current dimensions
-    cleanupCardCache();
-    
-    for (const auto &card : deck_.getAllCards()) {
-        if (auto img = deck_.getCardImage(card)) {
-            GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-            gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), nullptr);
-            gdk_pixbuf_loader_close(loader, nullptr);
+  // Pre-load all card images into cairo surfaces with current dimensions
+  cleanupCardCache();
 
-            GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-            GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-                pixbuf, current_card_width_, current_card_height_, GDK_INTERP_BILINEAR);
+  for (const auto &card : deck_.getAllCards()) {
+    if (auto img = deck_.getCardImage(card)) {
+      GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+      gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
+                              nullptr);
+      gdk_pixbuf_loader_close(loader, nullptr);
 
-            cairo_surface_t *surface = cairo_image_surface_create(
-                CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
-            cairo_t *cr = cairo_create(surface);
-            gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
-            cairo_paint(cr);
-            cairo_destroy(cr);
+      GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+      GdkPixbuf *scaled =
+          gdk_pixbuf_scale_simple(pixbuf, current_card_width_,
+                                  current_card_height_, GDK_INTERP_BILINEAR);
 
-            std::string key = std::to_string(static_cast<int>(card.suit)) +
-                            std::to_string(static_cast<int>(card.rank));
-            card_surface_cache_[key] = surface;
+      cairo_surface_t *surface = cairo_image_surface_create(
+          CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+      cairo_t *cr = cairo_create(surface);
+      gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+      cairo_paint(cr);
+      cairo_destroy(cr);
 
-            g_object_unref(scaled);
-            g_object_unref(loader);
-        }
+      std::string key = std::to_string(static_cast<int>(card.suit)) +
+                        std::to_string(static_cast<int>(card.rank));
+      card_surface_cache_[key] = surface;
+
+      g_object_unref(scaled);
+      g_object_unref(loader);
     }
+  }
 
-    // Cache card back
-    if (auto back_img = deck_.getCardBackImage()) {
-        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-        gdk_pixbuf_loader_write(loader, back_img->data.data(), back_img->data.size(), nullptr);
-        gdk_pixbuf_loader_close(loader, nullptr);
+  // Cache card back
+  if (auto back_img = deck_.getCardBackImage()) {
+    GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+    gdk_pixbuf_loader_write(loader, back_img->data.data(),
+                            back_img->data.size(), nullptr);
+    gdk_pixbuf_loader_close(loader, nullptr);
 
-        GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-        GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-            pixbuf, current_card_width_, current_card_height_, GDK_INTERP_BILINEAR);
+    GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+    GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
+        pixbuf, current_card_width_, current_card_height_, GDK_INTERP_BILINEAR);
 
-        cairo_surface_t *surface = cairo_image_surface_create(
-            CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
-        cairo_t *cr = cairo_create(surface);
-        gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
-        cairo_paint(cr);
-        cairo_destroy(cr);
+    cairo_surface_t *surface = cairo_image_surface_create(
+        CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+    cairo_t *cr = cairo_create(surface);
+    gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+    cairo_paint(cr);
+    cairo_destroy(cr);
 
-        card_surface_cache_["back"] = surface;
+    card_surface_cache_["back"] = surface;
 
-        g_object_unref(scaled);
-        g_object_unref(loader);
-    }
+    g_object_unref(scaled);
+    g_object_unref(loader);
+  }
 }
 
 void SolitaireGame::cleanupCardCache() {
-    for (auto &[key, surface] : card_surface_cache_) {
-        cairo_surface_destroy(surface);
-    }
-    card_surface_cache_.clear();
+  for (auto &[key, surface] : card_surface_cache_) {
+    cairo_surface_destroy(surface);
+  }
+  card_surface_cache_.clear();
 }
 
 cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
@@ -948,68 +973,70 @@ void SolitaireGame::setupWindow() {
 }
 
 void SolitaireGame::setupGameArea() {
-    // Create new drawing area
-    game_area_ = gtk_drawing_area_new();
-    gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
+  // Create new drawing area
+  game_area_ = gtk_drawing_area_new();
+  gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
 
-    // Enable mouse event handling
-    gtk_widget_add_events(game_area_, 
-        GDK_BUTTON_PRESS_MASK |
-        GDK_BUTTON_RELEASE_MASK |
-        GDK_POINTER_MOTION_MASK |
-        GDK_STRUCTURE_MASK);  // Enable structure events for resize
+  // Enable mouse event handling
+  gtk_widget_add_events(
+      game_area_,
+      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+          GDK_POINTER_MOTION_MASK |
+          GDK_STRUCTURE_MASK); // Enable structure events for resize
 
-    // Connect all necessary signals
-    g_signal_connect(G_OBJECT(game_area_), "draw", 
-        G_CALLBACK(onDraw), this);
-    
-    g_signal_connect(G_OBJECT(game_area_), "button-press-event",
-        G_CALLBACK(onButtonPress), this);
-    
-    g_signal_connect(G_OBJECT(game_area_), "button-release-event",
-        G_CALLBACK(onButtonRelease), this);
-    
-    g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
-        G_CALLBACK(onMotionNotify), this);
+  // Connect all necessary signals
+  g_signal_connect(G_OBJECT(game_area_), "draw", G_CALLBACK(onDraw), this);
 
-    // Add size-allocate signal handler for resize events
-    g_signal_connect(G_OBJECT(game_area_), "size-allocate",
-        G_CALLBACK(+[](GtkWidget* widget, GtkAllocation* allocation, gpointer data) {
-            SolitaireGame* game = static_cast<SolitaireGame*>(data);
+  g_signal_connect(G_OBJECT(game_area_), "button-press-event",
+                   G_CALLBACK(onButtonPress), this);
+
+  g_signal_connect(G_OBJECT(game_area_), "button-release-event",
+                   G_CALLBACK(onButtonRelease), this);
+
+  g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
+                   G_CALLBACK(onMotionNotify), this);
+
+  // Add size-allocate signal handler for resize events
+  g_signal_connect(
+      G_OBJECT(game_area_), "size-allocate",
+      G_CALLBACK(
+          +[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
+            SolitaireGame *game = static_cast<SolitaireGame *>(data);
             game->updateCardDimensions(allocation->width, allocation->height);
-            
+
             // Recreate buffer surface with new dimensions if needed
             if (game->buffer_surface_) {
-                cairo_surface_destroy(game->buffer_surface_);
-                cairo_destroy(game->buffer_cr_);
+              cairo_surface_destroy(game->buffer_surface_);
+              cairo_destroy(game->buffer_cr_);
             }
-            
+
             game->buffer_surface_ = cairo_image_surface_create(
-                CAIRO_FORMAT_ARGB32, 
-                allocation->width, 
-                allocation->height
-            );
+                CAIRO_FORMAT_ARGB32, allocation->width, allocation->height);
             game->buffer_cr_ = cairo_create(game->buffer_surface_);
-            
+
             gtk_widget_queue_draw(widget);
-        }), this);
+          }),
+      this);
 
-    // Set minimum size to prevent cards from becoming too small
-    gtk_widget_set_size_request(game_area_,
-        BASE_CARD_WIDTH * 7 + BASE_CARD_SPACING * 8,  // Minimum width for 7 cards + spacing
-        BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 6  // Minimum height for 2 rows + tableau
-    );
+  // Set minimum size to prevent cards from becoming too small
+  gtk_widget_set_size_request(
+      game_area_,
+      BASE_CARD_WIDTH * 7 +
+          BASE_CARD_SPACING * 8, // Minimum width for 7 cards + spacing
+      BASE_CARD_HEIGHT * 2 +
+          BASE_VERT_SPACING * 6 // Minimum height for 2 rows + tableau
+  );
 
-    // Initialize card dimensions based on initial window size
-    GtkAllocation allocation;
-    gtk_widget_get_allocation(window_, &allocation);
-    updateCardDimensions(allocation.width, allocation.height);
+  // Initialize card dimensions based on initial window size
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(window_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
 
-    // Initialize the card cache
-    initializeCardCache();
+  // Initialize the card cache
+  initializeCardCache();
 
-    // Make everything visible
-    gtk_widget_show_all(window_);
+  // Make everything visible
+  gtk_widget_show_all(window_);
 }
 
 void SolitaireGame::setupMenuBar() {
@@ -1027,16 +1054,16 @@ void SolitaireGame::setupMenuBar() {
                    this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
-   // Test Layout
-    /*GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
-    g_signal_connect(G_OBJECT(testLayoutItem), "activate",
-        G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-            SolitaireGame *game = static_cast<SolitaireGame *>(data);
-            game->dealTestLayout();
-            game->refreshDisplay();
-        }), this);
-    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), testLayoutItem);
-    */
+  // Test Layout
+  /*GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
+  g_signal_connect(G_OBJECT(testLayoutItem), "activate",
+      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+          SolitaireGame *game = static_cast<SolitaireGame *>(data);
+          game->dealTestLayout();
+          game->refreshDisplay();
+      }), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), testLayoutItem);
+  */
 
   // Draw Mode submenu
   GtkWidget *drawModeItem = gtk_menu_item_new_with_label("Draw Mode");
@@ -1079,100 +1106,100 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
 
   // Card Back menu - only show on non-Windows platforms
-//#ifndef _WIN32
-  GtkWidget* cardBackMenu = gtk_menu_new();
-  GtkWidget* cardBackItem = gtk_menu_item_new_with_label("Card Back");
+  // #ifndef _WIN32
+  GtkWidget *cardBackMenu = gtk_menu_new();
+  GtkWidget *cardBackItem = gtk_menu_item_new_with_label("Card Back");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
 
   // Select custom back option
-  GtkWidget* selectBackItem = gtk_menu_item_new_with_label("Select Custom Back");
-  g_signal_connect(G_OBJECT(selectBackItem), "activate",
-      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-          SolitaireGame* game = static_cast<SolitaireGame*>(data);
-          
-          GtkWidget* dialog = gtk_file_chooser_dialog_new("Select Card Back",
-              GTK_WINDOW(game->window_),
-              GTK_FILE_CHOOSER_ACTION_OPEN,
-              "_Cancel", GTK_RESPONSE_CANCEL,
-              "_Open", GTK_RESPONSE_ACCEPT,
-              NULL);
-              
-          GtkFileFilter* filter = gtk_file_filter_new();
-          gtk_file_filter_set_name(filter, "Image Files");
-          gtk_file_filter_add_pattern(filter, "*.png");
-          gtk_file_filter_add_pattern(filter, "*.jpg");
-          gtk_file_filter_add_pattern(filter, "*.jpeg");
-          gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-          
-          if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-              char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-              if (game->setCustomCardBack(filename)) {
-                  game->refreshCardCache();
-                  game->refreshDisplay();
-              } else {
-                  GtkWidget* error_dialog = gtk_message_dialog_new(
-                      GTK_WINDOW(game->window_),
-                      GTK_DIALOG_DESTROY_WITH_PARENT,
-                      GTK_MESSAGE_ERROR,
-                      GTK_BUTTONS_OK,
-                      "Failed to load image file");
-                  gtk_dialog_run(GTK_DIALOG(error_dialog));
-                  gtk_widget_destroy(error_dialog);
-              }
-              g_free(filename);
+  GtkWidget *selectBackItem =
+      gtk_menu_item_new_with_label("Select Custom Back");
+  g_signal_connect(
+      G_OBJECT(selectBackItem), "activate",
+      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+
+        GtkWidget *dialog = gtk_file_chooser_dialog_new(
+            "Select Card Back", GTK_WINDOW(game->window_),
+            GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
+            "_Open", GTK_RESPONSE_ACCEPT, NULL);
+
+        GtkFileFilter *filter = gtk_file_filter_new();
+        gtk_file_filter_set_name(filter, "Image Files");
+        gtk_file_filter_add_pattern(filter, "*.png");
+        gtk_file_filter_add_pattern(filter, "*.jpg");
+        gtk_file_filter_add_pattern(filter, "*.jpeg");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+          char *filename =
+              gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+          if (game->setCustomCardBack(filename)) {
+            game->refreshCardCache();
+            game->refreshDisplay();
+          } else {
+            GtkWidget *error_dialog = gtk_message_dialog_new(
+                GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+                GTK_MESSAGE_ERROR, GTK_BUTTONS_OK, "Failed to load image file");
+            gtk_dialog_run(GTK_DIALOG(error_dialog));
+            gtk_widget_destroy(error_dialog);
           }
-          gtk_widget_destroy(dialog);
-      }), this);
+          g_free(filename);
+        }
+        gtk_widget_destroy(dialog);
+      }),
+      this);
   gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
 
   // Reset to default back option
-  GtkWidget* resetBackItem = gtk_menu_item_new_with_label("Reset to Default Back");
+  GtkWidget *resetBackItem =
+      gtk_menu_item_new_with_label("Reset to Default Back");
   g_signal_connect(G_OBJECT(resetBackItem), "activate",
-      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-          SolitaireGame* game = static_cast<SolitaireGame*>(data);
-          game->resetToDefaultBack();
-      }), this);
+                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     game->resetToDefaultBack();
+                   }),
+                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
 
   // Add the Card Back submenu to the Game menu
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
-//#endif
+  // #endif
 
   // Load Deck option
-  GtkWidget* loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
-  g_signal_connect(G_OBJECT(loadDeckItem), "activate",
-      G_CALLBACK(+[](GtkWidget* widget, gpointer data) {
-          SolitaireGame* game = static_cast<SolitaireGame*>(data);
-          
-          GtkWidget* dialog = gtk_file_chooser_dialog_new("Load Deck",
-              GTK_WINDOW(game->window_),
-              GTK_FILE_CHOOSER_ACTION_OPEN,
-              "_Cancel", GTK_RESPONSE_CANCEL,
-              "_Open", GTK_RESPONSE_ACCEPT,
-              NULL);
-              
-          GtkFileFilter* filter = gtk_file_filter_new();
-          gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
-          gtk_file_filter_add_pattern(filter, "*.zip");
-          gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-          
-          if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-              char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-              if (game->loadDeck(filename)) {
-                  game->refreshDisplay();
-              }
-              g_free(filename);
+  GtkWidget *loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
+  g_signal_connect(
+      G_OBJECT(loadDeckItem), "activate",
+      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+
+        GtkWidget *dialog = gtk_file_chooser_dialog_new(
+            "Load Deck", GTK_WINDOW(game->window_),
+            GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
+            "_Open", GTK_RESPONSE_ACCEPT, NULL);
+
+        GtkFileFilter *filter = gtk_file_filter_new();
+        gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
+        gtk_file_filter_add_pattern(filter, "*.zip");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+          char *filename =
+              gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+          if (game->loadDeck(filename)) {
+            game->refreshDisplay();
           }
-          
-          gtk_widget_destroy(dialog);
-      }), this);
+          g_free(filename);
+        }
+
+        gtk_widget_destroy(dialog);
+      }),
+      this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
 
   // Separator
   GtkWidget *sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
-
-
 
   // Quit
   GtkWidget *quitItem = gtk_menu_item_new_with_label("Quit");
@@ -1324,428 +1351,430 @@ void SolitaireGame::dealTestLayout() {
 }
 
 void SolitaireGame::initializeSettingsDir() {
-    const char* home_dir = nullptr;
-    std::string app_dir;
-    
-    #ifdef _WIN32
-        home_dir = getenv("USERPROFILE");
-        if (home_dir) {
-            app_dir = std::string(home_dir) + "\\AppData\\Local\\Solitaire";
-            //app_dir = std::string(home_dir) + "/.config/solitaire";
-        }
-    #else
-        home_dir = getenv("HOME");
-        if (home_dir) {
-            app_dir = std::string(home_dir) + "/.config/solitaire";
-        }
-    #endif
+  const char *home_dir = nullptr;
+  std::string app_dir;
 
-    if (!home_dir) {
-        std::cerr << "Could not determine home directory" << std::endl;
-        return;
-    }
+#ifdef _WIN32
+  home_dir = getenv("USERPROFILE");
+  if (home_dir) {
+    app_dir = std::string(home_dir) + "\\AppData\\Local\\Solitaire";
+    // app_dir = std::string(home_dir) + "/.config/solitaire";
+  }
+#else
+  home_dir = getenv("HOME");
+  if (home_dir) {
+    app_dir = std::string(home_dir) + "/.config/solitaire";
+  }
+#endif
 
-    settings_dir_ = app_dir;
+  if (!home_dir) {
+    std::cerr << "Could not determine home directory" << std::endl;
+    return;
+  }
 
-    // Create directory if it doesn't exist
-    #ifdef _WIN32
-        _mkdir(app_dir.c_str());
-    #else
-        mkdir(app_dir.c_str(), 0755);
-    #endif
+  settings_dir_ = app_dir;
+
+// Create directory if it doesn't exist
+#ifdef _WIN32
+  _mkdir(app_dir.c_str());
+#else
+  mkdir(app_dir.c_str(), 0755);
+#endif
 }
 
 bool SolitaireGame::loadSettings() {
-    if (settings_dir_.empty()) {
-        return false;
+  if (settings_dir_.empty()) {
+    return false;
+  }
+
+  std::string settings_file = settings_dir_ +
+#ifdef _WIN32
+                              "\\settings.txt"
+#else
+                              "/settings.txt"
+#endif
+      ;
+
+  std::ifstream file(settings_file);
+  if (!file) {
+    return false;
+  }
+
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.substr(0, 10) == "card_back=") {
+      custom_back_path_ = line.substr(10);
+      break;
     }
+  }
 
-    std::string settings_file = settings_dir_ + 
-        #ifdef _WIN32
-            "\\settings.txt"
-        #else
-            "/settings.txt"
-        #endif
-        ;
-
-    std::ifstream file(settings_file);
-    if (!file) {
-        return false;
-    }
-
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.substr(0, 10) == "card_back=") {
-            custom_back_path_ = line.substr(10);
-            break;
-        }
-    }
-
-    return !custom_back_path_.empty();
+  return !custom_back_path_.empty();
 }
 
 void SolitaireGame::saveSettings() {
-    if (settings_dir_.empty()) {
-        return;
-    }
+  if (settings_dir_.empty()) {
+    return;
+  }
 
-    std::string settings_file = settings_dir_ + 
-        #ifdef _WIN32
-            "\\settings.txt"
-        #else
-            "/settings.txt"
-        #endif
-        ;
+  std::string settings_file = settings_dir_ +
+#ifdef _WIN32
+                              "\\settings.txt"
+#else
+                              "/settings.txt"
+#endif
+      ;
 
-    std::ofstream file(settings_file);
-    if (!file) {
-        std::cerr << "Could not save settings" << std::endl;
-        return;
-    }
+  std::ofstream file(settings_file);
+  if (!file) {
+    std::cerr << "Could not save settings" << std::endl;
+    return;
+  }
 
-    if (!custom_back_path_.empty()) {
-        file << "card_back=" << custom_back_path_ << std::endl;
-    }
+  if (!custom_back_path_.empty()) {
+    file << "card_back=" << custom_back_path_ << std::endl;
+  }
 }
 
-bool SolitaireGame::setCustomCardBack(const std::string& path) {
-    
-    // First read the entire file into memory
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        return false;
+bool SolitaireGame::setCustomCardBack(const std::string &path) {
+
+  // First read the entire file into memory
+  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  if (!file.is_open()) {
+    return false;
+  }
+
+  // Store original path
+  std::string old_path = custom_back_path_;
+
+  std::streamsize size = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  std::vector<char> buffer(size);
+  if (!file.read(buffer.data(), size)) {
+    return false;
+  }
+
+  // Now create pixbuf from memory
+  GError *error = nullptr;
+  GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+
+  if (!gdk_pixbuf_loader_write(loader, (const guchar *)buffer.data(), size,
+                               &error)) {
+    if (error) {
+      g_error_free(error);
     }
-    
-    // Store original path
-    std::string old_path = custom_back_path_;
-    
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    
-    std::vector<char> buffer(size);
-    if (!file.read(buffer.data(), size)) {
-        return false;
+    g_object_unref(loader);
+    return false;
+  }
+
+  if (!gdk_pixbuf_loader_close(loader, &error)) {
+    if (error) {
+      g_error_free(error);
     }
-    
-    
-    // Now create pixbuf from memory
-    GError* error = nullptr;
-    GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
-    
-    if (!gdk_pixbuf_loader_write(loader, (const guchar*)buffer.data(), size, &error)) {
-        if (error) {
-            g_error_free(error);
-        }
-        g_object_unref(loader);
-        return false;
-    }
-    
-    if (!gdk_pixbuf_loader_close(loader, &error)) {
-        if (error) {
-            g_error_free(error);
-        }
-        g_object_unref(loader);
-        return false;
-    }
-    
-    GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-    if (!pixbuf) {
-        g_object_unref(loader);
-        return false;
-    }
-    
-    g_object_unref(loader);  // This will also unreference the pixbuf
-    
-    try {
-        custom_back_path_ = path;
-        
-        saveSettings();
-        
-        return true;
-        
-    } catch (const std::exception& e) {
-        custom_back_path_ = old_path;  // Restore old path
-        return false;
-    }
+    g_object_unref(loader);
+    return false;
+  }
+
+  GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+  if (!pixbuf) {
+    g_object_unref(loader);
+    return false;
+  }
+
+  g_object_unref(loader); // This will also unreference the pixbuf
+
+  try {
+    custom_back_path_ = path;
+
+    saveSettings();
+
+    return true;
+
+  } catch (const std::exception &e) {
+    custom_back_path_ = old_path; // Restore old path
+    return false;
+  }
 }
 
-bool SolitaireGame::loadDeck(const std::string& path) {
-    try {
-        // Load the new deck first to validate it
-        cardlib::Deck new_deck(path);
-        new_deck.removeJokers();
-        
-        // If we got here, the deck loaded successfully
-        cleanupResources();
-        deck_ = std::move(new_deck);
-        refreshDisplay();
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Failed to load deck from " << path << ": " << e.what() << std::endl;
-        GtkWidget* error_dialog = gtk_message_dialog_new(
-            GTK_WINDOW(window_),
-            GTK_DIALOG_DESTROY_WITH_PARENT,
-            GTK_MESSAGE_ERROR,
-            GTK_BUTTONS_OK,
-            "Failed to load deck: %s", e.what());
-        gtk_dialog_run(GTK_DIALOG(error_dialog));
-        gtk_widget_destroy(error_dialog);
-        return false;
-    }
+bool SolitaireGame::loadDeck(const std::string &path) {
+  try {
+    // Load the new deck first to validate it
+    cardlib::Deck new_deck(path);
+    new_deck.removeJokers();
+
+    // If we got here, the deck loaded successfully
+    cleanupResources();
+    deck_ = std::move(new_deck);
+    refreshDisplay();
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load deck from " << path << ": " << e.what()
+              << std::endl;
+    GtkWidget *error_dialog = gtk_message_dialog_new(
+        GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+        GTK_BUTTONS_OK, "Failed to load deck: %s", e.what());
+    gtk_dialog_run(GTK_DIALOG(error_dialog));
+    gtk_widget_destroy(error_dialog);
+    return false;
+  }
 }
 
 void SolitaireGame::cleanupResources() {
-    // Clean up Cairo resources
-    if (buffer_cr_) {
-        cairo_destroy(buffer_cr_);
-        buffer_cr_ = nullptr;
-    }
-    if (buffer_surface_) {
-        cairo_surface_destroy(buffer_surface_);
-        buffer_surface_ = nullptr;
-    }
-    
-    // Clean up card cache
-    cleanupCardCache();
+  // Clean up Cairo resources
+  if (buffer_cr_) {
+    cairo_destroy(buffer_cr_);
+    buffer_cr_ = nullptr;
+  }
+  if (buffer_surface_) {
+    cairo_surface_destroy(buffer_surface_);
+    buffer_surface_ = nullptr;
+  }
+
+  // Clean up card cache
+  cleanupCardCache();
 }
 
 void SolitaireGame::resetToDefaultBack() {
-    clearCustomBack();
-    refreshCardCache();
-    refreshDisplay();
+  clearCustomBack();
+  refreshCardCache();
+  refreshDisplay();
 }
 
 void SolitaireGame::clearCustomBack() {
-    custom_back_path_.clear();
-    
-    // Remove the custom back from cache if it exists
-    auto it = card_surface_cache_.find("custom_back");
-    if (it != card_surface_cache_.end()) {
-        cairo_surface_destroy(it->second);
-        card_surface_cache_.erase(it);
-    }
-    
-    // Update settings file
-    saveSettings();
+  custom_back_path_.clear();
+
+  // Remove the custom back from cache if it exists
+  auto it = card_surface_cache_.find("custom_back");
+  if (it != card_surface_cache_.end()) {
+    cairo_surface_destroy(it->second);
+    card_surface_cache_.erase(it);
+  }
+
+  // Update settings file
+  saveSettings();
 }
 
 void SolitaireGame::refreshCardCache() {
-    // Clean up existing cache
-    cleanupCardCache();
-    
-    // Rebuild the cache
-    initializeCardCache();
-    
-    // If we have a custom back, reload it
-    if (!custom_back_path_.empty()) {
-        
-        std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
-        if (file.is_open()) {
-            std::streamsize size = file.tellg();
-            file.seekg(0, std::ios::beg);
-            
-            std::vector<char> buffer(size);
-            if (file.read(buffer.data(), size)) {
-                GError* error = nullptr;
-                GdkPixbufLoader* loader = gdk_pixbuf_loader_new();
-                
-                if (gdk_pixbuf_loader_write(loader, (const guchar*)buffer.data(), size, &error)) {
-                    gdk_pixbuf_loader_close(loader, &error);
-                    
-                    GdkPixbuf* original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-                    if (original_pixbuf) {
-                        GdkPixbuf* scaled = gdk_pixbuf_scale_simple(
-                            original_pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
-                            
-                        if (scaled) {
-                            cairo_surface_t* surface = cairo_image_surface_create(
-                                CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
-                            cairo_t* surface_cr = cairo_create(surface);
-                            
-                            gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
-                            cairo_paint(surface_cr);
-                            cairo_destroy(surface_cr);
-                            
-                            card_surface_cache_["custom_back"] = surface;
-                            
-                            g_object_unref(scaled);
-                        }
-                    }
-                }
-                
-                if (error) {
-                    g_error_free(error);
-                }
-                g_object_unref(loader);
+  // Clean up existing cache
+  cleanupCardCache();
+
+  // Rebuild the cache
+  initializeCardCache();
+
+  // If we have a custom back, reload it
+  if (!custom_back_path_.empty()) {
+
+    std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
+    if (file.is_open()) {
+      std::streamsize size = file.tellg();
+      file.seekg(0, std::ios::beg);
+
+      std::vector<char> buffer(size);
+      if (file.read(buffer.data(), size)) {
+        GError *error = nullptr;
+        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+
+        if (gdk_pixbuf_loader_write(loader, (const guchar *)buffer.data(), size,
+                                    &error)) {
+          gdk_pixbuf_loader_close(loader, &error);
+
+          GdkPixbuf *original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+          if (original_pixbuf) {
+            GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
+                original_pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
+
+            if (scaled) {
+              cairo_surface_t *surface = cairo_image_surface_create(
+                  CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
+              cairo_t *surface_cr = cairo_create(surface);
+
+              gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
+              cairo_paint(surface_cr);
+              cairo_destroy(surface_cr);
+
+              card_surface_cache_["custom_back"] = surface;
+
+              g_object_unref(scaled);
             }
+          }
         }
+
+        if (error) {
+          g_error_free(error);
+        }
+        g_object_unref(loader);
+      }
     }
-    
+  }
 }
 
 void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
-    double scale = getScaleFactor(window_width, window_height);
-    
-    // Update current dimensions
-    current_card_width_ = static_cast<int>(BASE_CARD_WIDTH * scale);
-    current_card_height_ = static_cast<int>(BASE_CARD_HEIGHT * scale);
-    current_card_spacing_ = static_cast<int>(BASE_CARD_SPACING * scale);
-    current_vert_spacing_ = static_cast<int>(BASE_VERT_SPACING * scale);
-    
-    // Ensure minimum sizes
-    current_card_width_ = std::max(current_card_width_, 60);
-    current_card_height_ = std::max(current_card_height_, 87);
-    current_card_spacing_ = std::max(current_card_spacing_, 10);
-    current_vert_spacing_ = std::max(current_vert_spacing_, 15);
+  double scale = getScaleFactor(window_width, window_height);
 
-    // Ensure cards don't overlap
-    if (current_vert_spacing_ < current_card_height_ / 4) {
-        current_vert_spacing_ = current_card_height_ / 4;
-    }
+  // Update current dimensions
+  current_card_width_ = static_cast<int>(BASE_CARD_WIDTH * scale);
+  current_card_height_ = static_cast<int>(BASE_CARD_HEIGHT * scale);
+  current_card_spacing_ = static_cast<int>(BASE_CARD_SPACING * scale);
+  current_vert_spacing_ = static_cast<int>(BASE_VERT_SPACING * scale);
 
-    // Reinitialize card cache with new dimensions
-    initializeCardCache();
+  // Ensure minimum sizes
+  current_card_width_ = std::max(current_card_width_, 60);
+  current_card_height_ = std::max(current_card_height_, 87);
+  current_card_spacing_ = std::max(current_card_spacing_, 10);
+  current_vert_spacing_ = std::max(current_vert_spacing_, 15);
+
+  // Ensure cards don't overlap
+  if (current_vert_spacing_ < current_card_height_ / 4) {
+    current_vert_spacing_ = current_card_height_ / 4;
+  }
+
+  // Reinitialize card cache with new dimensions
+  initializeCardCache();
 }
 
-double SolitaireGame::getScaleFactor(int window_width, int window_height) const {
-    // Calculate scale factors for both dimensions
-    double width_scale = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
-    double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
-    
-    // Use the smaller scale to ensure everything fits
-    return std::min(width_scale, height_scale);
-}
+double SolitaireGame::getScaleFactor(int window_width,
+                                     int window_height) const {
+  // Calculate scale factors for both dimensions
+  double width_scale = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
+  double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
 
+  // Use the smaller scale to ensure everything fits
+  return std::min(width_scale, height_scale);
+}
 
 void SolitaireGame::startWinAnimation() {
-    if (win_animation_active_) return;
-    
-    // Show win message
-    GtkWidget *dialog = gtk_message_dialog_new(
-        GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-    gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
-    
-    win_animation_active_ = true;
-    cards_launched_ = 0;
-    launch_timer_ = 0;
-    animated_cards_.clear();
-    
-    // Initialize tracking for animated cards
-    animated_foundation_cards_.clear();
-    animated_foundation_cards_.resize(4);  // 4 foundation piles
-    for (size_t i = 0; i < 4; i++) {
-        animated_foundation_cards_[i].resize(13, false);  // 13 cards per pile
-    }
-    
-    // Set up animation timer
-    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
-}
+  if (win_animation_active_)
+    return;
 
+  // Show win message
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+      GTK_BUTTONS_OK, "Congratulations! You've won!");
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
+
+  win_animation_active_ = true;
+  cards_launched_ = 0;
+  launch_timer_ = 0;
+  animated_cards_.clear();
+
+  // Initialize tracking for animated cards
+  animated_foundation_cards_.clear();
+  animated_foundation_cards_.resize(4); // 4 foundation piles
+  for (size_t i = 0; i < 4; i++) {
+    animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
+  }
+
+  // Set up animation timer
+  animation_timer_id_ =
+      g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
+}
 
 void SolitaireGame::stopWinAnimation() {
-    if (!win_animation_active_) return;
-    
-    win_animation_active_ = false;
-    if (animation_timer_id_ > 0) {
-        g_source_remove(animation_timer_id_);
-        animation_timer_id_ = 0;
-    }
-    animated_cards_.clear();
-    animated_foundation_cards_.clear();
-    cards_launched_ = 0;
-    
-    // Start new game
-    initializeGame();
-    refreshDisplay();
+  if (!win_animation_active_)
+    return;
+
+  win_animation_active_ = false;
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+  animated_cards_.clear();
+  animated_foundation_cards_.clear();
+  cards_launched_ = 0;
+
+  // Start new game
+  initializeGame();
+  refreshDisplay();
 }
 
-
 void SolitaireGame::launchNextCard() {
-    if (cards_launched_ >= 52) return;
-    
-    // Calculate which foundation pile and card to launch
-    int pile_index = cards_launched_ / 13;
-    int card_index = 12 - (cards_launched_ % 13);  // Start with King (12) down to Ace (0)
-    
-    if (pile_index < foundation_.size() && card_index >= 0 && 
-        card_index < static_cast<int>(foundation_[pile_index].size())) {
-        
-        // Mark card as animated
-        animated_foundation_cards_[pile_index][card_index] = true;
-        
-        // Calculate start position
-        double start_x = current_card_spacing_ + (3 + pile_index) * 
-                        (current_card_width_ + current_card_spacing_);
-        double start_y = current_card_spacing_;
-        
-        // Random velocities for variety
-        double angle = M_PI * 3 / 4 + (rand() % 1000) / 1000.0 * M_PI / 4;
-        double speed = 15 + (rand() % 5);
-        
-        AnimatedCard anim_card;
-        anim_card.card = foundation_[pile_index][card_index];
-        anim_card.x = start_x;
-        anim_card.y = start_y;
-        anim_card.velocity_x = cos(angle) * speed;
-        anim_card.velocity_y = sin(angle) * speed;
-        anim_card.rotation = 0;
-        anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
-        anim_card.active = true;
-        
-        animated_cards_.push_back(anim_card);
-        cards_launched_++;
-    }
+  if (cards_launched_ >= 52)
+    return;
+
+  // Calculate which foundation pile and card to launch
+  int pile_index = cards_launched_ / 13;
+  int card_index =
+      12 - (cards_launched_ % 13); // Start with King (12) down to Ace (0)
+
+  if (pile_index < foundation_.size() && card_index >= 0 &&
+      card_index < static_cast<int>(foundation_[pile_index].size())) {
+
+    // Mark card as animated
+    animated_foundation_cards_[pile_index][card_index] = true;
+
+    // Calculate start position
+    double start_x =
+        current_card_spacing_ +
+        (3 + pile_index) * (current_card_width_ + current_card_spacing_);
+    double start_y = current_card_spacing_;
+
+    // Random velocities for variety
+    double angle = M_PI * 3 / 4 + (rand() % 1000) / 1000.0 * M_PI / 4;
+    double speed = 15 + (rand() % 5);
+
+    AnimatedCard anim_card;
+    anim_card.card = foundation_[pile_index][card_index];
+    anim_card.x = start_x;
+    anim_card.y = start_y;
+    anim_card.velocity_x = cos(angle) * speed;
+    anim_card.velocity_y = sin(angle) * speed;
+    anim_card.rotation = 0;
+    anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+    anim_card.active = true;
+
+    animated_cards_.push_back(anim_card);
+    cards_launched_++;
+  }
 }
 
 gboolean SolitaireGame::onAnimationTick(gpointer data) {
-    SolitaireGame* game = static_cast<SolitaireGame*>(data);
-    game->updateWinAnimation();
-    return game->win_animation_active_ ? TRUE : FALSE;
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->updateWinAnimation();
+  return game->win_animation_active_ ? TRUE : FALSE;
 }
 
 void SolitaireGame::updateWinAnimation() {
-    if (!win_animation_active_) return;
-    
-    // Launch new cards periodically
-    launch_timer_ += ANIMATION_INTERVAL;
-    if (launch_timer_ >= 100) { // Launch a new card every 100ms
-        launch_timer_ = 0;
-        launchNextCard();
+  if (!win_animation_active_)
+    return;
+
+  // Launch new cards periodically
+  launch_timer_ += ANIMATION_INTERVAL;
+  if (launch_timer_ >= 100) { // Launch a new card every 100ms
+    launch_timer_ = 0;
+    launchNextCard();
+  }
+
+  // Update physics for all active cards
+  bool all_cards_finished = true;
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(game_area_, &allocation);
+
+  for (auto &card : animated_cards_) {
+    if (!card.active)
+      continue;
+
+    // Update position
+    card.x += card.velocity_x;
+    card.y += card.velocity_y;
+    card.velocity_y += GRAVITY;
+
+    // Update rotation
+    card.rotation += card.rotation_velocity;
+
+    // Check if card is off screen
+    if (card.x < -current_card_width_ || card.x > allocation.width ||
+        card.y > allocation.height + current_card_height_) {
+      card.active = false;
+    } else {
+      all_cards_finished = false;
     }
-    
-    // Update physics for all active cards
-    bool all_cards_finished = true;
-    GtkAllocation allocation;
-    gtk_widget_get_allocation(game_area_, &allocation);
-    
-    for (auto& card : animated_cards_) {
-        if (!card.active) continue;
-        
-        // Update position
-        card.x += card.velocity_x;
-        card.y += card.velocity_y;
-        card.velocity_y += GRAVITY;
-        
-        // Update rotation
-        card.rotation += card.rotation_velocity;
-        
-        // Check if card is off screen
-        if (card.x < -current_card_width_ || card.x > allocation.width ||
-            card.y > allocation.height + current_card_height_) {
-            card.active = false;
-        } else {
-            all_cards_finished = false;
-        }
-    }
-    
-    // Stop animation if all cards are done and we've launched them all
-    if (all_cards_finished && cards_launched_ >= 52) {
-        stopWinAnimation();
-    }
-    
-    refreshDisplay();
+  }
+
+  // Stop animation if all cards are done and we've launched them all
+  if (all_cards_finished && cards_launched_ >= 52) {
+    stopWinAnimation();
+  }
+
+  refreshDisplay();
 }
-
-

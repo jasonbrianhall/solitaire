@@ -191,7 +191,8 @@ void Deck::replaceCardBackImage(const std::string &image_path) {
     throw std::runtime_error("Failed to open image file: " + image_path);
   }
 
-  std::vector<unsigned char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::vector<unsigned char> buffer((std::istreambuf_iterator<char>(file)),
+                                    std::istreambuf_iterator<char>());
   file.close();
 
   if (buffer.empty()) {
