@@ -24,6 +24,24 @@ public:
 
 private:
   // Game state
+    static constexpr int BASE_WINDOW_WIDTH = 1024;
+    static constexpr int BASE_WINDOW_HEIGHT = 768;
+    static constexpr int BASE_CARD_WIDTH = 100;
+    static constexpr int BASE_CARD_HEIGHT = 145;
+    static constexpr int BASE_CARD_SPACING = 20;
+    static constexpr int BASE_VERT_SPACING = 30;
+
+    // Current dynamic dimensions
+    int current_card_width_;
+    int current_card_height_;
+    int current_card_spacing_;
+    int current_vert_spacing_;
+
+    // New method declarations
+    void updateCardDimensions(int window_width, int window_height);
+    double getScaleFactor(int window_width, int window_height) const;
+
+  
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile
   std::vector<cardlib::Card> waste_; // Faced-up cards from stock
