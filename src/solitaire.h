@@ -41,6 +41,33 @@ private:
     void updateCardDimensions(int window_width, int window_height);
     double getScaleFactor(int window_width, int window_height) const;
 
+struct AnimatedCard {
+    cardlib::Card card;
+    double x;
+    double y;
+    double velocity_x;
+    double velocity_y;
+    double rotation;
+    double rotation_velocity;
+    bool active;
+};
+
+bool win_animation_active_ = false;
+std::vector<AnimatedCard> animated_cards_;
+guint animation_timer_id_ = 0;
+static constexpr double GRAVITY = 0.8;
+static constexpr double BOUNCE_FACTOR = -0.7;
+static constexpr int ANIMATION_INTERVAL = 16; // ~60 FPS
+int cards_launched_ = 0;
+double launch_timer_ = 0;
+
+void startWinAnimation();
+void updateWinAnimation();
+static gboolean onAnimationTick(gpointer data);
+void stopWinAnimation();
+void launchNextCard();
+
+
   
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile

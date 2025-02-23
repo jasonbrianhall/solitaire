@@ -400,8 +400,31 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
         }
     }
 
+
+
     // Copy buffer to window
     cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
+if (game->win_animation_active_) {
+    for (const auto& anim_card : game->animated_cards_) {
+        if (!anim_card.active) continue;
+        
+        cairo_save(game->buffer_cr_);
+        
+        // Move to card center for rotation
+        cairo_translate(game->buffer_cr_, 
+                      anim_card.x + game->current_card_width_ / 2,
+                      anim_card.y + game->current_card_height_ / 2);
+        cairo_rotate(game->buffer_cr_, anim_card.rotation);
+        cairo_translate(game->buffer_cr_,
+                      -game->current_card_width_ / 2,
+                      -game->current_card_height_ / 2);
+        
+        // Draw the card
+        game->drawCard(game->buffer_cr_, 0, 0, &anim_card.card, true);
+        
+        cairo_restore(game->buffer_cr_);
+    }
+}
     cairo_paint(cr);
 
     return TRUE;
@@ -518,7 +541,7 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, 
             }
 
             if (card_moved) {
-                if (game->checkWinCondition()) {
+                /*if (game->checkWinCondition()) {
                     GtkWidget *dialog = gtk_message_dialog_new(
                         GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
                         GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
@@ -526,8 +549,13 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, 
                     gtk_widget_destroy(dialog);
                     game->initializeGame();
                 }
-                gtk_widget_queue_draw(game->game_area_);
+                gtk_widget_queue_draw(game->game_area_);*/
+                   if (game->checkWinCondition()) {
+        game->startWinAnimation();  // Start animation instead of showing dialog
+    }
+    gtk_widget_queue_draw(game->game_area_);
             }
+            
         }
         return TRUE;
     }
@@ -603,7 +631,7 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
       }
 
       if (move_successful) {
-        if (game->checkWinCondition()) {
+        /*if (game->checkWinCondition()) {
           GtkWidget *dialog = gtk_message_dialog_new(
               GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
               GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
@@ -613,7 +641,12 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
           game->initializeGame();
         }
         gtk_widget_queue_draw(game->game_area_);
-      }
+      }*/
+        if (game->checkWinCondition()) {
+            game->startWinAnimation();  // Start animation instead of showing dialog
+        }
+    gtk_widget_queue_draw(game->game_area_);
+}
     }
 
     game->dragging_ = false;
@@ -985,6 +1018,17 @@ void SolitaireGame::setupMenuBar() {
                    this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
+   // Test Layout
+    GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
+    g_signal_connect(G_OBJECT(testLayoutItem), "activate",
+        G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+            SolitaireGame *game = static_cast<SolitaireGame *>(data);
+            game->dealTestLayout();
+            game->refreshDisplay();
+        }), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), testLayoutItem);
+
+
   // Draw Mode submenu
   GtkWidget *drawModeItem = gtk_menu_item_new_with_label("Draw Mode");
   GtkWidget *drawModeMenu = gtk_menu_new();
@@ -1118,6 +1162,8 @@ void SolitaireGame::setupMenuBar() {
   // Separator
   GtkWidget *sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
+
+
 
   // Quit
   GtkWidget *quitItem = gtk_menu_item_new_with_label("Quit");
@@ -1560,4 +1606,124 @@ double SolitaireGame::getScaleFactor(int window_width, int window_height) const 
     // Use the smaller scale to ensure everything fits
     return std::min(width_scale, height_scale);
 }
+
+
+void SolitaireGame::startWinAnimation() {
+    if (win_animation_active_) return;
+    
+    // Show win message
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    
+    win_animation_active_ = true;
+    cards_launched_ = 0;
+    launch_timer_ = 0;
+    animated_cards_.clear();
+    
+    // Set up animation timer
+    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
+}
+
+void SolitaireGame::stopWinAnimation() {
+    if (!win_animation_active_) return;
+    
+    win_animation_active_ = false;
+    if (animation_timer_id_ > 0) {
+        g_source_remove(animation_timer_id_);
+        animation_timer_id_ = 0;
+    }
+    animated_cards_.clear();
+    cards_launched_ = 0;
+    
+    // Start new game
+    initializeGame();
+    refreshDisplay();
+}
+
+void SolitaireGame::launchNextCard() {
+    if (cards_launched_ >= 52) return;
+    
+    // Calculate which foundation pile and card to launch
+    int pile_index = cards_launched_ / 13;
+    int card_index = 12 - (cards_launched_ % 13); // Start from top of pile
+    
+    if (pile_index < foundation_.size() && card_index >= 0 && 
+        card_index < static_cast<int>(foundation_[pile_index].size())) {
+        
+        // Calculate start position
+        double start_x = current_card_spacing_ + (3 + pile_index) * 
+                        (current_card_width_ + current_card_spacing_);
+        double start_y = current_card_spacing_;
+        
+        // Random velocities for variety
+        double angle = M_PI * 3 / 4 + (rand() % 1000) / 1000.0 * M_PI / 4;
+        double speed = 15 + (rand() % 5);
+        
+        AnimatedCard anim_card;
+        anim_card.card = foundation_[pile_index][card_index];
+        anim_card.x = start_x;
+        anim_card.y = start_y;
+        anim_card.velocity_x = cos(angle) * speed;
+        anim_card.velocity_y = sin(angle) * speed;
+        anim_card.rotation = 0;
+        anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+        anim_card.active = true;
+        
+        animated_cards_.push_back(anim_card);
+        cards_launched_++;
+    }
+}
+
+gboolean SolitaireGame::onAnimationTick(gpointer data) {
+    SolitaireGame* game = static_cast<SolitaireGame*>(data);
+    game->updateWinAnimation();
+    return game->win_animation_active_ ? TRUE : FALSE;
+}
+
+void SolitaireGame::updateWinAnimation() {
+    if (!win_animation_active_) return;
+    
+    // Launch new cards periodically
+    launch_timer_ += ANIMATION_INTERVAL;
+    if (launch_timer_ >= 100) { // Launch a new card every 100ms
+        launch_timer_ = 0;
+        launchNextCard();
+    }
+    
+    // Update physics for all active cards
+    bool all_cards_finished = true;
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(game_area_, &allocation);
+    
+    for (auto& card : animated_cards_) {
+        if (!card.active) continue;
+        
+        // Update position
+        card.x += card.velocity_x;
+        card.y += card.velocity_y;
+        card.velocity_y += GRAVITY;
+        
+        // Update rotation
+        card.rotation += card.rotation_velocity;
+        
+        // Check if card is off screen
+        if (card.x < -current_card_width_ || card.x > allocation.width ||
+            card.y > allocation.height + current_card_height_) {
+            card.active = false;
+        } else {
+            all_cards_finished = false;
+        }
+    }
+    
+    // Stop animation if all cards are done and we've launched them all
+    if (all_cards_finished && cards_launched_ >= 52) {
+        stopWinAnimation();
+    }
+    
+    refreshDisplay();
+}
+
 
