@@ -107,7 +107,7 @@ For the brave souls who dare to venture into the code:
 
 ## 🐛 Known Features (Not Bugs)
 
-- The victory animation is intentionally subtle (okay, it's just a dialog box)
+- The victory animation is intentionally chaotic with cards flying off the screen
 - Cards occasionally show off their athletic abilities with smooth animations
 - The auto-complete feature is actually quite smart (it's just shy)
 
