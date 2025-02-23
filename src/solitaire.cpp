@@ -1054,8 +1054,8 @@ void SolitaireGame::setupMenuBar() {
                    this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
-  // Test Layout
-  /*GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
+#ifdef DEBUG
+  GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
   g_signal_connect(G_OBJECT(testLayoutItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
           SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -1063,7 +1063,7 @@ void SolitaireGame::setupMenuBar() {
           game->refreshDisplay();
       }), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), testLayoutItem);
-  */
+#endif
 
   // Draw Mode submenu
   GtkWidget *drawModeItem = gtk_menu_item_new_with_label("Draw Mode");
