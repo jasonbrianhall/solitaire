@@ -488,7 +488,48 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, 
             }
         }
     } else if (event->button == 3) { // Right click
-        // ... rest of the right-click handling code stays the same ...
+        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+
+        // Try to move card to foundation
+        if (pile_index >= 0) {
+            const cardlib::Card *card = nullptr;
+            bool card_moved = false;
+
+            // Get the card based on pile type
+            if (pile_index == 1 && !game->waste_.empty()) {
+                card = &game->waste_.back();
+                if (game->tryMoveToFoundation(*card)) {
+                    game->waste_.pop_back();
+                    card_moved = true;
+                }
+            } else if (pile_index >= 6 && pile_index <= 12) {
+                auto &tableau_pile = game->tableau_[pile_index - 6];
+                if (!tableau_pile.empty() && tableau_pile.back().face_up) {
+                    card = &tableau_pile.back().card;
+                    if (game->tryMoveToFoundation(*card)) {
+                        tableau_pile.pop_back();
+                        // Flip new top card if needed
+                        if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
+                            tableau_pile.back().face_up = true;
+                        }
+                        card_moved = true;
+                    }
+                }
+            }
+
+            if (card_moved) {
+                if (game->checkWinCondition()) {
+                    GtkWidget *dialog = gtk_message_dialog_new(
+                        GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+                        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
+                    gtk_dialog_run(GTK_DIALOG(dialog));
+                    gtk_widget_destroy(dialog);
+                    game->initializeGame();
+                }
+                gtk_widget_queue_draw(game->game_area_);
+            }
+        }
+        return TRUE;
     }
 
     return TRUE;
