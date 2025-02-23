@@ -1710,7 +1710,7 @@ void SolitaireGame::launchNextCard() {
     double start_y = current_card_spacing_;
 
     // Random velocities for variety
-    double angle = M_PI * 3 / 4 + (rand() % 1000) / 1000.0 * M_PI / 4;
+    double angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
     double speed = 15 + (rand() % 5);
 
     AnimatedCard anim_card;
