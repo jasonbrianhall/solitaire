@@ -1028,7 +1028,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
    // Test Layout
-    GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
+    /*GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
     g_signal_connect(G_OBJECT(testLayoutItem), "activate",
         G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
             SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -1036,7 +1036,7 @@ void SolitaireGame::setupMenuBar() {
             game->refreshDisplay();
         }), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), testLayoutItem);
-
+    */
 
   // Draw Mode submenu
   GtkWidget *drawModeItem = gtk_menu_item_new_with_label("Draw Mode");
@@ -1667,7 +1667,7 @@ void SolitaireGame::launchNextCard() {
     
     // Calculate which foundation pile and card to launch
     int pile_index = cards_launched_ / 13;
-    int card_index = cards_launched_ % 13;  // Start from bottom (Ace) of pile
+    int card_index = 12 - (cards_launched_ % 13);  // Start with King (12) down to Ace (0)
     
     if (pile_index < foundation_.size() && card_index >= 0 && 
         card_index < static_cast<int>(foundation_[pile_index].size())) {
