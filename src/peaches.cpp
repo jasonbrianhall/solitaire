@@ -557,17 +557,38 @@ void ThirtyOneGame::drawCard(cairo_t* cr, int x, int y, const cardlib::Card* car
 }
 
 void ThirtyOneGame::drawStatusArea(cairo_t* cr, int width, int height) {
-    int status_x = CARD_SPACING;
+    // Calculate positions for current player's cards
+    int right_margin = CARD_SPACING;
+    int cards_y = height - 250;  // Position cards higher up, above status area
+    
+    // Draw current player's cards first, if they're human or game is in knock phase
+    if (players_[current_player_].type == PlayerType::HUMAN || someone_knocked_) {
+        int num_cards = players_[current_player_].hand.size();
+        int total_cards_width = num_cards * CARD_WIDTH + (num_cards - 1) * CARD_SPACING;
+        int cards_x = width - total_cards_width - right_margin;  // Align to right
+        
+        for (const auto& card : players_[current_player_].hand) {
+            drawCard(cr, cards_x, cards_y, &card, true);
+            cards_x += CARD_WIDTH + CARD_SPACING;
+        }
+    }
+    
+    // Draw player info below the cards
     int status_y = height - 100;
+    int status_x = CARD_SPACING;
     
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
     cairo_set_font_size(cr, 14);
     
+    // Draw non-current player info on the left
     for (size_t i = 0; i < players_.size(); i++) {
-        drawPlayerInfo(cr, players_[i], status_x, status_y, i == current_player_);
-        status_x += 200;
+        if (i != current_player_) {
+            drawPlayerInfo(cr, players_[i], status_x, status_y, false);
+            status_x += 200;
+        }
     }
     
+    // Draw game state text
     cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
     cairo_move_to(cr, CARD_SPACING, status_y - 30);
     
@@ -577,18 +598,23 @@ void ThirtyOneGame::drawStatusArea(cairo_t* cr, int width, int height) {
             "Your turn" : "AI thinking...");
     
     cairo_show_text(cr, state_text.c_str());
+
+    // Draw current player's info in bottom right
+    int right_x = width - 300;  // Start 300 pixels from right edge
+    drawPlayerInfo(cr, players_[current_player_], right_x, status_y, true);
 }
 
 void ThirtyOneGame::drawPlayerInfo(cairo_t* cr, const Player& player, int x, int y, bool is_current) {
     if (is_current) {
-        cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
+        cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);  // Current player in yellow
     } else {
-        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);  // Other players in white
     }
     
     cairo_move_to(cr, x, y);
     std::string player_text = player.name + 
-        (player.type != PlayerType::HUMAN ? " (AI)" : "");
+        (player.type != PlayerType::HUMAN ? " (AI)" : "") +
+        (is_current ? " (Current)" : "");
     cairo_show_text(cr, player_text.c_str());
     
     cairo_move_to(cr, x, y + 20);
@@ -605,7 +631,6 @@ void ThirtyOneGame::drawPlayerInfo(cairo_t* cr, const Player& player, int x, int
         cairo_show_text(cr, value_text.c_str());
     }
 }
-
 gboolean ThirtyOneGame::onAITimer(gpointer data) {
     ThirtyOneGame* game = static_cast<ThirtyOneGame*>(data);
     if (!game->game_paused_ && game->waiting_for_ai_) {
