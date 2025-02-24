@@ -914,8 +914,8 @@ void SolitaireGame::drawAnimatedCard(cairo_t* cr, const AnimatedCard& anim_card)
     cairo_translate(cr, -current_card_width_ / 2,
                     -current_card_height_ / 2);
     
-    // Draw the card
-    drawCard(cr, 0, 0, &anim_card.card, true);
+    // Draw the card with its actual face-up status
+    drawCard(cr, 0, 0, &anim_card.card, anim_card.face_up);
     
     cairo_restore(cr);
 }
