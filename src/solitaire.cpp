@@ -258,6 +258,11 @@ void SolitaireGame::deal() {
   while (auto card = deck_.drawCard()) {
     stock_.push_back(*card);
   }
+  
+  std::cout << "Starting deal animation from deal()" << std::endl; // Debug output
+  
+  // Start the deal animation
+  startDealAnimation();
 }
 
 void SolitaireGame::flipTopTableauCard(int pile_index) {
@@ -1492,4 +1497,3 @@ double SolitaireGame::getScaleFactor(int window_width,
   // Use the smaller scale to ensure everything fits
   return std::min(width_scale, height_scale);
 }
-

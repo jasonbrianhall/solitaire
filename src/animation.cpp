@@ -351,18 +351,51 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
       cairo_stroke(game->buffer_cr_);
     }
 
-    for (size_t j = 0; j < pile.size(); j++) {
-      if (game->dragging_ && game->drag_source_pile_ >= 6 &&
-          game->drag_source_pile_ - 6 == static_cast<int>(i) &&
-          j >= static_cast<size_t>(game->tableau_[i].size() -
-                                   game->drag_cards_.size())) {
-        continue;
+    // During animation, we need to know which cards have been dealt already
+    if (game->deal_animation_active_) {
+      // Figure out how many cards should be visible in this pile
+      int cards_in_this_pile = i + 1; // Each pile has (index + 1) cards
+      int total_cards_before_this_pile = 0;
+      
+      for (int p = 0; p < i; p++) {
+        total_cards_before_this_pile += (p + 1);
       }
+      
+      // Only draw cards that have already been dealt and are not currently animating
+      int cards_to_draw = std::min(static_cast<int>(pile.size()), 
+                                  std::max(0, game->cards_dealt_ - total_cards_before_this_pile));
+      
+      for (int j = 0; j < cards_to_draw; j++) {
+        // Skip drawing the card if it's currently animating
+        bool is_animating = false;
+        for (const auto &anim_card : game->deal_cards_) {
+          if (anim_card.active && 
+              anim_card.card.suit == pile[j].card.suit && 
+              anim_card.card.rank == pile[j].card.rank) {
+            is_animating = true;
+            break;
+          }
+        }
+        
+        if (!is_animating) {
+          int current_y = tableau_base_y + j * game->current_vert_spacing_;
+          game->drawCard(game->buffer_cr_, x, current_y, &pile[j].card, pile[j].face_up);
+        }
+      }
+    } else {
+      // Normal drawing (not during animation)
+      for (size_t j = 0; j < pile.size(); j++) {
+        if (game->dragging_ && game->drag_source_pile_ >= 6 &&
+            game->drag_source_pile_ - 6 == static_cast<int>(i) &&
+            j >= static_cast<size_t>(game->tableau_[i].size() -
+                                  game->drag_cards_.size())) {
+          continue;
+        }
 
-      int current_y = tableau_base_y + j * game->current_vert_spacing_;
-      const auto &tableau_card = pile[j];
-      game->drawCard(game->buffer_cr_, x, current_y, &tableau_card.card,
-                     tableau_card.face_up);
+        int current_y = tableau_base_y + j * game->current_vert_spacing_;
+        const auto &tableau_card = pile[j];
+        game->drawCard(game->buffer_cr_, x, current_y, &tableau_card.card, tableau_card.face_up);
+      }
     }
   }
 
@@ -408,6 +441,35 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
           }
         }
       }
+    }
+  }
+
+  // Draw animated cards for deal animation
+  if (game->deal_animation_active_) {
+    // Debug indicator - small red square to indicate deal animation is active
+    cairo_set_source_rgb(game->buffer_cr_, 1.0, 0.0, 0.0);
+    cairo_rectangle(game->buffer_cr_, 10, 10, 10, 10);
+    cairo_fill(game->buffer_cr_);
+    
+    for (const auto &anim_card : game->deal_cards_) {
+      if (!anim_card.active)
+        continue;
+      
+      // Draw the card with rotation
+      cairo_save(game->buffer_cr_);
+      
+      // Move to card center for rotation
+      cairo_translate(game->buffer_cr_,
+                      anim_card.x + game->current_card_width_ / 2,
+                      anim_card.y + game->current_card_height_ / 2);
+      cairo_rotate(game->buffer_cr_, anim_card.rotation);
+      cairo_translate(game->buffer_cr_, -game->current_card_width_ / 2,
+                      -game->current_card_height_ / 2);
+      
+      // Draw the card
+      game->drawCard(game->buffer_cr_, 0, 0, &anim_card.card, anim_card.face_up);
+      
+      cairo_restore(game->buffer_cr_);
     }
   }
 
@@ -526,4 +588,165 @@ void SolitaireGame::explodeCard(AnimatedCard& card) {
   // We're using a cached surface, not creating a new one, so DON'T destroy it here
   // This was causing a double-free issue
   // cairo_surface_destroy(card_surface);
+}
+
+void SolitaireGame::startDealAnimation() {
+  if (deal_animation_active_)
+    return;
+
+  std::cout << "Starting deal animation" << std::endl; // Debug output
+
+  deal_animation_active_ = true;
+  cards_dealt_ = 0;
+  deal_timer_ = 0;
+  deal_cards_.clear();
+
+  // Make sure we're not using the same timer ID as the win animation
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+  
+  // Set up a new animation timer with a different callback
+  animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick, this);
+  
+  // Deal the first card immediately
+  dealNextCard();
+  
+  // Force a redraw to ensure we don't see the cards already in place
+  refreshDisplay();
+}
+
+gboolean SolitaireGame::onDealAnimationTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->updateDealAnimation();
+  return game->deal_animation_active_ ? TRUE : FALSE;
+}
+
+void SolitaireGame::updateDealAnimation() {
+  if (!deal_animation_active_)
+    return;
+
+  // Launch new cards periodically
+  deal_timer_ += ANIMATION_INTERVAL;
+  if (deal_timer_ >= DEAL_INTERVAL) {
+    deal_timer_ = 0;
+    dealNextCard();
+  }
+
+  // Update all cards in animation
+  bool all_cards_arrived = true;
+  
+  for (auto &card : deal_cards_) {
+    if (!card.active)
+      continue;
+
+    // Calculate distance to target
+    double dx = card.target_x - card.x;
+    double dy = card.target_y - card.y;
+    double distance = sqrt(dx * dx + dy * dy);
+    
+    if (distance < 5.0) {
+      // Card has arrived at destination
+      card.x = card.target_x;
+      card.y = card.target_y;
+      card.active = false;
+      std::cout << "Card arrived at destination" << std::endl; // Debug output
+    } else {
+      // Move card toward destination with a more pronounced arc
+      double speed = distance * 0.15 * DEAL_SPEED; // Reduced from 0.2 to make it slower
+      double move_x = dx * speed / distance;
+      double move_y = dy * speed / distance;
+      
+      // Add a slight arc to the motion (card rises then falls)
+      double progress = 1.0 - (distance / sqrt(dx*dx + dy*dy));
+      double arc_height = 50.0; // Maximum height of the arc in pixels
+      double arc_offset = sin(progress * M_PI) * arc_height;
+      
+      card.x += move_x;
+      card.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
+      
+      // Update rotation (gradually reduce to zero)
+      card.rotation *= 0.95; // Changed from 0.9 to make rotation last longer
+      
+      all_cards_arrived = false;
+    }
+  }
+
+  // Check if we're done dealing and all cards have arrived
+  if (all_cards_arrived && cards_dealt_ >= 28) { // 28 = total cards in initial tableau
+    std::cout << "All cards dealt, completing animation" << std::endl; // Debug output
+    completeDeal();
+  }
+
+  refreshDisplay();
+}
+
+void SolitaireGame::dealNextCard() {
+  if (cards_dealt_ >= 28)
+    return;
+
+  std::cout << "Dealing card #" << cards_dealt_ + 1 << std::endl; // Debug output
+
+  // Calculate which tableau pile and position this card belongs to
+  int pile_index = 0;
+  int card_index = 0;
+  int cards_so_far = 0;
+  
+  // Determine the pile and card index for the current card
+  for (int i = 0; i < 7; i++) {
+    if (cards_so_far + (i + 1) > cards_dealt_) {
+      pile_index = i;
+      card_index = cards_dealt_ - cards_so_far;
+      break;
+    }
+    cards_so_far += (i + 1);
+  }
+
+  // Start position (from stock pile)
+  double start_x = current_card_spacing_;
+  double start_y = current_card_spacing_;
+
+  // Calculate target position
+  double target_x = current_card_spacing_ + 
+                   pile_index * (current_card_width_ + current_card_spacing_);
+  double target_y = (current_card_spacing_ + current_card_height_ + 
+                   current_vert_spacing_) + 
+                   card_index * current_vert_spacing_;
+
+  // Create animation card
+  AnimatedCard anim_card;
+  anim_card.card = tableau_[pile_index][card_index].card;
+  anim_card.x = start_x;
+  anim_card.y = start_y;
+  anim_card.target_x = target_x;
+  anim_card.target_y = target_y;
+  anim_card.velocity_x = 0;
+  anim_card.velocity_y = 0;
+  anim_card.rotation = (rand() % 628) / 100.0 - 3.14; // Random initial rotation
+  anim_card.rotation_velocity = 0;
+  anim_card.active = true;
+  anim_card.exploded = false;
+  anim_card.face_up = tableau_[pile_index][card_index].face_up;
+  
+  // Give it a bigger initial rotation to make it more visible
+  anim_card.rotation = (rand() % 1256) / 100.0 - 6.28;
+  
+  // Add to animation list
+  deal_cards_.push_back(anim_card);
+  cards_dealt_++;
+}
+
+void SolitaireGame::completeDeal() {
+  deal_animation_active_ = false;
+  
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+  
+  deal_cards_.clear();
+  cards_dealt_ = 0;
+  
+  refreshDisplay();
 }

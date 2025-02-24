@@ -32,6 +32,11 @@ struct AnimatedCard {
     bool active;
     bool exploded;
     std::vector<CardFragment> fragments;
+    
+    // New fields for deal animation
+    double target_x;
+    double target_y;
+    bool face_up;
 };
 
 struct TableauCard {
@@ -67,6 +72,7 @@ private:
   void updateCardDimensions(int window_width, int window_height);
   double getScaleFactor(int window_width, int window_height) const;
 
+  // Win animation fields
   bool win_animation_active_ = false;
   std::vector<AnimatedCard> animated_cards_;
   guint animation_timer_id_ = 0;
@@ -75,12 +81,28 @@ private:
   static constexpr int ANIMATION_INTERVAL = 16; // ~60 FPS
   int cards_launched_ = 0;
   double launch_timer_ = 0;
+  
+  // Deal animation fields
+  bool deal_animation_active_ = false;
+  std::vector<AnimatedCard> deal_cards_;
+  int cards_dealt_ = 0;
+  double deal_timer_ = 0;
+  static constexpr double DEAL_INTERVAL = 30; // Time between dealing cards (ms)
+  static constexpr double DEAL_SPEED = 1.3;    // Speed multiplier for dealing
 
+  // Animation methods
   void startWinAnimation();
   void updateWinAnimation();
   static gboolean onAnimationTick(gpointer data);
   void stopWinAnimation();
   void launchNextCard();
+  
+  void startDealAnimation();
+  void updateDealAnimation();
+  static gboolean onDealAnimationTick(gpointer data);
+  void stopDealAnimation();
+  void dealNextCard();
+  void completeDeal();
 
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile
@@ -190,14 +212,12 @@ private:
   void clearCustomBack();
   void refreshCardCache();
 
-static constexpr double EXPLOSION_THRESHOLD_MIN = 0.3; // Minimum distance threshold (as percentage of screen height)
-static constexpr double EXPLOSION_THRESHOLD_MAX = 0.7; // Maximum distance threshold (as percentage of screen height)
+  static constexpr double EXPLOSION_THRESHOLD_MIN = 0.3; // Minimum distance threshold (as percentage of screen height)
+  static constexpr double EXPLOSION_THRESHOLD_MAX = 0.7; // Maximum distance threshold (as percentage of screen height)
 
-// Add these method declarations to the SolitaireGame class:
-void explodeCard(AnimatedCard& card);
-void updateCardFragments(AnimatedCard& card);
-void drawCardFragment(cairo_t* cr, const CardFragment& fragment);
-
+  void explodeCard(AnimatedCard& card);
+  void updateCardFragments(AnimatedCard& card);
+  void drawCardFragment(cairo_t* cr, const CardFragment& fragment);
 };
 
 #endif // SOLITAIRE_H
