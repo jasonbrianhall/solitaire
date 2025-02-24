@@ -62,6 +62,14 @@ private:
   static constexpr int BASE_CARD_SPACING = 20;
   static constexpr int BASE_VERT_SPACING = 30;
   std::vector<std::vector<bool>> animated_foundation_cards_;
+
+bool foundation_move_animation_active_ = false;
+AnimatedCard foundation_move_card_;
+int foundation_target_pile_ = -1;
+double foundation_move_timer_ = 0;
+static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
+
+
   // Current dynamic dimensions
   int current_card_width_;
   int current_card_height_;
@@ -195,7 +203,7 @@ private:
 
   bool draw_three_mode_; // True for draw 3, false for draw 1
   bool tryMoveToFoundation(const cardlib::Card &card);
-
+  void drawAnimatedCard(cairo_t* cr, const AnimatedCard& anim_card);
   void dealTestLayout();
 
   std::string settings_dir_;
@@ -218,6 +226,10 @@ private:
   void explodeCard(AnimatedCard& card);
   void updateCardFragments(AnimatedCard& card);
   void drawCardFragment(cairo_t* cr, const CardFragment& fragment);
+void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile);
+void updateFoundationMoveAnimation();
+static gboolean onFoundationMoveAnimationTick(gpointer data);
+
 };
 
 #endif // SOLITAIRE_H

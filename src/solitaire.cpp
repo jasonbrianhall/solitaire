@@ -338,109 +338,123 @@ std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
   return std::vector<cardlib::Card>();
 }
 
-gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
-                                      gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
-  if (event->button == 1) { // Left click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-    if (pile_index == 0) { // Stock pile
-      game->handleStockPileClick();
-      return TRUE;
+    // If an animation is already running and user clicks again, ignore the click
+    // until the animation is complete to prevent race conditions
+    if (game->foundation_move_animation_active_) {
+        return TRUE;
     }
 
-    if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
-      game->dragging_ = true;
-      game->drag_source_pile_ = pile_index;
-      game->drag_start_x_ = event->x;
-      game->drag_start_y_ = event->y;
-      game->drag_cards_ = game->getDragCards(pile_index, card_index);
+    if (event->button == 1) { // Left click
+        // Original left-click code remains unchanged
+        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
-      // Calculate x offset based on pile type
-      int x_offset_multiplier;
-      if (pile_index >= 6) {
-        // Tableau piles
-        x_offset_multiplier = pile_index - 6;
-      } else if (pile_index >= 2 && pile_index <= 5) {
-        // Foundation piles - adjust for spacing after waste pile
-        x_offset_multiplier = pile_index + 1;
-      } else if (pile_index == 1) {
-        // Waste pile
-        x_offset_multiplier = 1;
-      } else {
-        // Stock pile
-        x_offset_multiplier = 0;
-      }
-
-      game->drag_offset_x_ =
-          event->x - (game->current_card_spacing_ +
-                      x_offset_multiplier * (game->current_card_width_ +
-                                             game->current_card_spacing_));
-
-      // Calculate y offset
-      if (pile_index >= 6) {
-        // Tableau piles - account for vertical position within the pile
-        game->drag_offset_y_ =
-            event->y -
-            (game->current_card_spacing_ + game->current_card_height_ +
-             game->current_vert_spacing_ +
-             card_index * game->current_vert_spacing_);
-      } else {
-        // All other piles are in the top row
-        game->drag_offset_y_ = event->y - game->current_card_spacing_;
-      }
-    }
-  } else if (event->button == 3) { // Right click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-    // Try to move card to foundation
-    if (pile_index >= 0) {
-      const cardlib::Card *card = nullptr;
-      bool card_moved = false;
-
-      // Get the card based on pile type
-      if (pile_index == 1 && !game->waste_.empty()) {
-        card = &game->waste_.back();
-        if (game->tryMoveToFoundation(*card)) {
-          game->waste_.pop_back();
-          card_moved = true;
+        if (pile_index == 0) { // Stock pile
+            game->handleStockPileClick();
+            return TRUE;
         }
-      } else if (pile_index >= 6 && pile_index <= 12) {
-        auto &tableau_pile = game->tableau_[pile_index - 6];
-        if (!tableau_pile.empty() && tableau_pile.back().face_up) {
-          card = &tableau_pile.back().card;
-          if (game->tryMoveToFoundation(*card)) {
-            tableau_pile.pop_back();
-            // Flip new top card if needed
-            if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-              tableau_pile.back().face_up = true;
+
+        if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
+            game->dragging_ = true;
+            game->drag_source_pile_ = pile_index;
+            game->drag_start_x_ = event->x;
+            game->drag_start_y_ = event->y;
+            game->drag_cards_ = game->getDragCards(pile_index, card_index);
+
+            // Calculate offsets
+            int x_offset_multiplier;
+            if (pile_index >= 6) {
+                x_offset_multiplier = pile_index - 6;
+            } else if (pile_index >= 2 && pile_index <= 5) {
+                x_offset_multiplier = pile_index + 1;
+            } else if (pile_index == 1) {
+                x_offset_multiplier = 1;
+            } else {
+                x_offset_multiplier = 0;
             }
-            card_moved = true;
-          }
-        }
-      }
 
-      if (card_moved) {
-        /*if (game->checkWinCondition()) {
-            GtkWidget *dialog = gtk_message_dialog_new(
-                GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-                GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've
-        won!"); gtk_dialog_run(GTK_DIALOG(dialog)); gtk_widget_destroy(dialog);
-            game->initializeGame();
+            game->drag_offset_x_ =
+                event->x - (game->current_card_spacing_ +
+                           x_offset_multiplier * (game->current_card_width_ +
+                                                 game->current_card_spacing_));
+
+            if (pile_index >= 6) {
+                game->drag_offset_y_ =
+                    event->y -
+                    (game->current_card_spacing_ + game->current_card_height_ +
+                     game->current_vert_spacing_ +
+                     card_index * game->current_vert_spacing_);
+            } else {
+                game->drag_offset_y_ = event->y - game->current_card_spacing_;
+            }
         }
-        gtk_widget_queue_draw(game->game_area_);*/
-        if (game->checkWinCondition()) {
-          game->startWinAnimation(); // Start animation instead of showing
-                                     // dialog
+    } else if (event->button == 3) { // Right click
+        auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+
+        // Try to move card to foundation
+        if (pile_index >= 0) {
+            const cardlib::Card *card = nullptr;
+            int target_foundation = -1;
+
+            // Get the card based on pile type
+            if (pile_index == 1 && !game->waste_.empty()) {
+                card = &game->waste_.back();
+                // Find which foundation to move to
+                for (int i = 0; i < game->foundation_.size(); i++) {
+                    if (game->canMoveToFoundation(*card, i)) {
+                        target_foundation = i;
+                        break;
+                    }
+                }
+                
+                if (target_foundation >= 0) {
+                    // Start animation
+                    game->startFoundationMoveAnimation(*card, pile_index, 0, target_foundation + 2);
+                    
+                    // Remove card from waste pile
+                    game->waste_.pop_back();
+                    
+                    // The card will be added to the foundation in updateFoundationMoveAnimation when animation completes
+                    return TRUE;
+                }
+            } else if (pile_index >= 6 && pile_index <= 12) {
+                auto &tableau_pile = game->tableau_[pile_index - 6];
+                if (!tableau_pile.empty() && tableau_pile.back().face_up) {
+                    card = &tableau_pile.back().card;
+                    
+                    // Find which foundation to move to
+                    for (int i = 0; i < game->foundation_.size(); i++) {
+                        if (game->canMoveToFoundation(*card, i)) {
+                            target_foundation = i;
+                            break;
+                        }
+                    }
+                    
+                    if (target_foundation >= 0) {
+                        // Start animation
+                        game->startFoundationMoveAnimation(*card, pile_index, tableau_pile.size() - 1, target_foundation + 2);
+                        
+                        // Remove card from tableau
+                        tableau_pile.pop_back();
+                        
+                        // Flip new top card if needed
+                        if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
+                            tableau_pile.back().face_up = true;
+                        }
+                        
+                        // The card will be added to the foundation in updateFoundationMoveAnimation when animation completes
+                        return TRUE;
+                    }
+                }
+            }
         }
-        gtk_widget_queue_draw(game->game_area_);
-      }
+        
+        return TRUE;
     }
-    return TRUE;
-  }
 
-  return TRUE;
+    return TRUE;
 }
 
 gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
