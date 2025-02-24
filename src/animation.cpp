@@ -661,7 +661,7 @@ void SolitaireGame::updateDealAnimation() {
       // Add a slight arc to the motion (card rises then falls)
       double progress = 1.0 - (distance / sqrt(dx*dx + dy*dy));
       double arc_height = 50.0; // Maximum height of the arc in pixels
-      double arc_offset = sin(progress * M_PI) * arc_height;
+      double arc_offset = sin(progress * G_PI) * arc_height;
       
       card.x += move_x;
       card.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
