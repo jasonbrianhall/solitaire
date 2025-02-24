@@ -1188,8 +1188,22 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   // Show all widgets before running the dialog
   gtk_widget_show_all(dialog);
 
-  // Run dialog and destroy it when done
-  gtk_dialog_run(GTK_DIALOG(dialog));
+  // Run dialog and get the result
+  gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+
+  // Check for secret layout (Ctrl key pressed during dialog)
+  if (result == GTK_RESPONSE_OK) {
+    GdkModifierType modifiers;
+    gdk_window_get_pointer(gtk_widget_get_window(GTK_WIDGET(dialog)), NULL, NULL, &modifiers);
+    
+    if (modifiers & GDK_CONTROL_MASK) {
+      // Activate test layout
+      game->dealTestLayout();
+      game->refreshDisplay();
+    }
+  }
+
+  // Destroy dialog
   gtk_widget_destroy(dialog);
 }
 
