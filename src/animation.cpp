@@ -303,8 +303,30 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   // Draw waste pile
   x += game->current_card_width_ + game->current_card_spacing_;
   if (!game->waste_.empty()) {
-    const auto &top_card = game->waste_.back();
-    game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+    // Check if the top card is being dragged
+    bool top_card_dragging = (game->dragging_ && game->drag_source_pile_ == 1 && 
+                             game->drag_cards_.size() == 1 && 
+                             game->waste_.size() >= 1 &&
+                             game->drag_cards_[0].suit == game->waste_.back().suit && 
+                             game->drag_cards_[0].rank == game->waste_.back().rank);
+    
+    if (top_card_dragging && game->waste_.size() > 1) {
+      // Draw the second-to-top card
+      const auto &second_card = game->waste_[game->waste_.size() - 2];
+      game->drawCard(game->buffer_cr_, x, y, &second_card, true);
+    } 
+    else if (!top_card_dragging) {
+      // Draw the top card if it's not being dragged
+      const auto &top_card = game->waste_.back();
+      game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+    } 
+    else {
+      // Draw an empty placeholder if top card is being dragged and there are no other cards
+      cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
+      cairo_rectangle(game->buffer_cr_, x, y, game->current_card_width_,
+                      game->current_card_height_);
+      cairo_stroke(game->buffer_cr_);
+    }
   }
 
   // Draw foundation piles
@@ -326,8 +348,20 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
           }
         }
       } else {
-        const auto &top_card = pile.back();
-        game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+        // Check if the top card is being dragged from foundation
+        bool top_card_dragging = (game->dragging_ && game->drag_source_pile_ == i + 2 && 
+                                 !pile.empty() && game->drag_cards_.size() == 1 &&
+                                 game->drag_cards_[0].suit == pile.back().suit && 
+                                 game->drag_cards_[0].rank == pile.back().rank);
+        
+        if (!top_card_dragging) {
+          const auto &top_card = pile.back();
+          game->drawCard(game->buffer_cr_, x, y, &top_card, true);
+        } else if (pile.size() > 1) {
+          // Draw the second-to-top card
+          const auto &second_card = pile[pile.size() - 2];
+          game->drawCard(game->buffer_cr_, x, y, &second_card, true);
+        }
       }
     }
     x += game->current_card_width_ + game->current_card_spacing_;
@@ -431,7 +465,7 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
     }
   }
   
-  // NEW CODE: Draw animated card for foundation move animation
+  // Draw animated card for foundation move animation
   if (game->foundation_move_animation_active_) {
     game->drawAnimatedCard(game->buffer_cr_, game->foundation_move_card_);
   }
