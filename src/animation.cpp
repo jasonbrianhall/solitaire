@@ -112,6 +112,8 @@ void SolitaireGame::stopWinAnimation() {
     return;
 
   win_animation_active_ = false;
+  
+  // First, stop the animation timer
   if (animation_timer_id_ > 0) {
     g_source_remove(animation_timer_id_);
     animation_timer_id_ = 0;
@@ -121,15 +123,20 @@ void SolitaireGame::stopWinAnimation() {
   for (auto &card : animated_cards_) {
     for (auto &fragment : card.fragments) {
       if (fragment.surface) {
-        cairo_surface_destroy(fragment.surface);
-        fragment.surface = NULL;
+        // Only destroy if the surface is valid
+        if (cairo_surface_status(fragment.surface) == CAIRO_STATUS_SUCCESS) {
+          cairo_surface_destroy(fragment.surface);
+        }
+        fragment.surface = nullptr;
       }
     }
+    card.fragments.clear();
   }
   
   animated_cards_.clear();
   animated_foundation_cards_.clear();
   cards_launched_ = 0;
+  launch_timer_ = 0;
 
   // Start new game
   initializeGame();
@@ -213,10 +220,10 @@ void SolitaireGame::updateCardFragments(AnimatedCard& card) {
     // Check if fragment is off screen
     if (fragment.x < -fragment.width || fragment.x > allocation.width ||
         fragment.y > allocation.height + fragment.height) {
-      // Free the surface
+      // Free the surface if it exists
       if (fragment.surface) {
         cairo_surface_destroy(fragment.surface);
-        fragment.surface = NULL;
+        fragment.surface = nullptr;
       }
       fragment.active = false;
     }
@@ -224,7 +231,12 @@ void SolitaireGame::updateCardFragments(AnimatedCard& card) {
 }
 
 void SolitaireGame::drawCardFragment(cairo_t* cr, const CardFragment& fragment) {
+  // Skip inactive fragments or those without a surface
   if (!fragment.active || !fragment.surface)
+    return;
+  
+  // Check surface status before using it
+  if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS)
     return;
     
   // Save the current transformation state
@@ -236,8 +248,12 @@ void SolitaireGame::drawCardFragment(cairo_t* cr, const CardFragment& fragment) 
   
   // Draw the fragment
   cairo_set_source_surface(cr, fragment.surface, -fragment.width / 2, -fragment.height / 2);
-  cairo_rectangle(cr, -fragment.width / 2, -fragment.height / 2, fragment.width, fragment.height);
-  cairo_fill(cr);
+  
+  // Only proceed if setting the source was successful
+  if (cairo_status(cr) == CAIRO_STATUS_SUCCESS) {
+    cairo_rectangle(cr, -fragment.width / 2, -fragment.height / 2, fragment.width, fragment.height);
+    cairo_fill(cr);
+  }
   
   // Restore the transformation state
   cairo_restore(cr);
@@ -422,7 +438,7 @@ void SolitaireGame::explodeCard(AnimatedCard& card) {
     for (int col = 0; col < grid_size; col++) {
       CardFragment fragment;
       
-      // Initial position (center of fragment)
+      // Initial position
       fragment.x = card.x + col * fragment_width;
       fragment.y = card.y + row * fragment_height;
       fragment.width = fragment_width;
@@ -450,38 +466,64 @@ void SolitaireGame::explodeCard(AnimatedCard& card) {
         dir_y = sin(rand_angle);
       }
       
-      // Super-powered initial velocity - much stronger upward component
-      double speed = 12.0 + (rand() % 8); // Higher base speed
-      double upward_bias = -15.0 - (rand() % 10); // Strong upward bias (-Y is up)
+      // Velocity components
+      double speed = 12.0 + (rand() % 8); 
+      double upward_bias = -15.0 - (rand() % 10);
       
       fragment.velocity_x = dir_x * speed + (rand() % 10 - 5);
-      fragment.velocity_y = dir_y * speed + upward_bias; // Strong upward component
+      fragment.velocity_y = dir_y * speed + upward_bias;
       
-      // More dramatic rotation
+      // Rotation
       fragment.rotation = card.rotation;
-      fragment.rotation_velocity = (rand() % 60 - 30) / 5.0; // Much faster rotation
+      fragment.rotation_velocity = (rand() % 60 - 30) / 5.0;
       
-      // Create a surface for this fragment
-      fragment.surface = cairo_surface_create_similar(
-          card_surface,
-          cairo_surface_get_content(card_surface),
+      // Create a new image surface
+      fragment.surface = cairo_image_surface_create(
+          CAIRO_FORMAT_ARGB32,
           fragment_width,
           fragment_height
       );
       
-      // Copy the appropriate portion of the card to the fragment surface
+      if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS) {
+        // Clean up and skip this fragment if we couldn't create the surface
+        cairo_surface_destroy(fragment.surface);
+        fragment.surface = nullptr;
+        continue;
+      }
+      
+      // Create a context for drawing on the new surface
       cairo_t* cr = cairo_create(fragment.surface);
-      cairo_set_source_surface(cr, card_surface, -col * fragment_width, -row * fragment_height);
+      if (cairo_status(cr) != CAIRO_STATUS_SUCCESS) {
+        // Clean up and skip this fragment if we couldn't create the context
+        cairo_destroy(cr);
+        cairo_surface_destroy(fragment.surface);
+        fragment.surface = nullptr;
+        continue;
+      }
+      
+      // Draw white background (for transparency)
+      cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.0);
       cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
       cairo_fill(cr);
+      
+      // Draw the fragment of the card
+      cairo_set_source_surface(cr, card_surface, -col * fragment_width, -row * fragment_height);
+      
+      if (cairo_status(cr) == CAIRO_STATUS_SUCCESS) {
+        cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
+        cairo_fill(cr);
+      }
+      
+      // Clean up the drawing context
       cairo_destroy(cr);
       
+      // Set the fragment as active
       fragment.active = true;
       card.fragments.push_back(fragment);
     }
   }
   
-  // Clean up the original card surface
-  cairo_surface_destroy(card_surface);
+  // We're using a cached surface, not creating a new one, so DON'T destroy it here
+  // This was causing a double-free issue
+  // cairo_surface_destroy(card_surface);
 }
-
