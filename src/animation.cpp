@@ -434,6 +434,9 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   }
 
   // Draw dragged cards
+  if (game->stock_to_waste_animation_active_) {
+    game->drawAnimatedCard(game->buffer_cr_, game->stock_to_waste_card_);
+  }
   if (game->dragging_ && !game->drag_cards_.empty()) {
     int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
     int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
@@ -915,4 +918,126 @@ void SolitaireGame::drawAnimatedCard(cairo_t* cr, const AnimatedCard& anim_card)
     drawCard(cr, 0, 0, &anim_card.card, true);
     
     cairo_restore(cr);
+}
+
+void SolitaireGame::startStockToWasteAnimation() {
+  if (stock_to_waste_animation_active_ || stock_.empty())
+    return;
+
+  std::cout << "Starting stock to waste animation" << std::endl;
+  
+  stock_to_waste_animation_active_ = true;
+  stock_to_waste_timer_ = 0;
+  pending_waste_cards_.clear();
+  
+  // Determine how many cards to deal based on mode
+  int cards_to_deal = draw_three_mode_ ? std::min(3, static_cast<int>(stock_.size())) : 1;
+  
+  // Save the cards that will be moved to waste pile
+  for (int i = 0; i < cards_to_deal; i++) {
+    if (!stock_.empty()) {
+      pending_waste_cards_.push_back(stock_.back());
+      stock_.pop_back();
+    }
+  }
+  
+  if (pending_waste_cards_.empty()) {
+    stock_to_waste_animation_active_ = false;
+    return;
+  }
+  
+  // Prepare the first card for animation
+  stock_to_waste_card_.card = pending_waste_cards_.back();
+  stock_to_waste_card_.face_up = true;
+  
+  // Calculate start position (stock pile)
+  stock_to_waste_card_.x = current_card_spacing_;
+  stock_to_waste_card_.y = current_card_spacing_;
+  
+  // Calculate target position (waste pile)
+  stock_to_waste_card_.target_x = 2 * current_card_spacing_ + current_card_width_;
+  stock_to_waste_card_.target_y = current_card_spacing_;
+  
+  // Initial rotation for visual appeal
+  stock_to_waste_card_.rotation = 0;
+  stock_to_waste_card_.rotation_velocity = 0;
+  stock_to_waste_card_.active = true;
+  stock_to_waste_card_.exploded = false;
+  
+  // Set up animation timer
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+  
+  animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onStockToWasteAnimationTick, this);
+  
+  // Force initial redraw
+  refreshDisplay();
+}
+
+gboolean SolitaireGame::onStockToWasteAnimationTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->updateStockToWasteAnimation();
+  return game->stock_to_waste_animation_active_ ? TRUE : FALSE;
+}
+
+void SolitaireGame::updateStockToWasteAnimation() {
+  if (!stock_to_waste_animation_active_)
+    return;
+  
+  // Calculate distance to target
+  double dx = stock_to_waste_card_.target_x - stock_to_waste_card_.x;
+  double dy = stock_to_waste_card_.target_y - stock_to_waste_card_.y;
+  double distance = sqrt(dx * dx + dy * dy);
+  
+  // Determine if the card has arrived at destination
+  if (distance < 5.0) {
+    // Card has arrived
+    waste_.push_back(stock_to_waste_card_.card);
+    pending_waste_cards_.pop_back();
+    
+    // Check if there are more cards to animate
+    if (!pending_waste_cards_.empty()) {
+      // Set up the next card animation
+      stock_to_waste_card_.card = pending_waste_cards_.back();
+      stock_to_waste_card_.x = current_card_spacing_;
+      stock_to_waste_card_.y = current_card_spacing_;
+      stock_to_waste_card_.rotation = 0;
+    } else {
+      // All cards have been animated
+      completeStockToWasteAnimation();
+      return;
+    }
+  } else {
+    // Move card toward destination with a smooth curve
+    double speed = 0.3;
+    double move_x = dx * speed;
+    double move_y = dy * speed;
+    
+    // Add a slight arc and rotation for visual appeal
+    double progress = 1.0 - (distance / sqrt(dx*dx + dy*dy));
+    double arc_height = 20.0; // Maximum height of the arc
+    double arc_offset = sin(progress * G_PI) * arc_height;
+    
+    stock_to_waste_card_.x += move_x;
+    stock_to_waste_card_.y += move_y - arc_offset * 0.1;
+    
+    // Add a slight rotation during flight
+    stock_to_waste_card_.rotation = sin(progress * G_PI * 2) * 0.15;
+  }
+  
+  refreshDisplay();
+}
+
+void SolitaireGame::completeStockToWasteAnimation() {
+  stock_to_waste_animation_active_ = false;
+  
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+  
+  pending_waste_cards_.clear();
+  refreshDisplay();
 }

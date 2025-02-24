@@ -559,15 +559,16 @@ void SolitaireGame::handleStockPileClick() {
       stock_.push_back(waste_.back());
       waste_.pop_back();
     }
+    refreshDisplay();
   } else {
-    // Deal cards based on mode
-    int cards_to_deal = draw_three_mode_ ? 3 : 1;
-    for (int i = 0; i < cards_to_deal && !stock_.empty(); i++) {
-      waste_.push_back(stock_.back());
-      stock_.pop_back();
+    // Don't start a new animation if one is already running
+    if (stock_to_waste_animation_active_) {
+      return;
     }
+    
+    // Start animation instead of immediately moving cards
+    startStockToWasteAnimation();
   }
-  refreshDisplay();
 }
 
 bool SolitaireGame::tryMoveToFoundation(const cardlib::Card &card) {

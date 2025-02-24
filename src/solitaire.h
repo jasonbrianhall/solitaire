@@ -230,6 +230,16 @@ void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, in
 void updateFoundationMoveAnimation();
 static gboolean onFoundationMoveAnimationTick(gpointer data);
 
+  bool stock_to_waste_animation_active_ = false;
+  AnimatedCard stock_to_waste_card_;
+  int stock_to_waste_timer_ = 0;
+  std::vector<cardlib::Card> pending_waste_cards_;
+  
+  void startStockToWasteAnimation();
+  void updateStockToWasteAnimation();
+  static gboolean onStockToWasteAnimationTick(gpointer data);
+  void completeStockToWasteAnimation();
+
 };
 
 #endif // SOLITAIRE_H
