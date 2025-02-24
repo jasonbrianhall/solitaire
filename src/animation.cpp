@@ -39,8 +39,8 @@ void SolitaireGame::updateWinAnimation() {
       // Update rotation
       card.rotation += card.rotation_velocity;
 
-      // Check if card should explode (random chance within threshold area)
-      if (card.y > explosion_min && card.y < explosion_max && (rand() % 100 < 2)) {
+      // Check if card should explode (increase random chance from 2% to 5%)
+      if (card.y > explosion_min && card.y < explosion_max && (rand() % 100 < 5)) {
         explodeCard(card);
       }
       
@@ -107,45 +107,6 @@ void SolitaireGame::startWinAnimation() {
       g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
 }
 
-void SolitaireGame::launchNextCard() {
-  if (cards_launched_ >= 52)
-    return;
-
-  // Calculate which foundation pile and card to launch
-  int pile_index = cards_launched_ / 13;
-  int card_index = 12 - (cards_launched_ % 13); // Start with King (12) down to Ace (0)
-
-  if (pile_index < foundation_.size() && card_index >= 0 &&
-      card_index < static_cast<int>(foundation_[pile_index].size())) {
-
-    // Mark card as animated
-    animated_foundation_cards_[pile_index][card_index] = true;
-
-    // Calculate start position
-    double start_x = current_card_spacing_ + 
-                   (3 + pile_index) * (current_card_width_ + current_card_spacing_);
-    double start_y = current_card_spacing_;
-
-    // Random velocities for variety
-    double angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
-    double speed = 15 + (rand() % 5);
-
-    AnimatedCard anim_card;
-    anim_card.card = foundation_[pile_index][card_index];
-    anim_card.x = start_x;
-    anim_card.y = start_y;
-    anim_card.velocity_x = cos(angle) * speed;
-    anim_card.velocity_y = sin(angle) * speed;
-    anim_card.rotation = 0;
-    anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
-    anim_card.active = true;
-    anim_card.exploded = false; // Initialize the new exploded flag
-    
-    animated_cards_.push_back(anim_card);
-    cards_launched_++;
-  }
-}
-
 void SolitaireGame::stopWinAnimation() {
   if (!win_animation_active_)
     return;
@@ -182,60 +143,51 @@ gboolean SolitaireGame::onAnimationTick(gpointer data) {
   return game->win_animation_active_ ? TRUE : FALSE;
 }
 
-void SolitaireGame::explodeCard(AnimatedCard& card) {
-  // Mark the card as exploded
-  card.exploded = true;
-  
-  // Create a surface for the card
-  cairo_surface_t* card_surface = getCardSurface(card.card);
-  if (!card_surface) return;
-  
-  // Create fragments
-  card.fragments.clear();
-  
-  // Split the card into fragments (2x2 grid)
-  const int fragment_width = current_card_width_ / 2;
-  const int fragment_height = current_card_height_ / 2;
-  
-  for (int row = 0; row < 2; row++) {
-    for (int col = 0; col < 2; col++) {
-      CardFragment fragment;
-      
-      // Initial position (center of the original card)
-      fragment.x = card.x + col * fragment_width;
-      fragment.y = card.y + row * fragment_height;
-      fragment.width = fragment_width;
-      fragment.height = fragment_height;
-      
-      // Random velocities (exploding outward from center)
-      double angle = 2.0 * G_PI * (rand() % 1000) / 1000.0;
-      double speed = 5.0 + (rand() % 5);
-      
-      fragment.velocity_x = cos(angle) * speed;
-      fragment.velocity_y = sin(angle) * speed;
-      
-      // Random rotation
-      fragment.rotation = card.rotation;
-      fragment.rotation_velocity = (rand() % 20 - 10) / 5.0; // Faster rotation than whole cards
-      
-      // Create a surface for this fragment
-      fragment.surface = cairo_surface_create_similar(
-          card_surface,
-          cairo_surface_get_content(card_surface),
-          fragment_width,
-          fragment_height
-      );
-      
-      // Copy the appropriate portion of the card to the fragment surface
-      cairo_t* cr = cairo_create(fragment.surface);
-      cairo_set_source_surface(cr, card_surface, -col * fragment_width, -row * fragment_height);
-      cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
-      cairo_fill(cr);
-      cairo_destroy(cr);
-      
-      fragment.active = true;
-      card.fragments.push_back(fragment);
+void SolitaireGame::launchNextCard() {
+  if (cards_launched_ >= 52)
+    return;
+
+  // Calculate which foundation pile and card to launch
+  int pile_index = cards_launched_ / 13;
+  int card_index = 12 - (cards_launched_ % 13); // Start with King (12) down to Ace (0)
+
+  if (pile_index < foundation_.size() && card_index >= 0 &&
+      card_index < static_cast<int>(foundation_[pile_index].size())) {
+
+    // Mark card as animated
+    animated_foundation_cards_[pile_index][card_index] = true;
+
+    // Calculate start position
+    double start_x = current_card_spacing_ + 
+                   (3 + pile_index) * (current_card_width_ + current_card_spacing_);
+    double start_y = current_card_spacing_;
+
+    // Random velocities for variety
+    // Randomly choose between left and right trajectories
+    double angle;
+    if (rand() % 2 == 0) {
+      // Left trajectory (original behavior)
+      angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+    } else {
+      // Right trajectory (new behavior)
+      angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
     }
+    
+    double speed = 15 + (rand() % 5);
+
+    AnimatedCard anim_card;
+    anim_card.card = foundation_[pile_index][card_index];
+    anim_card.x = start_x;
+    anim_card.y = start_y;
+    anim_card.velocity_x = cos(angle) * speed;
+    anim_card.velocity_y = sin(angle) * speed;
+    anim_card.rotation = 0;
+    anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+    anim_card.active = true;
+    anim_card.exploded = false; // Initialize the exploded flag
+    
+    animated_cards_.push_back(anim_card);
+    cards_launched_++;
   }
 }
 
@@ -448,5 +400,88 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   cairo_paint(cr);
 
   return TRUE;
+}
+
+void SolitaireGame::explodeCard(AnimatedCard& card) {
+  // Mark the card as exploded
+  card.exploded = true;
+  
+  // Create a surface for the card
+  cairo_surface_t* card_surface = getCardSurface(card.card);
+  if (!card_surface) return;
+  
+  // Create fragments
+  card.fragments.clear();
+  
+  // Split the card into smaller fragments for more dramatic effect (4x4 grid)
+  const int grid_size = 4;
+  const int fragment_width = current_card_width_ / grid_size;
+  const int fragment_height = current_card_height_ / grid_size;
+  
+  for (int row = 0; row < grid_size; row++) {
+    for (int col = 0; col < grid_size; col++) {
+      CardFragment fragment;
+      
+      // Initial position (center of fragment)
+      fragment.x = card.x + col * fragment_width;
+      fragment.y = card.y + row * fragment_height;
+      fragment.width = fragment_width;
+      fragment.height = fragment_height;
+      
+      // Calculate distance from center of the card
+      double center_x = card.x + current_card_width_ / 2;
+      double center_y = card.y + current_card_height_ / 2;
+      double fragment_center_x = fragment.x + fragment_width / 2;
+      double fragment_center_y = fragment.y + fragment_height / 2;
+      
+      // Direction vector from center of card
+      double dir_x = fragment_center_x - center_x;
+      double dir_y = fragment_center_y - center_y;
+      
+      // Normalize direction vector
+      double magnitude = sqrt(dir_x * dir_x + dir_y * dir_y);
+      if (magnitude > 0.001) {
+        dir_x /= magnitude;
+        dir_y /= magnitude;
+      } else {
+        // If fragment is at center, give it a random direction
+        double rand_angle = 2.0 * G_PI * (rand() % 1000) / 1000.0;
+        dir_x = cos(rand_angle);
+        dir_y = sin(rand_angle);
+      }
+      
+      // Super-powered initial velocity - much stronger upward component
+      double speed = 12.0 + (rand() % 8); // Higher base speed
+      double upward_bias = -15.0 - (rand() % 10); // Strong upward bias (-Y is up)
+      
+      fragment.velocity_x = dir_x * speed + (rand() % 10 - 5);
+      fragment.velocity_y = dir_y * speed + upward_bias; // Strong upward component
+      
+      // More dramatic rotation
+      fragment.rotation = card.rotation;
+      fragment.rotation_velocity = (rand() % 60 - 30) / 5.0; // Much faster rotation
+      
+      // Create a surface for this fragment
+      fragment.surface = cairo_surface_create_similar(
+          card_surface,
+          cairo_surface_get_content(card_surface),
+          fragment_width,
+          fragment_height
+      );
+      
+      // Copy the appropriate portion of the card to the fragment surface
+      cairo_t* cr = cairo_create(fragment.surface);
+      cairo_set_source_surface(cr, card_surface, -col * fragment_width, -row * fragment_height);
+      cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
+      cairo_fill(cr);
+      cairo_destroy(cr);
+      
+      fragment.active = true;
+      card.fragments.push_back(fragment);
+    }
+  }
+  
+  // Clean up the original card surface
+  cairo_surface_destroy(card_surface);
 }
 
