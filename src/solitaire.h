@@ -8,6 +8,32 @@
 #include <unordered_map>
 #include <vector>
 
+struct CardFragment {
+    double x;
+    double y;
+    double width;
+    double height;
+    double velocity_x;
+    double velocity_y;
+    double rotation;
+    double rotation_velocity;
+    cairo_surface_t* surface;
+    bool active;
+};
+
+struct AnimatedCard {
+    cardlib::Card card;
+    double x;
+    double y;
+    double velocity_x;
+    double velocity_y;
+    double rotation;
+    double rotation_velocity;
+    bool active;
+    bool exploded;
+    std::vector<CardFragment> fragments;
+};
+
 struct TableauCard {
   cardlib::Card card;
   bool face_up;
@@ -40,17 +66,6 @@ private:
   // New method declarations
   void updateCardDimensions(int window_width, int window_height);
   double getScaleFactor(int window_width, int window_height) const;
-
-  struct AnimatedCard {
-    cardlib::Card card;
-    double x;
-    double y;
-    double velocity_x;
-    double velocity_y;
-    double rotation;
-    double rotation_velocity;
-    bool active;
-  };
 
   bool win_animation_active_ = false;
   std::vector<AnimatedCard> animated_cards_;
@@ -174,6 +189,15 @@ private:
   void resetToDefaultBack();
   void clearCustomBack();
   void refreshCardCache();
+
+static constexpr double EXPLOSION_THRESHOLD_MIN = 0.3; // Minimum distance threshold (as percentage of screen height)
+static constexpr double EXPLOSION_THRESHOLD_MAX = 0.7; // Maximum distance threshold (as percentage of screen height)
+
+// Add these method declarations to the SolitaireGame class:
+void explodeCard(AnimatedCard& card);
+void updateCardFragments(AnimatedCard& card);
+void drawCardFragment(cairo_t* cr, const CardFragment& fragment);
+
 };
 
 #endif // SOLITAIRE_H
