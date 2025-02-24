@@ -632,7 +632,9 @@ void SolitaireGame::startDealAnimation() {
   if (deal_animation_active_)
     return;
 
+#ifdef DEBUG
   std::cout << "Starting deal animation" << std::endl; // Debug output
+#endif
 
   deal_animation_active_ = true;
   cards_dealt_ = 0;
@@ -690,7 +692,9 @@ void SolitaireGame::updateDealAnimation() {
       card.x = card.target_x;
       card.y = card.target_y;
       card.active = false;
+#ifdef DEBUG
       std::cout << "Card arrived at destination" << std::endl; // Debug output
+#endif
     } else {
       // Move card toward destination with a more pronounced arc
       double speed =
@@ -716,8 +720,10 @@ void SolitaireGame::updateDealAnimation() {
   // Check if we're done dealing and all cards have arrived
   if (all_cards_arrived &&
       cards_dealt_ >= 28) { // 28 = total cards in initial tableau
-    std::cout << "All cards dealt, completing animation"
+#ifdef DEBUG
+     std::cout << "All cards dealt, completing animation"
               << std::endl; // Debug output
+#endif
     completeDeal();
   }
 
@@ -728,8 +734,10 @@ void SolitaireGame::dealNextCard() {
   if (cards_dealt_ >= 28)
     return;
 
+#ifdef DEBUG
   std::cout << "Dealing card #" << cards_dealt_ + 1
             << std::endl; // Debug output
+#endif
 
   // Calculate which tableau pile and position this card belongs to
   int pile_index = 0;
@@ -818,7 +826,9 @@ void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card,
     }
   }
 
+#ifdef DEBUG
   std::cout << "Starting foundation move animation" << std::endl;
+#endif
 
   foundation_move_animation_active_ = true;
   foundation_target_pile_ = target_pile;
@@ -959,7 +969,9 @@ void SolitaireGame::startStockToWasteAnimation() {
   if (stock_to_waste_animation_active_ || stock_.empty())
     return;
 
+#ifdef DEBUG
   std::cout << "Starting stock to waste animation" << std::endl;
+#endif
 
   stock_to_waste_animation_active_ = true;
   stock_to_waste_timer_ = 0;

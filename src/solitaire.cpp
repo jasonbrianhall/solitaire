@@ -259,8 +259,10 @@ void SolitaireGame::deal() {
     stock_.push_back(*card);
   }
 
+#ifdef DEBUG
   std::cout << "Starting deal animation from deal()"
             << std::endl; // Debug output
+#endif
 
   // Start the deal animation
   startDealAnimation();
