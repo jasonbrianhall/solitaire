@@ -9,34 +9,34 @@
 #include <vector>
 
 struct CardFragment {
-    double x;
-    double y;
-    double width;
-    double height;
-    double velocity_x;
-    double velocity_y;
-    double rotation;
-    double rotation_velocity;
-    cairo_surface_t* surface;
-    bool active;
+  double x;
+  double y;
+  double width;
+  double height;
+  double velocity_x;
+  double velocity_y;
+  double rotation;
+  double rotation_velocity;
+  cairo_surface_t *surface;
+  bool active;
 };
 
 struct AnimatedCard {
-    cardlib::Card card;
-    double x;
-    double y;
-    double velocity_x;
-    double velocity_y;
-    double rotation;
-    double rotation_velocity;
-    bool active;
-    bool exploded;
-    std::vector<CardFragment> fragments;
-    
-    // New fields for deal animation
-    double target_x;
-    double target_y;
-    bool face_up;
+  cardlib::Card card;
+  double x;
+  double y;
+  double velocity_x;
+  double velocity_y;
+  double rotation;
+  double rotation_velocity;
+  bool active;
+  bool exploded;
+  std::vector<CardFragment> fragments;
+
+  // New fields for deal animation
+  double target_x;
+  double target_y;
+  bool face_up;
 };
 
 struct TableauCard {
@@ -63,12 +63,11 @@ private:
   static constexpr int BASE_VERT_SPACING = 30;
   std::vector<std::vector<bool>> animated_foundation_cards_;
 
-bool foundation_move_animation_active_ = false;
-AnimatedCard foundation_move_card_;
-int foundation_target_pile_ = -1;
-double foundation_move_timer_ = 0;
-static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
-
+  bool foundation_move_animation_active_ = false;
+  AnimatedCard foundation_move_card_;
+  int foundation_target_pile_ = -1;
+  double foundation_move_timer_ = 0;
+  static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
 
   // Current dynamic dimensions
   int current_card_width_;
@@ -89,14 +88,14 @@ static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
   static constexpr int ANIMATION_INTERVAL = 16; // ~60 FPS
   int cards_launched_ = 0;
   double launch_timer_ = 0;
-  
+
   // Deal animation fields
   bool deal_animation_active_ = false;
   std::vector<AnimatedCard> deal_cards_;
   int cards_dealt_ = 0;
   double deal_timer_ = 0;
   static constexpr double DEAL_INTERVAL = 30; // Time between dealing cards (ms)
-  static constexpr double DEAL_SPEED = 1.3;    // Speed multiplier for dealing
+  static constexpr double DEAL_SPEED = 1.3;   // Speed multiplier for dealing
 
   // Animation methods
   void startWinAnimation();
@@ -104,7 +103,7 @@ static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
   static gboolean onAnimationTick(gpointer data);
   void stopWinAnimation();
   void launchNextCard();
-  
+
   void startDealAnimation();
   void updateDealAnimation();
   static gboolean onDealAnimationTick(gpointer data);
@@ -203,7 +202,7 @@ static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
 
   bool draw_three_mode_; // True for draw 3, false for draw 1
   bool tryMoveToFoundation(const cardlib::Card &card);
-  void drawAnimatedCard(cairo_t* cr, const AnimatedCard& anim_card);
+  void drawAnimatedCard(cairo_t *cr, const AnimatedCard &anim_card);
   void dealTestLayout();
 
   std::string settings_dir_;
@@ -220,26 +219,28 @@ static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
   void clearCustomBack();
   void refreshCardCache();
 
-  static constexpr double EXPLOSION_THRESHOLD_MIN = 0.3; // Minimum distance threshold (as percentage of screen height)
-  static constexpr double EXPLOSION_THRESHOLD_MAX = 0.7; // Maximum distance threshold (as percentage of screen height)
+  static constexpr double EXPLOSION_THRESHOLD_MIN =
+      0.3; // Minimum distance threshold (as percentage of screen height)
+  static constexpr double EXPLOSION_THRESHOLD_MAX =
+      0.7; // Maximum distance threshold (as percentage of screen height)
 
-  void explodeCard(AnimatedCard& card);
-  void updateCardFragments(AnimatedCard& card);
-  void drawCardFragment(cairo_t* cr, const CardFragment& fragment);
-void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile);
-void updateFoundationMoveAnimation();
-static gboolean onFoundationMoveAnimationTick(gpointer data);
+  void explodeCard(AnimatedCard &card);
+  void updateCardFragments(AnimatedCard &card);
+  void drawCardFragment(cairo_t *cr, const CardFragment &fragment);
+  void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile,
+                                    int source_index, int target_pile);
+  void updateFoundationMoveAnimation();
+  static gboolean onFoundationMoveAnimationTick(gpointer data);
 
   bool stock_to_waste_animation_active_ = false;
   AnimatedCard stock_to_waste_card_;
   int stock_to_waste_timer_ = 0;
   std::vector<cardlib::Card> pending_waste_cards_;
-  
+
   void startStockToWasteAnimation();
   void updateStockToWasteAnimation();
   static gboolean onStockToWasteAnimationTick(gpointer data);
   void completeStockToWasteAnimation();
-
 };
 
 #endif // SOLITAIRE_H
