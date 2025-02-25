@@ -1175,7 +1175,7 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
       "Controls:\n"
       "- Left-click and drag to move cards\n"
       "- Rigit-click to automatically move cards to the suit piles at the "
-      "top\n"
+      "top\n\n"
       "Written by Jason Hall\n"
       "Licensed under the MIT License\n"
       "https://github.com/jasonbrianhall/solitaire";
