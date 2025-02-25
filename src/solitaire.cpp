@@ -345,14 +345,12 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
                                       gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
-  // If an animation is already running and user clicks again, ignore the click
-  // until the animation is complete to prevent race conditions
-  if (game->foundation_move_animation_active_) {
+  // If any animation is active, block all interactions
+  if (game->foundation_move_animation_active_ || game->stock_to_waste_animation_active_) {
     return TRUE;
   }
 
   if (event->button == 1) { // Left click
-    // Original left-click code remains unchanged
     auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
     if (pile_index == 0) { // Stock pile
