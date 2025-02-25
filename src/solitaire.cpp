@@ -1179,7 +1179,7 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
       "- Right-click to draw new cards\n\n"
       "Written by Jason Hall\n"
       "Licensed under the MIT License\n"
-      "https://github.com/jasonbrianhall/minesweeper";
+      "https://github.com/jasonbrianhall/solitaire";
 
   gtk_text_buffer_set_text(buffer, instructions, -1);
 
