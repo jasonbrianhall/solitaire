@@ -1568,6 +1568,12 @@ void SolitaireGame::autoFinishGame() {
     return; // Don't restart if already running
   }
   
+  // Explicitly deactivate keyboard navigation and selection
+  keyboard_navigation_active_ = false;
+  keyboard_selection_active_ = false;
+  //selected_pile_ = -1;
+  //selected_card_idx_ = -1;
+  
   auto_finish_active_ = true;
   
   // Try to make the first move immediately
