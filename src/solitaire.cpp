@@ -935,13 +935,12 @@ void SolitaireGame::setupMenuBar() {
 
   // Game menu
   GtkWidget *gameMenu = gtk_menu_new();
-  GtkWidget *gameMenuItem = gtk_menu_item_new_with_label("Game");
+  GtkWidget *gameMenuItem = gtk_menu_item_new_with_mnemonic("_Game");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameMenuItem), gameMenu);
 
   // New Game
-  GtkWidget *newGameItem = gtk_menu_item_new_with_label("New Game (CTRL+N)");
-  g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame),
-                   this);
+  GtkWidget *newGameItem = gtk_menu_item_new_with_mnemonic("_New Game (CTRL+N)");
+  g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
 #ifdef DEBUG
@@ -957,15 +956,14 @@ void SolitaireGame::setupMenuBar() {
 #endif
 
   // Draw Mode submenu
-  GtkWidget *drawModeItem = gtk_menu_item_new_with_label("Draw Mode");
+  GtkWidget *drawModeItem = gtk_menu_item_new_with_mnemonic("_Draw Mode");
   GtkWidget *drawModeMenu = gtk_menu_new();
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(drawModeItem), drawModeMenu);
 
   // Draw One option
-  GtkWidget *drawOneItem =
-      gtk_radio_menu_item_new_with_label(nullptr, "Draw One (1)");
-  GSList *group =
-      gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
+  GtkWidget *drawOneItem = gtk_radio_menu_item_new_with_mnemonic(
+      NULL, "_One (1)");
+  GSList *group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
   g_signal_connect(
       G_OBJECT(drawOneItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -977,8 +975,8 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawOneItem);
 
   // Draw Three option
-  GtkWidget *drawThreeItem =
-      gtk_radio_menu_item_new_with_label(group, "Draw Three (3)");
+  GtkWidget *drawThreeItem = gtk_radio_menu_item_new_with_mnemonic(
+      group, "_Three (3)");
   g_signal_connect(
       G_OBJECT(drawThreeItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -996,15 +994,13 @@ void SolitaireGame::setupMenuBar() {
 
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
 
-  // Card Back menu - only show on non-Windows platforms
-  // #ifndef _WIN32
+  // Card Back menu
   GtkWidget *cardBackMenu = gtk_menu_new();
-  GtkWidget *cardBackItem = gtk_menu_item_new_with_label("Card Back");
+  GtkWidget *cardBackItem = gtk_menu_item_new_with_mnemonic("_Card Back");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
 
   // Select custom back option
-  GtkWidget *selectBackItem =
-      gtk_menu_item_new_with_label("Select Custom Back");
+  GtkWidget *selectBackItem = gtk_menu_item_new_with_mnemonic("_Select Custom Back");
   g_signal_connect(
       G_OBJECT(selectBackItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -1043,8 +1039,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
 
   // Reset to default back option
-  GtkWidget *resetBackItem =
-      gtk_menu_item_new_with_label("Reset to Default Back");
+  GtkWidget *resetBackItem = gtk_menu_item_new_with_mnemonic("_Reset to Default Back");
   g_signal_connect(G_OBJECT(resetBackItem), "activate",
                    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
                      SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -1055,10 +1050,9 @@ void SolitaireGame::setupMenuBar() {
 
   // Add the Card Back submenu to the Game menu
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
-  // #endif
 
   // Load Deck option
-  GtkWidget *loadDeckItem = gtk_menu_item_new_with_label("Load Deck");
+  GtkWidget *loadDeckItem = gtk_menu_item_new_with_mnemonic("_Load Deck");
   g_signal_connect(
       G_OBJECT(loadDeckItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -1089,7 +1083,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
 
   // Fullscreen option
-  GtkWidget *fullscreenItem = gtk_menu_item_new_with_label("Toggle Fullscreen (F11)");
+  GtkWidget *fullscreenItem = gtk_menu_item_new_with_mnemonic("Toggle _Fullscreen (F11)");
   g_signal_connect(G_OBJECT(fullscreenItem), "activate", G_CALLBACK(onToggleFullscreen), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), fullscreenItem);
 
@@ -1098,7 +1092,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
 
   // Quit
-  GtkWidget *quitItem = gtk_menu_item_new_with_label("Quit (CTRL+Q)");
+  GtkWidget *quitItem = gtk_menu_item_new_with_mnemonic("_Quit (CTRL+Q)");
   g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
 
@@ -1106,11 +1100,11 @@ void SolitaireGame::setupMenuBar() {
 
   // Help menu
   GtkWidget *helpMenu = gtk_menu_new();
-  GtkWidget *helpMenuItem = gtk_menu_item_new_with_label("Help");
+  GtkWidget *helpMenuItem = gtk_menu_item_new_with_mnemonic("_Help");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(helpMenuItem), helpMenu);
 
   // About
-  GtkWidget *aboutItem = gtk_menu_item_new_with_label("About (CTRL+H)");
+  GtkWidget *aboutItem = gtk_menu_item_new_with_mnemonic("_About (CTRL+H)");
   g_signal_connect(G_OBJECT(aboutItem), "activate", G_CALLBACK(onAbout), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), aboutItem);
 
