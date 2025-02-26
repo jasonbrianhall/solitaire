@@ -10,7 +10,7 @@ Welcome to what might be the most meticulously crafted Solitaire implementation 
 - **Fancy Graphics**: Powered by Cairo, because we believe pixels should be pretty
 - **Super Smooth Drag & Drop**: More fluid than your morning smoothie
 - **Auto-Complete Detection**: Because we know you were going to win anyway
-- **Settings Persistence**: Your preferences matter (and we remember them!)
+- **Full Keyboard Support**:  Since sometimes you don't have a mouse.
 
 ## 🛠️ Building
 
@@ -68,6 +68,17 @@ This will:
 - **Left Click + Drag**: Move cards (revolutionary, we know)
 - **Right Click**: Automatically move a card to its foundation (for the lazy among us)
 - **Left Click on Stock**: Draw new cards (draw one or three, depending on your mode)
+
+### Keyboard Controls
+
+- **Arrow Keys**: Navigate around the board (yellow highlight)
+- **Enter**: Select card (highlights to blue) or puts in foundation
+- **ESC***: Deselect card (turns highlight back to yellow)
+- **F**: Finish the game
+- **Space**: Deal next card
+- **1**: Change to dealing one card
+- **3**: Change to dealing three cards at once
+- To move a card, select the card you would like to move, press enter, move with arrow keys to new location, and then press enter again
 
 ### Game Rules
 
