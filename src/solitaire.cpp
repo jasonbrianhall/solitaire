@@ -931,7 +931,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameMenuItem), gameMenu);
 
   // New Game
-  GtkWidget *newGameItem = gtk_menu_item_new_with_label("New Game");
+  GtkWidget *newGameItem = gtk_menu_item_new_with_label("New Game (CTRL+N)");
   g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame),
                    this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
@@ -955,7 +955,7 @@ void SolitaireGame::setupMenuBar() {
 
   // Draw One option
   GtkWidget *drawOneItem =
-      gtk_radio_menu_item_new_with_label(nullptr, "Draw One");
+      gtk_radio_menu_item_new_with_label(nullptr, "Draw One (1)");
   GSList *group =
       gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
   g_signal_connect(
@@ -970,7 +970,7 @@ void SolitaireGame::setupMenuBar() {
 
   // Draw Three option
   GtkWidget *drawThreeItem =
-      gtk_radio_menu_item_new_with_label(group, "Draw Three");
+      gtk_radio_menu_item_new_with_label(group, "Draw Three (3)");
   g_signal_connect(
       G_OBJECT(drawThreeItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -1090,7 +1090,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
 
   // Quit
-  GtkWidget *quitItem = gtk_menu_item_new_with_label("Quit");
+  GtkWidget *quitItem = gtk_menu_item_new_with_label("Quit (CTRL+Q)");
   g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
 
@@ -1102,7 +1102,7 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(helpMenuItem), helpMenu);
 
   // About
-  GtkWidget *aboutItem = gtk_menu_item_new_with_label("About");
+  GtkWidget *aboutItem = gtk_menu_item_new_with_label("About (CTRL+H)");
   g_signal_connect(G_OBJECT(aboutItem), "activate", G_CALLBACK(onAbout), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), aboutItem);
 
@@ -1549,12 +1549,74 @@ double SolitaireGame::getScaleFactor(int window_width,
   return std::min(width_scale, height_scale);
 }
 
+// Update the onKeyPress function in solitaire.cpp to handle the new shortcuts:
+
 gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
   
-  if (event->keyval == GDK_KEY_F11) {
-    game->toggleFullscreen();
-    return TRUE;
+  // Check for control key modifier
+  bool ctrl_pressed = (event->state & GDK_CONTROL_MASK);
+  
+  switch (event->keyval) {
+    case GDK_KEY_F11:
+      game->toggleFullscreen();
+      return TRUE;
+      
+    case GDK_KEY_Escape:
+      if (game->is_fullscreen_) {
+        game->toggleFullscreen();
+        return TRUE;
+      }
+      break;
+      
+    case GDK_KEY_n:
+    case GDK_KEY_N:
+      if (ctrl_pressed) {
+        game->initializeGame();
+        game->refreshDisplay();
+        return TRUE;
+      }
+      break;
+      
+    case GDK_KEY_q:
+    case GDK_KEY_Q:
+      if (ctrl_pressed) {
+        gtk_main_quit();
+        return TRUE;
+      }
+      break;
+      
+    case GDK_KEY_h:
+    case GDK_KEY_H:
+      if (ctrl_pressed) {
+        onAbout(nullptr, game);
+        return TRUE;
+      }
+      break;
+      
+    case GDK_KEY_1:
+      if (game->draw_three_mode_) {
+        game->draw_three_mode_ = false;
+        game->refreshDisplay();
+      }
+      return TRUE;
+      
+    case GDK_KEY_3:
+      if (!game->draw_three_mode_) {
+        game->draw_three_mode_ = true;
+        game->refreshDisplay();
+      }
+      return TRUE;
+      
+    case GDK_KEY_space:
+      // Draw cards from stock with spacebar
+      game->handleStockPileClick();
+      return TRUE;
+      
+    case GDK_KEY_F1:
+      // F1 for Help/About (common standard)
+      onAbout(nullptr, game);
+      return TRUE;
   }
   
   return FALSE; // Let other handlers process this key event
