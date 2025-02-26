@@ -14,7 +14,8 @@ SolitaireGame::SolitaireGame()
       current_card_width_(BASE_CARD_WIDTH),
       current_card_height_(BASE_CARD_HEIGHT),
       current_card_spacing_(BASE_CARD_SPACING),
-      current_vert_spacing_(BASE_VERT_SPACING) {
+      current_vert_spacing_(BASE_VERT_SPACING), 
+     is_fullscreen_(false) {
   initializeGame();
   initializeSettingsDir();
   loadSettings();
@@ -842,6 +843,9 @@ void SolitaireGame::setupWindow() {
   g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit),
                    NULL);
 
+  gtk_widget_add_events(window_, GDK_KEY_PRESS_MASK);
+  g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress), this);
+
   // Create vertical box
   vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window_), vbox_);
@@ -1075,6 +1079,11 @@ void SolitaireGame::setupMenuBar() {
       }),
       this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
+
+  // Fullscreen option
+  GtkWidget *fullscreenItem = gtk_menu_item_new_with_label("Toggle Fullscreen (F11)");
+  g_signal_connect(G_OBJECT(fullscreenItem), "activate", G_CALLBACK(onToggleFullscreen), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), fullscreenItem);
 
   // Separator
   GtkWidget *sep = gtk_separator_menu_item_new();
@@ -1501,6 +1510,11 @@ void SolitaireGame::refreshCardCache() {
   }
 }
 
+void SolitaireGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->toggleFullscreen();
+}
+
 void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
   double scale = getScaleFactor(window_width, window_height);
 
@@ -1534,3 +1548,25 @@ double SolitaireGame::getScaleFactor(int window_width,
   // Use the smaller scale to ensure everything fits
   return std::min(width_scale, height_scale);
 }
+
+gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  
+  if (event->keyval == GDK_KEY_F11) {
+    game->toggleFullscreen();
+    return TRUE;
+  }
+  
+  return FALSE; // Let other handlers process this key event
+}
+
+void SolitaireGame::toggleFullscreen() {
+  if (is_fullscreen_) {
+    gtk_window_unfullscreen(GTK_WINDOW(window_));
+    is_fullscreen_ = false;
+  } else {
+    gtk_window_fullscreen(GTK_WINDOW(window_));
+    is_fullscreen_ = true;
+  }
+}
+

@@ -241,6 +241,11 @@ private:
   void updateStockToWasteAnimation();
   static gboolean onStockToWasteAnimationTick(gpointer data);
   void completeStockToWasteAnimation();
+  static void onToggleFullscreen(GtkWidget *widget, gpointer data);
+
+   bool is_fullscreen_;
+   static gboolean onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data);
+   void toggleFullscreen();
 };
 
 #endif // SOLITAIRE_H
