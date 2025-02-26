@@ -74,8 +74,8 @@ This will:
 - **Arrow Keys**: Navigate around the board (yellow highlight)
 - **Enter**: Select card (highlights to blue) or puts in foundation
 - **ESC**: Deselect card (turns highlight back to yellow)
-- **F**: Finish the game
-- **Space**: Deal next card
+- **F**: Finish the game (moves cards to the foundation until it can't move anymore)
+- **Space**: Deal next card(s)
 - **1**: Change to dealing one card
 - **3**: Change to dealing three cards at once
 - To move a card, select the card you would like to move, press enter, move with arrow keys to new location, and then press enter again
