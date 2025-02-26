@@ -1193,6 +1193,17 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
       "- Left-click and drag to move cards\n"
       "- Rigit-click to automatically move cards to the suit piles at the "
       "top\n\n"
+      "Keyboard Controls:\n"
+      "- Arrow keys (←, →, ↑, ↓) to navigate between piles and cards\n"
+      "- Enter to select a card or perform a move\n"
+      "- Escape to cancel a selection\n"
+      "- Space to draw cards from the stock pile\n"
+      "- F to automatically move all possible cards to the foundation piles\n"
+      "- 1 or 3 to toggle between Draw One and Draw Three modes\n"
+      "- F11 to toggle fullscreen mode\n"
+      "- Ctrl+N for a new game\n"
+      "- Ctrl+Q to quit\n"
+      "- Ctrl+H for help\n\n"
       "Written by Jason Hall\n"
       "Licensed under the MIT License\n"
       "https://github.com/jasonbrianhall/solitaire";
@@ -1557,5 +1568,112 @@ double SolitaireGame::getScaleFactor(int window_width,
   return std::min(width_scale, height_scale);
 }
 
+void SolitaireGame::autoFinishGame() {
+  // We need to use a timer to handle the animations properly
+  if (auto_finish_active_) {
+    return; // Don't restart if already running
+  }
+  
+  auto_finish_active_ = true;
+  
+  // Try to make the first move immediately
+  processNextAutoFinishMove();
+}
 
+void SolitaireGame::processNextAutoFinishMove() {
+  if (!auto_finish_active_) {
+    return;
+  }
+  
+  // If a foundation animation is currently running, wait for it to complete
+  if (foundation_move_animation_active_) {
+    // Set up a timer to check again after a short delay
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+    }
+    auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
+    return;
+  }
+  
+  bool found_move = false;
+  
+  // Check waste pile first
+  if (!waste_.empty()) {
+    const cardlib::Card &waste_card = waste_.back();
+    
+    // Try to move the waste card to foundation
+    for (size_t f = 0; f < foundation_.size(); f++) {
+      if (canMoveToFoundation(waste_card, f)) {
+        // Use the animation to move the card
+        startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
+        
+        // Remove card from waste pile
+        waste_.pop_back();
+        
+        found_move = true;
+        break;
+      }
+    }
+  }
+  
+  // Try each tableau pile if no move was found yet
+  if (!found_move) {
+    for (size_t t = 0; t < tableau_.size(); t++) {
+      auto &pile = tableau_[t];
+      
+      if (!pile.empty() && pile.back().face_up) {
+        const cardlib::Card &top_card = pile.back().card;
+        
+        // Try to move to foundation
+        for (size_t f = 0; f < foundation_.size(); f++) {
+          if (canMoveToFoundation(top_card, f)) {
+            // Use the animation to move the card
+            startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1, f + 2);
+            
+            // Remove card from tableau
+            pile.pop_back();
+            
+            // Flip the new top card if needed
+            if (!pile.empty() && !pile.back().face_up) {
+              pile.back().face_up = true;
+            }
+            
+            found_move = true;
+            break;
+          }
+        }
+        
+        if (found_move) {
+          break;
+        }
+      }
+    }
+  }
+  
+  if (found_move) {
+    // Set up a timer to check for the next move after the animation completes
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+    }
+    auto_finish_timer_id_ = g_timeout_add(200, onAutoFinishTick, this);
+  } else {
+    // No more moves to make
+    auto_finish_active_ = false;
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+      auto_finish_timer_id_ = 0;
+    }
+    
+    // Check if the player has won
+    if (checkWinCondition()) {
+      startWinAnimation();
+    }
+  }
+}
+
+gboolean SolitaireGame::onAutoFinishTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->processNextAutoFinishMove();
+  return FALSE; // Don't repeat the timer
+}
 

@@ -66,6 +66,12 @@ gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpoint
         game->refreshDisplay();
       }
       return TRUE;
+
+    case GDK_KEY_f:
+    case GDK_KEY_F:
+      // Auto-finish game by moving cards to foundation
+      game->autoFinishGame();
+      return TRUE;
       
     case GDK_KEY_space:
       // Draw cards from stock with spacebar
@@ -497,9 +503,9 @@ bool SolitaireGame::tryMoveSelectedCard() {
   }
   
   // Check for win
-  if (checkWinCondition()) {
+  /*if (checkWinCondition()) {
     startWinAnimation();
-  }
+  }*/
   
   refreshDisplay();
   return true;

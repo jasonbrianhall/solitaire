@@ -912,7 +912,7 @@ void SolitaireGame::updateFoundationMoveAnimation() {
   if (distance < 5.0) {
     // Card has arrived at destination
 
-    // Add card to the foundation pile (this is the missing line)
+    // Add card to the foundation pile
     foundation_[foundation_target_pile_ - 2].push_back(
         foundation_move_card_.card);
 
@@ -925,9 +925,19 @@ void SolitaireGame::updateFoundationMoveAnimation() {
       animation_timer_id_ = 0;
     }
 
-    // Check if the player has won
-    if (checkWinCondition()) {
+    // Check if the player has won - BUT only if auto-finish is not active
+    // When auto-finishing, we'll check for win condition at the end
+    if (!auto_finish_active_ && checkWinCondition()) {
       startWinAnimation();
+    }
+    
+    // Continue auto-finish if active
+    if (auto_finish_active_) {
+      // Set a short timer to avoid recursion
+      if (auto_finish_timer_id_ > 0) {
+        g_source_remove(auto_finish_timer_id_);
+      }
+      auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
     }
   } else {
     // Move card toward destination with a smooth curve

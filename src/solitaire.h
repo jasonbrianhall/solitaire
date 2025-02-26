@@ -263,6 +263,14 @@ bool keyboard_selection_active_ = false;  // Flag for when a card is selected fo
 int source_pile_ = -1;                    // Source pile for keyboard moves
 int source_card_idx_ = -1;                // Index of card in source pile
 
+void autoFinishGame();
+bool auto_finish_active_ = false;
+guint auto_finish_timer_id_ = 0;
+
+// Add these function declarations to your SolitaireGame class in solitaire.h:
+void processNextAutoFinishMove();
+static gboolean onAutoFinishTick(gpointer data);
+
 };
 
 #endif // SOLITAIRE_H
