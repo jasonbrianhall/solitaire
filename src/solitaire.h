@@ -246,6 +246,23 @@ private:
    bool is_fullscreen_;
    static gboolean onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data);
    void toggleFullscreen();
+   
+   int selected_pile_;      // Currently selected pile (-1 if none)
+int selected_card_idx_;  // Index of selected card in the pile
+
+// Keyboard navigation
+void selectNextPile();
+void selectPreviousPile();
+void selectCardUp();
+void selectCardDown();
+void activateSelected();
+void highlightSelectedCard(cairo_t *cr);
+bool keyboard_navigation_active_ = false;
+bool tryMoveSelectedCard();
+bool keyboard_selection_active_ = false;  // Flag for when a card is selected for movement
+int source_pile_ = -1;                    // Source pile for keyboard moves
+int source_card_idx_ = -1;                // Index of card in source pile
+
 };
 
 #endif // SOLITAIRE_H

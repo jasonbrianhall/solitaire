@@ -15,7 +15,13 @@ SolitaireGame::SolitaireGame()
       current_card_height_(BASE_CARD_HEIGHT),
       current_card_spacing_(BASE_CARD_SPACING),
       current_vert_spacing_(BASE_VERT_SPACING), 
-     is_fullscreen_(false) {
+      is_fullscreen_(false),
+      selected_pile_(-1),
+      selected_card_idx_(-1),
+      keyboard_navigation_active_(false),
+      keyboard_selection_active_(false),
+      source_pile_(-1),
+      source_card_idx_(-1) {
   initializeGame();
   initializeSettingsDir();
   loadSettings();
@@ -346,6 +352,7 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
                                       gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
+  game->keyboard_navigation_active_ = false;
   // If any animation is active, block all interactions
   if (game->foundation_move_animation_active_ || game->stock_to_waste_animation_active_) {
     return TRUE;
@@ -468,6 +475,7 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
 gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
                                         GdkEventButton *event, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->keyboard_navigation_active_ = false;
 
   if (event->button == 1 && game->dragging_) {
     auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
@@ -1549,86 +1557,5 @@ double SolitaireGame::getScaleFactor(int window_width,
   return std::min(width_scale, height_scale);
 }
 
-// Update the onKeyPress function in solitaire.cpp to handle the new shortcuts:
 
-gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
-  
-  // Check for control key modifier
-  bool ctrl_pressed = (event->state & GDK_CONTROL_MASK);
-  
-  switch (event->keyval) {
-    case GDK_KEY_F11:
-      game->toggleFullscreen();
-      return TRUE;
-      
-    case GDK_KEY_Escape:
-      if (game->is_fullscreen_) {
-        game->toggleFullscreen();
-        return TRUE;
-      }
-      break;
-      
-    case GDK_KEY_n:
-    case GDK_KEY_N:
-      if (ctrl_pressed) {
-        game->initializeGame();
-        game->refreshDisplay();
-        return TRUE;
-      }
-      break;
-      
-    case GDK_KEY_q:
-    case GDK_KEY_Q:
-      if (ctrl_pressed) {
-        gtk_main_quit();
-        return TRUE;
-      }
-      break;
-      
-    case GDK_KEY_h:
-    case GDK_KEY_H:
-      if (ctrl_pressed) {
-        onAbout(nullptr, game);
-        return TRUE;
-      }
-      break;
-      
-    case GDK_KEY_1:
-      if (game->draw_three_mode_) {
-        game->draw_three_mode_ = false;
-        game->refreshDisplay();
-      }
-      return TRUE;
-      
-    case GDK_KEY_3:
-      if (!game->draw_three_mode_) {
-        game->draw_three_mode_ = true;
-        game->refreshDisplay();
-      }
-      return TRUE;
-      
-    case GDK_KEY_space:
-      // Draw cards from stock with spacebar
-      game->handleStockPileClick();
-      return TRUE;
-      
-    case GDK_KEY_F1:
-      // F1 for Help/About (common standard)
-      onAbout(nullptr, game);
-      return TRUE;
-  }
-  
-  return FALSE; // Let other handlers process this key event
-}
-
-void SolitaireGame::toggleFullscreen() {
-  if (is_fullscreen_) {
-    gtk_window_unfullscreen(GTK_WINDOW(window_));
-    is_fullscreen_ = false;
-  } else {
-    gtk_window_fullscreen(GTK_WINDOW(window_));
-    is_fullscreen_ = true;
-  }
-}
 

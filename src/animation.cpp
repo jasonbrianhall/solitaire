@@ -512,6 +512,12 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
     }
   }
 
+  if (game->keyboard_navigation_active_ && !game->dragging_ && !game->deal_animation_active_ && 
+      !game->win_animation_active_ && !game->foundation_move_animation_active_ && 
+      !game->stock_to_waste_animation_active_) {
+    game->highlightSelectedCard(game->buffer_cr_);
+  }
+
   // Copy buffer to window
   cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
   cairo_paint(cr);
