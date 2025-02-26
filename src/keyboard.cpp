@@ -190,15 +190,35 @@ void SolitaireGame::selectPreviousPile() {
 void SolitaireGame::selectCardUp() {
   if (selected_pile_ >= 6 && selected_pile_ <= 12) {
     int tableau_idx = selected_pile_ - 6;
-    if (!tableau_[tableau_idx].empty()) {
-      if (selected_card_idx_ > 0) {
-        // Only allow navigating to face-up cards
-        for (int i = selected_card_idx_ - 1; i >= 0; i--) {
-          if (tableau_[tableau_idx][i].face_up) {
-            selected_card_idx_ = i;
-            break;
-          }
+    
+    // If we're looking at a tableau pile
+    if (!tableau_[tableau_idx].empty() && selected_card_idx_ > 0) {
+      // Try to navigate up within the tableau pile
+      for (int i = selected_card_idx_ - 1; i >= 0; i--) {
+        if (tableau_[tableau_idx][i].face_up) {
+          selected_card_idx_ = i;
+          refreshDisplay();
+          return;
         }
+      }
+    }
+    
+    // If we couldn't navigate up or we're at the top card,
+    // move to the corresponding pile in the top row
+    if (tableau_idx == 0) {
+      // Pile 0 goes to stock pile
+      selected_pile_ = 0;
+      selected_card_idx_ = stock_.empty() ? -1 : 0;
+    } else if (tableau_idx == 1) {
+      // Pile 1 goes to waste pile
+      selected_pile_ = 1;
+      selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
+    } else if (tableau_idx >= 2) {
+      // Other piles go to corresponding foundation (if available) or empty space
+      int foundation_idx = tableau_idx - 2;
+      if (foundation_idx < foundation_.size()) {
+        selected_pile_ = 2 + foundation_idx;
+        selected_card_idx_ = foundation_[foundation_idx].empty() ? -1 : foundation_[foundation_idx].size() - 1;
       }
     }
   }
@@ -206,9 +226,32 @@ void SolitaireGame::selectCardUp() {
   refreshDisplay();
 }
 
+
 // Move selection down in a tableau pile
 void SolitaireGame::selectCardDown() {
-  if (selected_pile_ >= 6 && selected_pile_ <= 12) {
+  // If we're in the top row, move down to the corresponding tableau pile
+  if (selected_pile_ >= 0 && selected_pile_ <= 5) {
+    int target_tableau;
+    
+    if (selected_pile_ == 0) {
+      // Stock pile goes to tableau pile 0
+      target_tableau = 0;
+    } else if (selected_pile_ == 1) {
+      // Waste pile goes to tableau pile 1
+      target_tableau = 1;
+    } else {
+      // Foundation piles go to corresponding tableau piles (2-5 -> 2-5)
+      target_tableau = selected_pile_;
+    }
+    
+    // Check if the target_tableau is within range
+    if (target_tableau < tableau_.size()) {
+      selected_pile_ = 6 + target_tableau;
+      selected_card_idx_ = tableau_[target_tableau].empty() ? -1 : tableau_[target_tableau].size() - 1;
+    }
+  }
+  // If we're already in the tableau, try to move down
+  else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
     int tableau_idx = selected_pile_ - 6;
     if (!tableau_[tableau_idx].empty() && selected_card_idx_ >= 0) {
       if (static_cast<size_t>(selected_card_idx_) < tableau_[tableau_idx].size() - 1) {
@@ -219,6 +262,7 @@ void SolitaireGame::selectCardDown() {
   
   refreshDisplay();
 }
+
 
 // Activate the currently selected card/pile (like clicking)
 void SolitaireGame::activateSelected() {
@@ -235,6 +279,8 @@ void SolitaireGame::activateSelected() {
       source_pile_ = -1;
       source_card_idx_ = -1;
     }
+    // Always refresh display whether move succeeded or not
+    refreshDisplay();
     return;
   }
   
@@ -324,7 +370,8 @@ void SolitaireGame::activateSelected() {
       keyboard_selection_active_ = true;
       source_pile_ = selected_pile_;
       source_card_idx_ = selected_card_idx_;
-      // Now user can navigate to another pile and press Enter again to move
+      // Force a refresh immediately to show the blue highlight
+      refreshDisplay();
     }
   }
   else if (selected_pile_ == 1 && !waste_.empty()) {
@@ -332,6 +379,8 @@ void SolitaireGame::activateSelected() {
     keyboard_selection_active_ = true;
     source_pile_ = selected_pile_;
     source_card_idx_ = waste_.size() - 1;
+    // Force a refresh immediately to show the blue highlight
+    refreshDisplay();
   }
 }
 
@@ -385,6 +434,7 @@ bool SolitaireGame::tryMoveSelectedCard() {
     if (!target_tableau.empty()) {
       target_cards = {target_tableau.back().card};
     }
+    // Empty pile case - leave target_cards empty
   }
   
   // Check if the move is valid
@@ -457,8 +507,8 @@ bool SolitaireGame::tryMoveSelectedCard() {
 
 // Highlight the selected card in the onDraw method
 void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
-  // Don't highlight if nothing is selected
-  if (selected_pile_ == -1 || selected_card_idx_ == -1) {
+  // Only exit if no pile is selected (card index can be -1 for empty piles)
+  if (selected_pile_ == -1) {
     return;
   }
   
@@ -481,40 +531,51 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     // Tableau piles
     int tableau_idx = selected_pile_ - 6;
     x = current_card_spacing_ + tableau_idx * (current_card_width_ + current_card_spacing_);
-    y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ + 
-        selected_card_idx_ * current_vert_spacing_;
+    
+    // For empty tableau piles, highlight the empty space
+    if (selected_card_idx_ == -1) {
+      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+    } else {
+      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ + 
+          selected_card_idx_ * current_vert_spacing_;
+    }
   }
   
   // Choose highlight color based on whether we're selecting a card to move
-if (keyboard_selection_active_ && source_pile_ == selected_pile_ && source_card_idx_ == selected_card_idx_) {
-    // Source card is highlighted in blue
+  if (keyboard_selection_active_ && source_pile_ == selected_pile_ && 
+      (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
+    // Source card/pile is highlighted in blue
     cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.5); // Semi-transparent blue
-} else {
+  } else {
     // Regular selection is highlighted in yellow
     cairo_set_source_rgba(cr, 1.0, 1.0, 0.0, 0.5); // Semi-transparent yellow
-}
+  }
   
   cairo_set_line_width(cr, 3.0);
   cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4, current_card_height_ + 4);
   cairo_stroke(cr);
   
   // If we have a card selected for movement, highlight all cards below it in a tableau pile
-  if (keyboard_selection_active_ && source_pile_ >= 6 && source_pile_ <= 12) {
+  if (keyboard_selection_active_ && source_pile_ >= 6 && source_pile_ <= 12 && source_card_idx_ >= 0) {
     int tableau_idx = source_pile_ - 6;
     auto &tableau_pile = tableau_[tableau_idx];
     
-    // Highlight all cards from the selected one to the bottom
-    cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
-    
-    x = current_card_spacing_ + tableau_idx * (current_card_width_ + current_card_spacing_);
-    y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ + 
-        source_card_idx_ * current_vert_spacing_;
-    
-    // Draw a single rectangle that covers all cards in the stack
-    int stack_height = (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ + 
-                      current_card_height_;
-    
-    cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4, stack_height + 4);
-    cairo_stroke(cr);
+    if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
+      // Highlight all cards from the selected one to the bottom
+      cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
+      
+      x = current_card_spacing_ + tableau_idx * (current_card_width_ + current_card_spacing_);
+      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ + 
+          source_card_idx_ * current_vert_spacing_;
+      
+      // Draw a single rectangle that covers all cards in the stack
+      int stack_height = (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ + 
+                        current_card_height_;
+      
+      if (stack_height > 0) {
+        cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4, stack_height + 4);
+        cairo_stroke(cr);
+      }
+    }
   }
 }
