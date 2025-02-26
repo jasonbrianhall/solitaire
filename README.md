@@ -73,7 +73,7 @@ This will:
 
 - **Arrow Keys**: Navigate around the board (yellow highlight)
 - **Enter**: Select card (highlights to blue) or puts in foundation
-- **ESC***: Deselect card (turns highlight back to yellow)
+- **ESC**: Deselect card (turns highlight back to yellow)
 - **F**: Finish the game
 - **Space**: Deal next card
 - **1**: Change to dealing one card
