@@ -11,13 +11,12 @@
 
 // Sound event types for the game
 enum class SoundEvent {
-    CardDeal,         // Dealing a card
+    DealCard,         // Dealing a card
     CardFlip,         // Flipping a card over
     CardPlace,        // Placing a card on a stack
-    CardDrag,         // Starting to drag a card
     CardReturn,       // Card returning to original position (invalid move)
     FoundationMove,   // Card moving to foundation
-    GameWon,          // Winning the game
+    WinGame,          // Winning the game
     GameStart,        // Game starting
     StockRefill,      // Refilling the stock from waste
     ButtonClick,      // Button click or UI interaction

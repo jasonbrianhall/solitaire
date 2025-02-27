@@ -11,7 +11,6 @@
 enum class GameSoundEvent {
     CardFlip,
     CardPlace,
-    CardDrag,
     StockRefill,
     WinGame,
     DealCards,

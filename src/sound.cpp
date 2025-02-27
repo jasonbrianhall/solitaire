@@ -99,7 +99,6 @@ bool SolitaireGame::initializeAudio() {
         // Attempt to load default sounds
         if (loadSoundFromZip(GameSoundEvent::CardFlip, "flip.wav") &&
             loadSoundFromZip(GameSoundEvent::CardPlace, "place.wav") &&
-            loadSoundFromZip(GameSoundEvent::CardDrag, "drag.wav") &&
             loadSoundFromZip(GameSoundEvent::StockRefill, "refill.wav") &&
             loadSoundFromZip(GameSoundEvent::WinGame, "win.wav") &&
             loadSoundFromZip(GameSoundEvent::DealCards, "deal.wav") && 
@@ -183,19 +182,16 @@ bool SolitaireGame::loadSoundFromZip(GameSoundEvent event, const std::string& so
         case GameSoundEvent::CardPlace:
             audioEvent = SoundEvent::CardPlace;
             break;
-        case GameSoundEvent::CardDrag:
-            audioEvent = SoundEvent::CardDrag;
-            break;
         case GameSoundEvent::StockRefill:
             audioEvent = SoundEvent::StockRefill;
             break;
         case GameSoundEvent::WinGame:
             // Reuse an existing sound event since WinGame is not available
-            audioEvent = SoundEvent::CardPlace; // Using CardPlace as a substitute
+            audioEvent = SoundEvent::WinGame; // Using CardPlace as a substitute
             break;
         case GameSoundEvent::DealCards:
             // Reuse an existing sound event since DealCards is not available
-            audioEvent = SoundEvent::CardDrag; // Using CardDrag as a substitute
+            audioEvent = SoundEvent::DealCard; 
             break;
         case GameSoundEvent::Firework:
             // Reuse an existing sound event since DealCards is not available
@@ -225,19 +221,14 @@ void SolitaireGame::playSound(GameSoundEvent event) {
         case GameSoundEvent::CardPlace:
             audioEvent = SoundEvent::CardPlace;
             break;
-        case GameSoundEvent::CardDrag:
-            audioEvent = SoundEvent::CardDrag;
-            break;
         case GameSoundEvent::StockRefill:
             audioEvent = SoundEvent::StockRefill;
             break;
         case GameSoundEvent::WinGame:
-            // Reuse an existing sound event since WinGame is not available
-            audioEvent = SoundEvent::CardPlace; // Using CardPlace as a substitute
+            audioEvent = SoundEvent::WinGame; // Using CardPlace as a substitute
             break;
         case GameSoundEvent::DealCards:
-            // Reuse an existing sound event since DealCards is not available
-            audioEvent = SoundEvent::CardDrag; // Using CardDrag as a substitute
+            audioEvent = SoundEvent::DealCard;
             break;
         case GameSoundEvent::Firework:
             audioEvent = SoundEvent::Firework;
