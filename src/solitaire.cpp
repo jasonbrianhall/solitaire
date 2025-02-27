@@ -353,6 +353,8 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
   game->keyboard_navigation_active_ = false;
+  game->keyboard_selection_active_ = false;
+
   // If any animation is active, block all interactions
   if (game->foundation_move_animation_active_ || game->stock_to_waste_animation_active_) {
     return TRUE;
