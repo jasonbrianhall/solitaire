@@ -8,6 +8,15 @@
 #include <unordered_map>
 #include <vector>
 
+enum class GameSoundEvent {
+    CardFlip,
+    CardPlace,
+    CardDrag,
+    StockRefill,
+    WinGame,
+    DealCards
+};
+
 struct CardFragment {
   double x;
   double y;
@@ -50,6 +59,7 @@ class SolitaireGame {
 public:
   SolitaireGame();
   ~SolitaireGame();
+  bool setSoundsZipPath(const std::string& path);
 
   void run(int argc, char **argv);
 
@@ -270,6 +280,24 @@ guint auto_finish_timer_id_ = 0;
 void processNextAutoFinishMove();
 static gboolean onAutoFinishTick(gpointer data);
 void resetKeyboardNavigation();
+
+    std::string sounds_zip_path_;
+    bool sound_enabled_;
+
+    // Method to initialize sound system
+    bool initializeAudio();
+    
+    // Method to load a specific sound from the ZIP archive
+    bool loadSoundFromZip(GameSoundEvent event, const std::string& soundFileName);
+    
+    // Method to play a sound
+    void playSound(GameSoundEvent event);
+    
+    // Method to clean up audio resources
+    void cleanupAudio();
+
+    bool extractFileFromZip(const std::string& zipFilePath, const std::string& fileName, std::vector<uint8_t>& fileData);
+
 };
 
 #endif // SOLITAIRE_H
