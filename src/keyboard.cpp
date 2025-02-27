@@ -7,6 +7,18 @@ gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpoint
   
   // Check for control key modifier
   bool ctrl_pressed = (event->state & GDK_CONTROL_MASK);
+
+  // If any animation is active, block all keyboard input except Escape
+  if (game->foundation_move_animation_active_ || 
+      game->stock_to_waste_animation_active_ ||
+      game->deal_animation_active_ ||
+      game->win_animation_active_) {
+    if (event->keyval == GDK_KEY_Escape) {
+      // Allow Escape to cancel animations
+      return TRUE;
+    }
+    return FALSE;  // Ignore other keys during animations
+  }
   
   switch (event->keyval) {
     case GDK_KEY_F11:
@@ -194,6 +206,28 @@ void SolitaireGame::selectPreviousPile() {
 
 // Move selection up in a tableau pile
 void SolitaireGame::selectCardUp() {
+  if (selected_pile_ < 6 || selected_pile_ > 12) {
+    return;
+  }
+  
+  int tableau_idx = selected_pile_ - 6;
+  if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
+    return;
+  }
+  
+  // Only proceed if the tableau pile has cards
+  if (tableau_[tableau_idx].empty()) {
+    return;
+  }
+  
+  // Ensure selected_card_idx_ is valid
+  if (selected_card_idx_ < 0 || 
+      selected_card_idx_ >= static_cast<int>(tableau_[tableau_idx].size())) {
+    // Reset to a valid state
+    selected_card_idx_ = tableau_[tableau_idx].size() - 1;
+    return;
+  }
+
   if (selected_pile_ >= 6 && selected_pile_ <= 12) {
     int tableau_idx = selected_pile_ - 6;
     
@@ -273,6 +307,14 @@ void SolitaireGame::selectCardDown() {
 // Activate the currently selected card/pile (like clicking)
 void SolitaireGame::activateSelected() {
   if (selected_pile_ == -1) {
+    return;
+  }
+  
+  // If any animation is active, don't allow selection or moves
+  if (foundation_move_animation_active_ || 
+      stock_to_waste_animation_active_ ||
+      deal_animation_active_ ||
+      win_animation_active_) {
     return;
   }
   
@@ -391,8 +433,24 @@ void SolitaireGame::activateSelected() {
 }
 
 bool SolitaireGame::tryMoveSelectedCard() {
-  // Check if we have valid source and destination
   if (source_pile_ == -1 || selected_pile_ == -1) {
+    return false;
+  }
+  
+  // Validate source_pile_ and source_card_idx_
+  if (source_pile_ == 1) {
+    if (waste_.empty() || source_card_idx_ < 0 || 
+        source_card_idx_ >= static_cast<int>(waste_.size())) {
+      return false;
+    }
+  } else if (source_pile_ >= 6 && source_pile_ <= 12) {
+    int tableau_idx = source_pile_ - 6;
+    if (tableau_idx < 0 || tableau_idx >= tableau_.size() ||
+        tableau_[tableau_idx].empty() || source_card_idx_ < 0 ||
+        source_card_idx_ >= static_cast<int>(tableau_[tableau_idx].size())) {
+      return false;
+    }
+  } else {
     return false;
   }
   
@@ -513,12 +571,26 @@ bool SolitaireGame::tryMoveSelectedCard() {
 
 // Highlight the selected card in the onDraw method
 void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
-  // Only exit if no pile is selected (card index can be -1 for empty piles)
-  if (selected_pile_ == -1) {
+  int x = 0, y = 0;
+
+
+  if (!cr || selected_pile_ == -1) {
     return;
   }
   
-  int x = 0, y = 0;
+  // Validate keyboard selection
+  if (keyboard_selection_active_) {
+    if (source_pile_ < 0 || 
+        (source_pile_ >= 6 && source_pile_ - 6 >= tableau_.size()) ||
+        (source_pile_ == 1 && waste_.empty())) {
+      // Invalid source pile, reset selection state
+      keyboard_selection_active_ = false;
+      source_pile_ = -1;
+      source_card_idx_ = -1;
+      return;
+    }
+  }
+  
   
   // Determine position based on pile type
   if (selected_pile_ == 0) {
