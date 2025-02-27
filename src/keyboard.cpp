@@ -430,6 +430,19 @@ void SolitaireGame::activateSelected() {
     // Force a refresh immediately to show the blue highlight
     refreshDisplay();
   }
+  else if (selected_pile_ >= 2 && selected_pile_ <= 5) {
+  int foundation_idx = selected_pile_ - 2;
+  auto &foundation_pile = foundation_[foundation_idx];
+  
+  if (!foundation_pile.empty()) {
+    // Allow selecting foundation pile top card
+    keyboard_selection_active_ = true;
+    source_pile_ = selected_pile_;
+    source_card_idx_ = foundation_pile.size() - 1;
+    // Force a refresh immediately to show the blue highlight
+    refreshDisplay();
+  }
+}
 }
 
 bool SolitaireGame::tryMoveSelectedCard() {
@@ -443,9 +456,17 @@ bool SolitaireGame::tryMoveSelectedCard() {
         source_card_idx_ >= static_cast<int>(waste_.size())) {
       return false;
     }
+  } else if (source_pile_ >= 2 && source_pile_ <= 5) {
+    // Foundation pile validation
+    int foundation_idx = source_pile_ - 2;
+    if (foundation_idx < 0 || foundation_idx >= static_cast<int>(foundation_.size()) ||
+        foundation_[foundation_idx].empty() || source_card_idx_ < 0 ||
+        source_card_idx_ >= static_cast<int>(foundation_[foundation_idx].size())) {
+      return false;
+    }
   } else if (source_pile_ >= 6 && source_pile_ <= 12) {
     int tableau_idx = source_pile_ - 6;
-    if (tableau_idx < 0 || tableau_idx >= tableau_.size() ||
+    if (tableau_idx < 0 || tableau_idx >= static_cast<int>(tableau_.size()) ||
         tableau_[tableau_idx].empty() || source_card_idx_ < 0 ||
         source_card_idx_ >= static_cast<int>(tableau_[tableau_idx].size())) {
       return false;
@@ -468,8 +489,13 @@ bool SolitaireGame::tryMoveSelectedCard() {
     if (!waste_.empty()) {
       source_cards = {waste_.back()};
     }
-  } 
-  else if (source_pile_ >= 6 && source_pile_ <= 12) {
+  } else if (source_pile_ >= 2 && source_pile_ <= 5) {
+    // Foundation pile - can only move top card
+    int foundation_idx = source_pile_ - 2;
+    if (!foundation_[foundation_idx].empty()) {
+      source_cards = {foundation_[foundation_idx].back()};
+    }
+  } else if (source_pile_ >= 6 && source_pile_ <= 12) {
     // Tableau pile - can move the selected card and all cards below it
     int tableau_idx = source_pile_ - 6;
     auto &source_tableau = tableau_[tableau_idx];
@@ -489,8 +515,7 @@ bool SolitaireGame::tryMoveSelectedCard() {
     // Foundation pile
     int foundation_idx = selected_pile_ - 2;
     target_cards = foundation_[foundation_idx];
-  } 
-  else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
+  } else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
     // Tableau pile
     int tableau_idx = selected_pile_ - 6;
     auto &target_tableau = tableau_[tableau_idx];
@@ -521,8 +546,24 @@ bool SolitaireGame::tryMoveSelectedCard() {
       int tableau_idx = selected_pile_ - 6;
       tableau_[tableau_idx].emplace_back(source_cards[0], true);
     }
-  } 
-  else if (source_pile_ >= 6 && source_pile_ <= 12) {
+  } else if (source_pile_ >= 2 && source_pile_ <= 5) {
+    // Moving from foundation pile
+    int foundation_idx = source_pile_ - 2;
+    
+    // Can only move to tableau (not to another foundation)
+    if (!is_foundation && selected_pile_ >= 6 && selected_pile_ <= 12) {
+      // Remove card from foundation
+      cardlib::Card card_to_move = foundation_[foundation_idx].back();
+      foundation_[foundation_idx].pop_back();
+      
+      // Add to tableau
+      int tableau_idx = selected_pile_ - 6;
+      tableau_[tableau_idx].emplace_back(card_to_move, true);
+    } else {
+      // Invalid move (can't move between foundations)
+      return false;
+    }
+  } else if (source_pile_ >= 6 && source_pile_ <= 12) {
     // Moving from tableau pile
     int source_tableau_idx = source_pile_ - 6;
     auto &source_tableau = tableau_[source_tableau_idx];
@@ -559,11 +600,6 @@ bool SolitaireGame::tryMoveSelectedCard() {
     int tableau_idx = selected_pile_ - 6;
     selected_card_idx_ = tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
   }
-  
-  // Check for win
-  /*if (checkWinCondition()) {
-    startWinAnimation();
-  }*/
   
   refreshDisplay();
   return true;
