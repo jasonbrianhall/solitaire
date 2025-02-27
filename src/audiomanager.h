@@ -21,6 +21,7 @@ enum class SoundEvent {
     GameStart,        // Game starting
     StockRefill,      // Refilling the stock from waste
     ButtonClick,      // Button click or UI interaction
+    Firework,
     Error             // Error sound
 };
 

@@ -14,7 +14,8 @@ enum class GameSoundEvent {
     CardDrag,
     StockRefill,
     WinGame,
-    DealCards
+    DealCards,
+    Firework
 };
 
 struct CardFragment {

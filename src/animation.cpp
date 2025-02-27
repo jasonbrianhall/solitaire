@@ -531,6 +531,8 @@ void SolitaireGame::explodeCard(AnimatedCard &card) {
   // Mark the card as exploded
   card.exploded = true;
 
+  playSound(GameSoundEvent::Firework);
+
   // Create a surface for the card
   cairo_surface_t *card_surface = getCardSurface(card.card);
   if (!card_surface)

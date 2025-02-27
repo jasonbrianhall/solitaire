@@ -21,10 +21,14 @@ SolitaireGame::SolitaireGame()
       keyboard_navigation_active_(false),
       keyboard_selection_active_(false),
       source_pile_(-1),
-      source_card_idx_(-1) {
+      source_card_idx_(-1),
+      sound_enabled_(true),    // Set sound to enabled by default
+      sounds_zip_path_("sound.zip") {  // Set the default sound zip path
   initializeGame();
   initializeSettingsDir();
   loadSettings();
+  printf("Initializing Audio\n");
+  initializeAudio();  // This will handle loading all sounds from the zip file
 }
 
 SolitaireGame::~SolitaireGame() {
@@ -34,6 +38,7 @@ SolitaireGame::~SolitaireGame() {
   if (buffer_surface_) {
     cairo_surface_destroy(buffer_surface_);
   }
+  cleanupAudio();
 }
 
 void SolitaireGame::run(int argc, char **argv) {

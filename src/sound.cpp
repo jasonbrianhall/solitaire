@@ -97,12 +97,14 @@ bool SolitaireGame::initializeAudio() {
     // Try to initialize the audio system
     if (AudioManager::getInstance().initialize()) {
         // Attempt to load default sounds
-        if (loadSoundFromZip(GameSoundEvent::CardFlip, "sounds/flip.wav") &&
-            loadSoundFromZip(GameSoundEvent::CardPlace, "sounds/place.wav") &&
-            loadSoundFromZip(GameSoundEvent::CardDrag, "sounds/drag.wav") &&
-            loadSoundFromZip(GameSoundEvent::StockRefill, "sounds/refill.wav") &&
-            loadSoundFromZip(GameSoundEvent::WinGame, "sounds/win.wav") &&
-            loadSoundFromZip(GameSoundEvent::DealCards, "sounds/deal.wav")) {
+        if (loadSoundFromZip(GameSoundEvent::CardFlip, "flip.wav") &&
+            loadSoundFromZip(GameSoundEvent::CardPlace, "place.wav") &&
+            loadSoundFromZip(GameSoundEvent::CardDrag, "drag.wav") &&
+            loadSoundFromZip(GameSoundEvent::StockRefill, "refill.wav") &&
+            loadSoundFromZip(GameSoundEvent::WinGame, "win.wav") &&
+            loadSoundFromZip(GameSoundEvent::DealCards, "deal.wav") && 
+            loadSoundFromZip(GameSoundEvent::Firework, "firework.wav")) {
+
             
             std::cout << "Sound system initialized successfully." << std::endl;
             return true;
@@ -195,6 +197,11 @@ bool SolitaireGame::loadSoundFromZip(GameSoundEvent event, const std::string& so
             // Reuse an existing sound event since DealCards is not available
             audioEvent = SoundEvent::CardDrag; // Using CardDrag as a substitute
             break;
+        case GameSoundEvent::Firework:
+            // Reuse an existing sound event since DealCards is not available
+            audioEvent = SoundEvent::Firework; // Using CardDrag as a substitute
+            break;
+
         default:
             std::cerr << "Unknown sound event" << std::endl;
             return false;
@@ -232,6 +239,9 @@ void SolitaireGame::playSound(GameSoundEvent event) {
             // Reuse an existing sound event since DealCards is not available
             audioEvent = SoundEvent::CardDrag; // Using CardDrag as a substitute
             break;
+        case GameSoundEvent::Firework:
+            audioEvent = SoundEvent::Firework;
+            break;            
         default:
             return;
     }
