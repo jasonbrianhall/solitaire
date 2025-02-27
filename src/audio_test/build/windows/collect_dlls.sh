@@ -1,0 +1,1 @@
+../../../../build/windows/collect_dlls.sh
