@@ -35,6 +35,10 @@ public:
         activeSounds_[soundId] = std::move(sound);
         return soundId;
     }
+
+bool canAddMoreSounds() const {
+    return activeSounds_.size() < 5;  // Limit to 5 active sounds
+}
     
     // Get a sound by ID
     ActiveSound* getSound(uint32_t soundId) {
@@ -172,6 +176,14 @@ private:
     }
     
 void playWavSound(const std::vector<uint8_t>& data, 
+
+if (!g_SoundManager.canAddMoreSounds()) {
+    std::cerr << "Too many active sounds, skipping playback" << std::endl;
+    if (completionPromise) {
+        completionPromise->set_value();
+    }
+    return;
+}
                  std::shared_ptr<std::promise<void>> completionPromise) {
     if (data.size() < 44) {
         std::cerr << "Invalid WAV file: too small" << std::endl;
