@@ -105,26 +105,16 @@ $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG): $(addprefix $(BUILD_DIR_WIN_DEBUG)/,
 $(BUILD_DIR_WIN_DEBUG)/%.win.debug.o: %.cpp
 	$(CXX_WIN) $(CXXFLAGS_WIN_DEBUG) -c $< -o $@
 
-# DLL collection
+# DLL collection using your existing script
 .PHONY: collect-dlls
 collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN)
 	@echo "Collecting DLLs..."
-	@mkdir -p $(BUILD_DIR_WIN)
-	@cp $(DLL_SOURCE_DIR)/libzip*.dll $(BUILD_DIR_WIN)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/libwinpthread*.dll $(BUILD_DIR_WIN)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/libgcc_s_seh*.dll $(BUILD_DIR_WIN)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/libstdc++*.dll $(BUILD_DIR_WIN)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/zlib*.dll $(BUILD_DIR_WIN)/ 2>/dev/null || true
+	@$(BUILD_DIR)/windows/collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
 
 .PHONY: collect-debug-dlls
 collect-debug-dlls: $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG)
 	@echo "Collecting Debug DLLs..."
-	@mkdir -p $(BUILD_DIR_WIN_DEBUG)
-	@cp $(DLL_SOURCE_DIR)/libzip*.dll $(BUILD_DIR_WIN_DEBUG)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/libwinpthread*.dll $(BUILD_DIR_WIN_DEBUG)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/libgcc_s_seh*.dll $(BUILD_DIR_WIN_DEBUG)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/libstdc++*.dll $(BUILD_DIR_WIN_DEBUG)/ 2>/dev/null || true
-	@cp $(DLL_SOURCE_DIR)/zlib*.dll $(BUILD_DIR_WIN_DEBUG)/ 2>/dev/null || true
+	@$(BUILD_DIR)/windows/collect_dlls.sh $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN_DEBUG)
 
 # Check dependencies
 .PHONY: check-deps
@@ -151,7 +141,7 @@ check-deps:
 clean:
 	rm -f $(OBJS_LINUX) $(OBJS_WIN) $(OBJS_LINUX_DEBUG) $(OBJS_WIN_DEBUG)
 	rm -f $(TARGET_LINUX) $(TARGET_WIN) $(TARGET_LINUX_DEBUG) $(TARGET_WIN_DEBUG)
-	rm -rf $(BUILD_DIR_LINUX) $(BUILD_DIR_WIN) $(BUILD_DIR_LINUX_DEBUG) $(BUILD_DIR_WIN_DEBUG)
+	rm -rf $(BUILD_DIR_LINUX)/* $(BUILD_DIR_WIN)/* $(BUILD_DIR_LINUX_DEBUG)/* $(BUILD_DIR_WIN_DEBUG)/*
 	mkdir -p $(BUILD_DIR_LINUX) $(BUILD_DIR_WIN) $(BUILD_DIR_LINUX_DEBUG) $(BUILD_DIR_WIN_DEBUG)
 
 # Run the program with ZIP and WAV file arguments
