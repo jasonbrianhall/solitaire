@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "audio/audiomanager.h"
+#include "audiomanager.h"
 #include <cctype>    // Added for std::tolower
 #ifdef _WIN32
 #include <direct.h>
