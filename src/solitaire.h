@@ -13,7 +13,7 @@ enum class GameSoundEvent {
     CardPlace,
     StockRefill,
     WinGame,
-    DealCards,
+    DealCard,
     Firework
 };
 

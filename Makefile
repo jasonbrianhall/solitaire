@@ -7,7 +7,7 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 DEBUG_FLAGS = -g -DDEBUG
 
 # Source files
-SRCS_COMMON = src/solitaire.cpp src/cardlib.cpp src/animation.cpp src/keyboard.cpp src/audiomanager.cpp
+SRCS_COMMON = src/solitaire.cpp src/cardlib.cpp src/sound.cpp src/animation.cpp src/keyboard.cpp src/audiomanager.cpp
 SRCS_LINUX = src/pulseaudioplayer.cpp
 SRCS_WIN = src/windowsaudioplayer.cpp
 
