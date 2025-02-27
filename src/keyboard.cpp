@@ -657,3 +657,12 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     }
   }
 }
+
+void SolitaireGame::resetKeyboardNavigation() {
+  keyboard_navigation_active_ = false;
+  keyboard_selection_active_ = false;
+  source_pile_ = -1;
+  source_card_idx_ = -1;
+  selected_pile_ = -1;
+  selected_card_idx_ = -1;
+}

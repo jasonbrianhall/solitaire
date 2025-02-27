@@ -84,6 +84,8 @@ void SolitaireGame::startWinAnimation() {
   if (win_animation_active_)
     return;
 
+  resetKeyboardNavigation();
+
   // Show win message
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,

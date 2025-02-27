@@ -267,10 +267,9 @@ void autoFinishGame();
 bool auto_finish_active_ = false;
 guint auto_finish_timer_id_ = 0;
 
-// Add these function declarations to your SolitaireGame class in solitaire.h:
 void processNextAutoFinishMove();
 static gboolean onAutoFinishTick(gpointer data);
-
+void resetKeyboardNavigation();
 };
 
 #endif // SOLITAIRE_H
