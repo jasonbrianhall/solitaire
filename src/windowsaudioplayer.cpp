@@ -171,125 +171,105 @@ private:
         g_SoundManager.cleanupCompletedSounds();
     }
     
-    void playWavSound(const std::vector<uint8_t>& data, 
-                     std::shared_ptr<std::promise<void>> completionPromise) {
-        if (data.size() < 44) {  // Minimum WAV header size
-            std::cerr << "Invalid WAV file: too small" << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
-            return;
+void playWavSound(const std::vector<uint8_t>& data, 
+                 std::shared_ptr<std::promise<void>> completionPromise) {
+    if (data.size() < 44) {
+        std::cerr << "Invalid WAV file: too small" << std::endl;
+        if (completionPromise) {
+            completionPromise->set_value();
         }
-        
-        // Parse WAV header to get format information
-        WAVEFORMATEX wfx = {0};
-        
-        // Check for RIFF header
-        if (memcmp(data.data(), "RIFF", 4) != 0 || memcmp(data.data() + 8, "WAVE", 4) != 0) {
-            std::cerr << "Invalid WAV file: missing RIFF/WAVE header" << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
-            return;
-        }
-        
-        // Extract audio format from WAV header
-        uint16_t audioFormat = *reinterpret_cast<const uint16_t*>(&data[20]);
-        uint16_t numChannels = *reinterpret_cast<const uint16_t*>(&data[22]);
-        uint32_t sampleRate = *reinterpret_cast<const uint32_t*>(&data[24]);
-        uint16_t bitsPerSample = *reinterpret_cast<const uint16_t*>(&data[34]);
-        
-        // Find the 'data' chunk
-        size_t dataOffset = 0;
-        for (size_t i = 12; i < data.size() - 8; ) {
-            if (memcmp(data.data() + i, "data", 4) == 0) {
-                dataOffset = i + 8;  // Skip "data" + size (4 bytes each)
-                break;
-            }
-            // Skip this chunk (add chunk size + 8 for header)
-            uint32_t chunkSize = *reinterpret_cast<const uint32_t*>(&data[i + 4]);
-            i += 8 + chunkSize;
-        }
-        
-        if (dataOffset == 0 || dataOffset >= data.size()) {
-            std::cerr << "Invalid WAV file: data chunk not found" << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
-            return;
-        }
-        
-        // Set up WAVEFORMATEX structure
-        wfx.wFormatTag = audioFormat; // Usually WAVE_FORMAT_PCM (1)
-        wfx.nChannels = numChannels;
-        wfx.nSamplesPerSec = sampleRate;
-        wfx.wBitsPerSample = bitsPerSample;
-        wfx.nBlockAlign = numChannels * bitsPerSample / 8;
-        wfx.nAvgBytesPerSec = sampleRate * wfx.nBlockAlign;
-        
-        // Create an ActiveSound instance
-        ActiveSound sound;
-        sound.soundData = data;  // Keep a copy of the data
-        sound.completionPromise = completionPromise;
-        
-        // Open a waveOut device
-        MMRESULT result = waveOutOpen(&sound.hWaveOut, WAVE_MAPPER, &wfx, 
-                                    (DWORD_PTR)WaveOutProc, 0, // We'll set instance data after getting a sound ID
-                                    CALLBACK_FUNCTION);
-        
-        if (result != MMSYSERR_NOERROR) {
-            std::cerr << "Failed to open waveOut device, error code: " << result << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
-            return;
-        }
-        
-        // Set up the wave header
-        sound.waveHeader.lpData = (LPSTR)sound.soundData.data() + dataOffset;
-        sound.waveHeader.dwBufferLength = sound.soundData.size() - dataOffset;
-        sound.waveHeader.dwFlags = 0;
-        
-        // Add the sound and get its ID
-        uint32_t soundId = g_SoundManager.addSound(std::move(sound));
-        
-        // Get the sound again from the manager
-        ActiveSound* activeSound = g_SoundManager.getSound(soundId);
-        if (!activeSound) {
-            // This should never happen, but just in case
-            std::cerr << "Failed to retrieve active sound" << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
-            return;
-        }
-        
-        // Set the instance data to the sound ID for use in the callback
-        waveOutOpen(&activeSound->hWaveOut, WAVE_MAPPER, &wfx, 
-                  (DWORD_PTR)WaveOutProc, soundId, 
-                  CALLBACK_FUNCTION | WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE);
-        
-        // Prepare the header
-        result = waveOutPrepareHeader(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
-        if (result != MMSYSERR_NOERROR) {
-            std::cerr << "Failed to prepare waveOut header, error code: " << result << std::endl;
-            waveOutClose(activeSound->hWaveOut);
-            g_SoundManager.completeSound(soundId);
-            return;
-        }
-        
-        // Write the data
-        result = waveOutWrite(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
-        if (result != MMSYSERR_NOERROR) {
-            std::cerr << "Failed to write wave data, error code: " << result << std::endl;
-            waveOutUnprepareHeader(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
-            waveOutClose(activeSound->hWaveOut);
-            g_SoundManager.completeSound(soundId);
-            return;
-        }
-        
-        // The callback will handle cleanup and signaling completion
+        return;
     }
+    
+    WAVEFORMATEX wfx = {0};
+    
+    if (memcmp(data.data(), "RIFF", 4) != 0 || memcmp(data.data() + 8, "WAVE", 4) != 0) {
+        std::cerr << "Invalid WAV file: missing RIFF/WAVE header" << std::endl;
+        if (completionPromise) {
+            completionPromise->set_value();
+        }
+        return;
+    }
+    
+    uint16_t audioFormat = *reinterpret_cast<const uint16_t*>(&data[20]);
+    uint16_t numChannels = *reinterpret_cast<const uint16_t*>(&data[22]);
+    uint32_t sampleRate = *reinterpret_cast<const uint32_t*>(&data[24]);
+    uint16_t bitsPerSample = *reinterpret_cast<const uint16_t*>(&data[34]);
+    
+    size_t dataOffset = 0;
+    for (size_t i = 12; i < data.size() - 8; ) {
+        if (memcmp(data.data() + i, "data", 4) == 0) {
+            dataOffset = i + 8;
+            break;
+        }
+        uint32_t chunkSize = *reinterpret_cast<const uint32_t*>(&data[i + 4]);
+        i += 8 + chunkSize;
+    }
+    
+    if (dataOffset == 0 || dataOffset >= data.size()) {
+        std::cerr << "Invalid WAV file: data chunk not found" << std::endl;
+        if (completionPromise) {
+            completionPromise->set_value();
+        }
+        return;
+    }
+    
+    wfx.wFormatTag = audioFormat;
+    wfx.nChannels = numChannels;
+    wfx.nSamplesPerSec = sampleRate;
+    wfx.wBitsPerSample = bitsPerSample;
+    wfx.nBlockAlign = numChannels * bitsPerSample / 8;
+    wfx.nAvgBytesPerSec = sampleRate * wfx.nBlockAlign;
+    
+    ActiveSound sound;
+    sound.soundData = data;
+    sound.completionPromise = completionPromise;
+    
+    uint32_t soundId = g_SoundManager.addSound(std::move(sound));
+    
+    ActiveSound* activeSound = g_SoundManager.getSound(soundId);
+    if (!activeSound) {
+        std::cerr << "Failed to retrieve active sound" << std::endl;
+        if (completionPromise) {
+            completionPromise->set_value();
+        }
+        return;
+    }
+    
+    MMRESULT result = waveOutOpen(&activeSound->hWaveOut, WAVE_MAPPER, &wfx, 
+                                (DWORD_PTR)WaveOutProc, soundId, 
+                                CALLBACK_FUNCTION);
+    
+    if (result != MMSYSERR_NOERROR) {
+        std::cerr << "Failed to open waveOut device, error code: " << result << std::endl;
+        g_SoundManager.completeSound(soundId);
+        if (completionPromise) {
+            completionPromise->set_value();
+        }
+        return;
+    }
+    
+    activeSound->waveHeader.lpData = (LPSTR)activeSound->soundData.data() + dataOffset;
+    activeSound->waveHeader.dwBufferLength = activeSound->soundData.size() - dataOffset;
+    activeSound->waveHeader.dwFlags = 0;
+    
+    result = waveOutPrepareHeader(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
+    if (result != MMSYSERR_NOERROR) {
+        std::cerr << "Failed to prepare waveOut header, error code: " << result << std::endl;
+        waveOutClose(activeSound->hWaveOut);
+        g_SoundManager.completeSound(soundId);
+        return;
+    }
+    
+    result = waveOutWrite(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
+    if (result != MMSYSERR_NOERROR) {
+        std::cerr << "Failed to write wave data, error code: " << result << std::endl;
+        waveOutUnprepareHeader(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
+        waveOutClose(activeSound->hWaveOut);
+        g_SoundManager.completeSound(soundId);
+        return;
+    }
+}
 };
 
 // Factory function implementation for Windows
