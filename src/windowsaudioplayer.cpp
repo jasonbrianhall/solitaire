@@ -176,6 +176,7 @@ private:
     }
     
 void playWavSound(const std::vector<uint8_t>& data, 
+                 std::shared_ptr<std::promise<void>> completionPromise) {
 
 if (!g_SoundManager.canAddMoreSounds()) {
     std::cerr << "Too many active sounds, skipping playback" << std::endl;
@@ -184,7 +185,8 @@ if (!g_SoundManager.canAddMoreSounds()) {
     }
     return;
 }
-                 std::shared_ptr<std::promise<void>> completionPromise) {
+
+
     if (data.size() < 44) {
         std::cerr << "Invalid WAV file: too small" << std::endl;
         if (completionPromise) {
