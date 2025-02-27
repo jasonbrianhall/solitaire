@@ -141,7 +141,7 @@ check-deps:
 clean:
 	rm -f $(OBJS_LINUX) $(OBJS_WIN) $(OBJS_LINUX_DEBUG) $(OBJS_WIN_DEBUG)
 	rm -f $(TARGET_LINUX) $(TARGET_LINUX_DEBUG)
-	rm -rf $(BUILD_DIR_LINUX)/* $(BUILD_DIR_WIN)/* $(BUILD_DIR_LINUX_DEBUG)/* $(BUILD_DIR_WIN_DEBUG)/*
+	rm -rf $(BUILD_DIR_LINUX)/* $(BUILD_DIR_WIN)/*.dll $(BUILD_DIR_LINUX_DEBUG)/* $(BUILD_DIR_WIN_DEBUG)/*.dll
 	mkdir -p $(BUILD_DIR_LINUX) $(BUILD_DIR_WIN) $(BUILD_DIR_LINUX_DEBUG) $(BUILD_DIR_WIN_DEBUG)
 
 # Run the program with ZIP and WAV file arguments
