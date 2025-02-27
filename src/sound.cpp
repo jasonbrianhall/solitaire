@@ -101,7 +101,7 @@ bool SolitaireGame::initializeAudio() {
             loadSoundFromZip(GameSoundEvent::CardPlace, "place.wav") &&
             loadSoundFromZip(GameSoundEvent::StockRefill, "refill.wav") &&
             loadSoundFromZip(GameSoundEvent::WinGame, "win.wav") &&
-            loadSoundFromZip(GameSoundEvent::DealCards, "deal.wav") && 
+            loadSoundFromZip(GameSoundEvent::DealCard, "deal.wav") && 
             loadSoundFromZip(GameSoundEvent::Firework, "firework.wav")) {
 
             
@@ -189,7 +189,7 @@ bool SolitaireGame::loadSoundFromZip(GameSoundEvent event, const std::string& so
             // Reuse an existing sound event since WinGame is not available
             audioEvent = SoundEvent::WinGame; // Using CardPlace as a substitute
             break;
-        case GameSoundEvent::DealCards:
+        case GameSoundEvent::DealCard:
             // Reuse an existing sound event since DealCards is not available
             audioEvent = SoundEvent::DealCard; 
             break;
@@ -227,7 +227,7 @@ void SolitaireGame::playSound(GameSoundEvent event) {
         case GameSoundEvent::WinGame:
             audioEvent = SoundEvent::WinGame; // Using CardPlace as a substitute
             break;
-        case GameSoundEvent::DealCards:
+        case GameSoundEvent::DealCard:
             audioEvent = SoundEvent::DealCard;
             break;
         case GameSoundEvent::Firework:

@@ -139,6 +139,8 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
 void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
                              const cardlib::Card *card, bool face_up) {
   if (face_up && card) {
+    //playSound(GameSoundEvent::Firework);
+
     std::string key = std::to_string(static_cast<int>(card->suit)) +
                       std::to_string(static_cast<int>(card->rank));
     auto it = card_surface_cache_.find(key);
@@ -288,6 +290,8 @@ void SolitaireGame::flipTopTableauCard(int pile_index) {
   auto &pile = tableau_[pile_index];
   if (!pile.empty() && !pile.back().face_up) {
     pile.back().face_up = true;
+    playSound(GameSoundEvent::CardFlip);
+
   }
 }
 
@@ -462,6 +466,8 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
 
             // Flip new top card if needed
             if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
+              game->playSound(GameSoundEvent::CardFlip);
+
               tableau_pile.back().face_up = true;
             }
 
@@ -501,6 +507,8 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
 
             // Flip over the new top card if there is one
             if (!source_tableau.empty() && !source_tableau.back().face_up) {
+              game->playSound(GameSoundEvent::CardFlip);
+
               source_tableau.back().face_up = true;
             }
           } else {
@@ -531,6 +539,8 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
 
             // Flip over the new top card if there is one
             if (!source_tableau.empty() && !source_tableau.back().face_up) {
+              game->playSound(GameSoundEvent::CardFlip);
+
               source_tableau.back().face_up = true;
             }
           } else {
@@ -1642,6 +1652,8 @@ void SolitaireGame::processNextAutoFinishMove() {
             
             // Flip the new top card if needed
             if (!pile.empty() && !pile.back().face_up) {
+              playSound(GameSoundEvent::CardFlip);
+
               pile.back().face_up = true;
             }
             
