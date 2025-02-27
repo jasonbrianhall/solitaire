@@ -6,23 +6,45 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 # Debug flags
 DEBUG_FLAGS = -g -DDEBUG
 
+# Source files
+SRCS_COMMON = src/solitaire.cpp src/cardlib.cpp src/sound.cpp src/animation.cpp src/keyboard.cpp src/audiomanager.cpp
+SRCS_LINUX = src/pulseaudioplayer.cpp
+SRCS_WIN = src/windowsaudioplayer.cpp
+
+# Use pkg-config for dependencies
+GTK_CFLAGS_LINUX := $(shell pkg-config --cflags gtk+-3.0)
+GTK_LIBS_LINUX := $(shell pkg-config --libs gtk+-3.0)
+GTK_CFLAGS_WIN := $(shell mingw64-pkg-config --cflags gtk+-3.0)
+GTK_LIBS_WIN := $(shell mingw64-pkg-config --libs gtk+-3.0)
+
+# PulseAudio flags for Linux
+PULSE_CFLAGS := $(shell pkg-config --cflags libpulse libpulse-simple)
+PULSE_LIBS := $(shell pkg-config --libs libpulse libpulse-simple)
+
+# ZIP library flags
+ZIP_CFLAGS_LINUX := $(shell pkg-config --cflags libzip)
+ZIP_LIBS_LINUX := $(shell pkg-config --libs libzip)
+ZIP_CFLAGS_WIN := $(shell mingw64-pkg-config --cflags libzip)
+ZIP_LIBS_WIN := $(shell mingw64-pkg-config --libs libzip)
+
 # Platform-specific settings
-CXXFLAGS_LINUX = $(CXXFLAGS_COMMON) $(shell pkg-config --cflags gtk+-3.0)
-CXXFLAGS_WIN = $(CXXFLAGS_COMMON) $(shell mingw64-pkg-config --cflags gtk+-3.0)
+CXXFLAGS_LINUX = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_LINUX) $(PULSE_CFLAGS) $(ZIP_CFLAGS_LINUX)
+CXXFLAGS_WIN = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_WIN) $(ZIP_CFLAGS_WIN)
 
 # Debug-specific flags
 CXXFLAGS_LINUX_DEBUG = $(CXXFLAGS_LINUX) $(DEBUG_FLAGS)
 CXXFLAGS_WIN_DEBUG = $(CXXFLAGS_WIN) $(DEBUG_FLAGS)
 
-LDFLAGS_LINUX = $(shell pkg-config --libs gtk+-3.0) -lzip
-LDFLAGS_WIN = $(shell mingw64-pkg-config --libs gtk+-3.0) -lstdc++ -lzip -mwindows
+LDFLAGS_LINUX = $(GTK_LIBS_LINUX) $(PULSE_LIBS) $(ZIP_LIBS_LINUX) -pthread
+LDFLAGS_WIN = $(GTK_LIBS_WIN) $(ZIP_LIBS_WIN) -lwinmm -lstdc++ -mwindows
 
-# Source files and targets
-SRCS = src/solitaire.cpp src/cardlib.cpp src/animation.cpp src/keyboard.cpp
-OBJS_LINUX = $(SRCS:.cpp=.o)
-OBJS_WIN = $(SRCS:.cpp=.win.o)
-OBJS_LINUX_DEBUG = $(SRCS:.cpp=.debug.o)
-OBJS_WIN_DEBUG = $(SRCS:.cpp=.win.debug.o)
+# Object files
+OBJS_LINUX = $(SRCS_COMMON:.cpp=.o) $(SRCS_LINUX:.cpp=.o)
+OBJS_WIN = $(SRCS_COMMON:.cpp=.win.o) $(SRCS_WIN:.cpp=.win.o)
+OBJS_LINUX_DEBUG = $(SRCS_COMMON:.cpp=.debug.o) $(SRCS_LINUX:.cpp=.debug.o)
+OBJS_WIN_DEBUG = $(SRCS_COMMON:.cpp=.win.debug.o) $(SRCS_WIN:.cpp=.win.debug.o)
+
+# Target executables
 TARGET_LINUX = solitaire
 TARGET_WIN = solitaire.exe
 TARGET_LINUX_DEBUG = solitaire_debug
@@ -102,8 +124,8 @@ clean:
 	find build -type f -name "*.o" | xargs -I xxx rm xxx
 	find build -type f -name "*.dll" | xargs -I xxx rm xxx
 	find build -type f -name "*.exe" | xargs -I xxx rm xxx
-	rm build/linux/solitaire -f
-	rm build/linux_debug/solitaire_debug -f
+	rm -f $(BUILD_DIR_LINUX)/$(TARGET_LINUX)
+	rm -f $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG)
 
 # Help target
 .PHONY: help

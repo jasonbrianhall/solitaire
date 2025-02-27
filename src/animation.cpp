@@ -86,6 +86,7 @@ void SolitaireGame::startWinAnimation() {
 
   resetKeyboardNavigation();
 
+  playSound(GameSoundEvent::WinGame);
   // Show win message
   GtkWidget *dialog = gtk_message_dialog_new(
       GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
@@ -514,8 +515,9 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
     }
   }
 
-  if (game->keyboard_navigation_active_ && !game->dragging_ && !game->deal_animation_active_ && 
-      !game->win_animation_active_ && !game->foundation_move_animation_active_ && 
+  if (game->keyboard_navigation_active_ && !game->dragging_ &&
+      !game->deal_animation_active_ && !game->win_animation_active_ &&
+      !game->foundation_move_animation_active_ &&
       !game->stock_to_waste_animation_active_) {
     game->highlightSelectedCard(game->buffer_cr_);
   }
@@ -530,6 +532,8 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
 void SolitaireGame::explodeCard(AnimatedCard &card) {
   // Mark the card as exploded
   card.exploded = true;
+
+  playSound(GameSoundEvent::Firework);
 
   // Create a surface for the card
   cairo_surface_t *card_surface = getCardSurface(card.card);
@@ -729,7 +733,7 @@ void SolitaireGame::updateDealAnimation() {
   if (all_cards_arrived &&
       cards_dealt_ >= 28) { // 28 = total cards in initial tableau
 #ifdef DEBUG
-     std::cout << "All cards dealt, completing animation"
+    std::cout << "All cards dealt, completing animation"
               << std::endl; // Debug output
 #endif
     completeDeal();
@@ -932,7 +936,7 @@ void SolitaireGame::updateFoundationMoveAnimation() {
     if (!auto_finish_active_ && checkWinCondition()) {
       startWinAnimation();
     }
-    
+
     // Continue auto-finish if active
     if (auto_finish_active_) {
       // Set a short timer to avoid recursion

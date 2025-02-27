@@ -14,17 +14,17 @@ SolitaireGame::SolitaireGame()
       current_card_width_(BASE_CARD_WIDTH),
       current_card_height_(BASE_CARD_HEIGHT),
       current_card_spacing_(BASE_CARD_SPACING),
-      current_vert_spacing_(BASE_VERT_SPACING), 
-      is_fullscreen_(false),
-      selected_pile_(-1),
-      selected_card_idx_(-1),
-      keyboard_navigation_active_(false),
-      keyboard_selection_active_(false),
-      source_pile_(-1),
-      source_card_idx_(-1) {
+      current_vert_spacing_(BASE_VERT_SPACING), is_fullscreen_(false),
+      selected_pile_(-1), selected_card_idx_(-1),
+      keyboard_navigation_active_(false), keyboard_selection_active_(false),
+      source_pile_(-1), source_card_idx_(-1),
+      sound_enabled_(true),           // Set sound to enabled by default
+      sounds_zip_path_("sound.zip") { // Set the default sound zip path
   initializeGame();
   initializeSettingsDir();
   loadSettings();
+  printf("Initializing Audio\n");
+  initializeAudio(); // This will handle loading all sounds from the zip file
 }
 
 SolitaireGame::~SolitaireGame() {
@@ -34,6 +34,7 @@ SolitaireGame::~SolitaireGame() {
   if (buffer_surface_) {
     cairo_surface_destroy(buffer_surface_);
   }
+  cleanupAudio();
 }
 
 void SolitaireGame::run(int argc, char **argv) {
@@ -134,6 +135,7 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
 void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
                              const cardlib::Card *card, bool face_up) {
   if (face_up && card) {
+
     std::string key = std::to_string(static_cast<int>(card->suit)) +
                       std::to_string(static_cast<int>(card->rank));
     auto it = card_surface_cache_.find(key);
@@ -283,6 +285,7 @@ void SolitaireGame::flipTopTableauCard(int pile_index) {
   auto &pile = tableau_[pile_index];
   if (!pile.empty() && !pile.back().face_up) {
     pile.back().face_up = true;
+    // playSound(GameSoundEvent::CardFlip);
   }
 }
 
@@ -356,7 +359,8 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
   game->keyboard_selection_active_ = false;
 
   // If any animation is active, block all interactions
-  if (game->foundation_move_animation_active_ || game->stock_to_waste_animation_active_) {
+  if (game->foundation_move_animation_active_ ||
+      game->stock_to_waste_animation_active_) {
     return TRUE;
   }
 
@@ -457,6 +461,8 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
 
             // Flip new top card if needed
             if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
+              // game->playSound(GameSoundEvent::CardFlip);
+
               tableau_pile.back().face_up = true;
             }
 
@@ -496,6 +502,8 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
 
             // Flip over the new top card if there is one
             if (!source_tableau.empty() && !source_tableau.back().face_up) {
+              // game->playSound(GameSoundEvent::CardFlip);
+
               source_tableau.back().face_up = true;
             }
           } else {
@@ -526,6 +534,8 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
 
             // Flip over the new top card if there is one
             if (!source_tableau.empty() && !source_tableau.back().face_up) {
+              // game->playSound(GameSoundEvent::CardFlip);
+
               source_tableau.back().face_up = true;
             }
           } else {
@@ -854,7 +864,8 @@ void SolitaireGame::setupWindow() {
                    NULL);
 
   gtk_widget_add_events(window_, GDK_KEY_PRESS_MASK);
-  g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress), this);
+  g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress),
+                   this);
 
   // Create vertical box
   vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -941,8 +952,10 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameMenuItem), gameMenu);
 
   // New Game
-  GtkWidget *newGameItem = gtk_menu_item_new_with_mnemonic("_New Game (CTRL+N)");
-  g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame), this);
+  GtkWidget *newGameItem =
+      gtk_menu_item_new_with_mnemonic("_New Game (CTRL+N)");
+  g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame),
+                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
 #ifdef DEBUG
@@ -963,9 +976,10 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(drawModeItem), drawModeMenu);
 
   // Draw One option
-  GtkWidget *drawOneItem = gtk_radio_menu_item_new_with_mnemonic(
-      NULL, "_One (1)");
-  GSList *group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
+  GtkWidget *drawOneItem =
+      gtk_radio_menu_item_new_with_mnemonic(NULL, "_One (1)");
+  GSList *group =
+      gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
   g_signal_connect(
       G_OBJECT(drawOneItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -977,8 +991,8 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawOneItem);
 
   // Draw Three option
-  GtkWidget *drawThreeItem = gtk_radio_menu_item_new_with_mnemonic(
-      group, "_Three (3)");
+  GtkWidget *drawThreeItem =
+      gtk_radio_menu_item_new_with_mnemonic(group, "_Three (3)");
   g_signal_connect(
       G_OBJECT(drawThreeItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -1002,7 +1016,8 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
 
   // Select custom back option
-  GtkWidget *selectBackItem = gtk_menu_item_new_with_mnemonic("_Select Custom Back");
+  GtkWidget *selectBackItem =
+      gtk_menu_item_new_with_mnemonic("_Select Custom Back");
   g_signal_connect(
       G_OBJECT(selectBackItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -1041,7 +1056,8 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
 
   // Reset to default back option
-  GtkWidget *resetBackItem = gtk_menu_item_new_with_mnemonic("_Reset to Default Back");
+  GtkWidget *resetBackItem =
+      gtk_menu_item_new_with_mnemonic("_Reset to Default Back");
   g_signal_connect(G_OBJECT(resetBackItem), "activate",
                    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
                      SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -1085,12 +1101,29 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
 
   // Fullscreen option
-  GtkWidget *fullscreenItem = gtk_menu_item_new_with_mnemonic("Toggle _Fullscreen (F11)");
-  g_signal_connect(G_OBJECT(fullscreenItem), "activate", G_CALLBACK(onToggleFullscreen), this);
+  GtkWidget *fullscreenItem =
+      gtk_menu_item_new_with_mnemonic("Toggle _Fullscreen (F11)");
+  g_signal_connect(G_OBJECT(fullscreenItem), "activate",
+                   G_CALLBACK(onToggleFullscreen), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), fullscreenItem);
 
   // Separator
   GtkWidget *sep = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
+
+  GtkWidget *soundItem = gtk_check_menu_item_new_with_mnemonic("_Sound");
+  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(soundItem),
+                                 sound_enabled_);
+  g_signal_connect(G_OBJECT(soundItem), "toggled",
+                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     game->sound_enabled_ = gtk_check_menu_item_get_active(
+                         GTK_CHECK_MENU_ITEM(widget));
+                   }),
+                   this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), soundItem);
+
+  // Add a separator before Quit item
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
 
   // Quit
@@ -1569,15 +1602,15 @@ void SolitaireGame::autoFinishGame() {
   if (auto_finish_active_) {
     return; // Don't restart if already running
   }
-  
+
   // Explicitly deactivate keyboard navigation and selection
   keyboard_navigation_active_ = false;
   keyboard_selection_active_ = false;
-  //selected_pile_ = -1;
-  //selected_card_idx_ = -1;
-  
+  // selected_pile_ = -1;
+  // selected_card_idx_ = -1;
+
   auto_finish_active_ = true;
-  
+
   // Try to make the first move immediately
   processNextAutoFinishMove();
 }
@@ -1586,7 +1619,7 @@ void SolitaireGame::processNextAutoFinishMove() {
   if (!auto_finish_active_) {
     return;
   }
-  
+
   // If a foundation animation is currently running, wait for it to complete
   if (foundation_move_animation_active_) {
     // Set up a timer to check again after a short delay
@@ -1596,62 +1629,65 @@ void SolitaireGame::processNextAutoFinishMove() {
     auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
     return;
   }
-  
+
   bool found_move = false;
-  
+
   // Check waste pile first
   if (!waste_.empty()) {
     const cardlib::Card &waste_card = waste_.back();
-    
+
     // Try to move the waste card to foundation
     for (size_t f = 0; f < foundation_.size(); f++) {
       if (canMoveToFoundation(waste_card, f)) {
         // Use the animation to move the card
         startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
-        
+
         // Remove card from waste pile
         waste_.pop_back();
-        
+
         found_move = true;
         break;
       }
     }
   }
-  
+
   // Try each tableau pile if no move was found yet
   if (!found_move) {
     for (size_t t = 0; t < tableau_.size(); t++) {
       auto &pile = tableau_[t];
-      
+
       if (!pile.empty() && pile.back().face_up) {
         const cardlib::Card &top_card = pile.back().card;
-        
+
         // Try to move to foundation
         for (size_t f = 0; f < foundation_.size(); f++) {
           if (canMoveToFoundation(top_card, f)) {
             // Use the animation to move the card
-            startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1, f + 2);
-            
+            startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1,
+                                         f + 2);
+
             // Remove card from tableau
             pile.pop_back();
-            
+
             // Flip the new top card if needed
             if (!pile.empty() && !pile.back().face_up) {
+              // this->playSound(GameSoundEvent::CardFlip);
+
               pile.back().face_up = true;
             }
-            
+
             found_move = true;
             break;
           }
         }
-        
+
         if (found_move) {
           break;
         }
       }
     }
   }
-  
+
   if (found_move) {
     // Set up a timer to check for the next move after the animation completes
     if (auto_finish_timer_id_ > 0) {
@@ -1665,7 +1701,7 @@ void SolitaireGame::processNextAutoFinishMove() {
       g_source_remove(auto_finish_timer_id_);
       auto_finish_timer_id_ = 0;
     }
-    
+
     // Check if the player has won
     if (checkWinCondition()) {
       startWinAnimation();
@@ -1678,4 +1714,3 @@ gboolean SolitaireGame::onAutoFinishTick(gpointer data) {
   game->processNextAutoFinishMove();
   return FALSE; // Don't repeat the timer
 }
-

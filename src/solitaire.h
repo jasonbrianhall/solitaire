@@ -8,6 +8,15 @@
 #include <unordered_map>
 #include <vector>
 
+enum class GameSoundEvent {
+  CardFlip,
+  CardPlace,
+  StockRefill,
+  WinGame,
+  DealCard,
+  Firework
+};
+
 struct CardFragment {
   double x;
   double y;
@@ -50,6 +59,7 @@ class SolitaireGame {
 public:
   SolitaireGame();
   ~SolitaireGame();
+  bool setSoundsZipPath(const std::string &path);
 
   void run(int argc, char **argv);
 
@@ -243,33 +253,54 @@ private:
   void completeStockToWasteAnimation();
   static void onToggleFullscreen(GtkWidget *widget, gpointer data);
 
-   bool is_fullscreen_;
-   static gboolean onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data);
-   void toggleFullscreen();
-   
-   int selected_pile_;      // Currently selected pile (-1 if none)
-int selected_card_idx_;  // Index of selected card in the pile
+  bool is_fullscreen_;
+  static gboolean onKeyPress(GtkWidget *widget, GdkEventKey *event,
+                             gpointer data);
+  void toggleFullscreen();
 
-// Keyboard navigation
-void selectNextPile();
-void selectPreviousPile();
-void selectCardUp();
-void selectCardDown();
-void activateSelected();
-void highlightSelectedCard(cairo_t *cr);
-bool keyboard_navigation_active_ = false;
-bool tryMoveSelectedCard();
-bool keyboard_selection_active_ = false;  // Flag for when a card is selected for movement
-int source_pile_ = -1;                    // Source pile for keyboard moves
-int source_card_idx_ = -1;                // Index of card in source pile
+  int selected_pile_;     // Currently selected pile (-1 if none)
+  int selected_card_idx_; // Index of selected card in the pile
 
-void autoFinishGame();
-bool auto_finish_active_ = false;
-guint auto_finish_timer_id_ = 0;
+  // Keyboard navigation
+  void selectNextPile();
+  void selectPreviousPile();
+  void selectCardUp();
+  void selectCardDown();
+  void activateSelected();
+  void highlightSelectedCard(cairo_t *cr);
+  bool keyboard_navigation_active_ = false;
+  bool tryMoveSelectedCard();
+  bool keyboard_selection_active_ =
+      false;                 // Flag for when a card is selected for movement
+  int source_pile_ = -1;     // Source pile for keyboard moves
+  int source_card_idx_ = -1; // Index of card in source pile
 
-void processNextAutoFinishMove();
-static gboolean onAutoFinishTick(gpointer data);
-void resetKeyboardNavigation();
+  void autoFinishGame();
+  bool auto_finish_active_ = false;
+  guint auto_finish_timer_id_ = 0;
+
+  void processNextAutoFinishMove();
+  static gboolean onAutoFinishTick(gpointer data);
+  void resetKeyboardNavigation();
+
+  std::string sounds_zip_path_;
+  bool sound_enabled_;
+
+  // Method to initialize sound system
+  bool initializeAudio();
+
+  // Method to load a specific sound from the ZIP archive
+  bool loadSoundFromZip(GameSoundEvent event, const std::string &soundFileName);
+
+  // Method to play a sound
+  void playSound(GameSoundEvent event);
+
+  // Method to clean up audio resources
+  void cleanupAudio();
+
+  bool extractFileFromZip(const std::string &zipFilePath,
+                          const std::string &fileName,
+                          std::vector<uint8_t> &fileData);
 };
 
 #endif // SOLITAIRE_H
