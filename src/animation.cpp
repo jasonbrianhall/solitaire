@@ -15,7 +15,18 @@ void SolitaireGame::updateWinAnimation() {
   launch_timer_ += ANIMATION_INTERVAL;
   if (launch_timer_ >= 100) { // Launch a new card every 100ms
     launch_timer_ = 0;
-    launchNextCard();
+    if (rand() % 100 < 10) {
+        // Launch 4 cards in rapid succession
+        for (int i = 0; i < 4; i++) {
+            launchNextCard();
+            
+            // Check if we've reached the limit - break if needed
+            if (cards_launched_ >= 52) 
+                break;
+        }
+    } else {    
+       launchNextCard();
+    }
   }
 
   // Update physics for all active cards
