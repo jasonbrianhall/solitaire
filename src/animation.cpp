@@ -84,8 +84,17 @@ void SolitaireGame::updateWinAnimation() {
   }
 
   // Stop animation if all cards are done and we've launched them all
-  if (all_cards_finished && cards_launched_ >= 52) {
+  /*if (all_cards_finished && cards_launched_ >= 52) {
     stopWinAnimation();
+  } */
+  
+  if (all_cards_finished) {
+  // Reset tracking for animated cards to allow reusing the piles
+  for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
+    std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
+  }
+  // Reset cards_launched_ counter to allow showing which cards we've used
+  cards_launched_ = 0;
   }
 
   refreshDisplay();
@@ -99,11 +108,31 @@ void SolitaireGame::startWinAnimation() {
 
   playSound(GameSoundEvent::WinGame);
   // Show win message
-  GtkWidget *dialog = gtk_message_dialog_new(
-      GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
-      GTK_BUTTONS_OK, "Congratulations! You've won!");
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
+GtkWidget *dialog = gtk_message_dialog_new(
+    GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+    GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
+
+// Get the message area to apply formatting
+GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
+
+// Create a label with centered text
+GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
+gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+gtk_widget_set_margin_start(label, 20);
+gtk_widget_set_margin_end(label, 20);
+gtk_widget_set_margin_top(label, 10);
+gtk_widget_set_margin_bottom(label, 10);
+
+// Add the label to the message area
+gtk_container_add(GTK_CONTAINER(message_area), label);
+gtk_widget_show(label);
+
+// Run the dialog
+gtk_dialog_run(GTK_DIALOG(dialog));
+gtk_widget_destroy(dialog);
 
   win_animation_active_ = true;
   cards_launched_ = 0;
