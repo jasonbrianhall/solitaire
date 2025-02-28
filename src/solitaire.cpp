@@ -22,9 +22,8 @@ SolitaireGame::SolitaireGame()
       sounds_zip_path_("sound.zip") { // Set the default sound zip path
   initializeGame();
   initializeSettingsDir();
-  loadSettings();
-  printf("Initializing Audio\n");
   initializeAudio(); // This will handle loading all sounds from the zip file
+  loadSettings();
 }
 
 SolitaireGame::~SolitaireGame() {
@@ -1344,6 +1343,7 @@ void SolitaireGame::initializeSettingsDir() {
 
 bool SolitaireGame::loadSettings() {
   if (settings_dir_.empty()) {
+    std::cerr << "Settings directory is empty" << std::endl;
     return false;
   }
 
@@ -1355,20 +1355,25 @@ bool SolitaireGame::loadSettings() {
 #endif
       ;
 
+  std::cerr << "Attempting to load settings from: " << settings_file << std::endl;
+  
   std::ifstream file(settings_file);
   if (!file) {
+    std::cerr << "Failed to open settings file" << std::endl;
     return false;
   }
 
+  bool settings_loaded = false;
   std::string line;
   while (std::getline(file, line)) {
     if (line.substr(0, 10) == "card_back=") {
       custom_back_path_ = line.substr(10);
-      break;
+      settings_loaded = true;
+      std::cerr << "Loaded custom back path: " << custom_back_path_ << std::endl;
     }
   }
 
-  return !custom_back_path_.empty();
+  return true; // Return true if we successfully read the file, even if no custom back was found
 }
 
 void SolitaireGame::saveSettings() {
