@@ -17,8 +17,9 @@ Welcome to what might be the most meticulously crafted Solitaire implementation 
 ### Prerequisites
 
 - GTK+ 3.0 development libraries
-- Cairo graphics library
-- libzip
+- Cairo graphics library for pretty graphics
+- libzip for opening archives
+- pulse development lib for the finale audio
 - A C++ compiler that doesn't faint at the sight of modern C++
 - For Windows builds: MinGW-w64 with GTK+ development files
 
