@@ -158,63 +158,94 @@ void SolitaireGame::launchNextCard() {
   if (cards_launched_ >= 52)
     return;
 
-  // Calculate which foundation pile and card to launch
-  // This uses a clever algorithm to launch cards from each pile
-  // 0-12 cards from first pile, 13-25 from second, etc.
-  int pile_index = cards_launched_ / 13;
-  int card_index =
-      12 - (cards_launched_ % 13); // Start with King (12) down to Ace (0)
-
-  if (pile_index < foundation_.size() && card_index >= 0 &&
-      card_index < static_cast<int>(foundation_[pile_index].size())) {
-
-    // Mark this specific card as animated in the tracking structure
-    animated_foundation_cards_[pile_index][card_index] = true;
-
-    // Calculate the starting X position based on the pile
-    double start_x =
-        current_card_spacing_ +
-        (3 + pile_index) * (current_card_width_ + current_card_spacing_);
-    double start_y = current_card_spacing_;
-
-    // Randomly choose a launch trajectory (left or right)
-    double angle;
-    if (rand() % 2 == 0) {
-      // Left trajectory
-      angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
-    } else {
-      // Right trajectory
-      angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  // Create a vector to store valid foundation piles that still have cards
+  std::vector<int> valid_piles;
+  
+  // Check each foundation pile
+  for (size_t pile_index = 0; pile_index < foundation_.size(); pile_index++) {
+    // Skip empty piles
+    if (foundation_[pile_index].empty())
+      continue;
+      
+    // Find the highest card in this pile that hasn't been animated yet
+    for (int card_index = static_cast<int>(foundation_[pile_index].size()) - 1; card_index >= 0; card_index--) {
+      // Check if this card has already been animated
+      if (card_index < static_cast<int>(animated_foundation_cards_[pile_index].size()) && 
+          !animated_foundation_cards_[pile_index][card_index]) {
+        // This card is available for animation
+        valid_piles.push_back(pile_index);
+        break;
+      }
     }
-
-    // Randomize launch speed slightly
-    double speed = 15 + (rand() % 5);
-
-    // Create an animated card instance
-    AnimatedCard anim_card;
-    anim_card.card = foundation_[pile_index][card_index];
-    anim_card.x = start_x;
-    anim_card.y = start_y;
-
-    // Calculate velocity components
-    anim_card.velocity_x = cos(angle) * speed;
-    anim_card.velocity_y = sin(angle) * speed;
-
-    // Add some rotation for visual interest
-    anim_card.rotation = 0;
-    anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
-
-    // Set card as active and not yet exploded
-    anim_card.active = true;
-    anim_card.exploded = false;
-
-    // KEY MODIFICATION: Force face-down state
-    anim_card.face_up = true;
-
-    // Add to the list of animated cards
-    animated_cards_.push_back(anim_card);
-    cards_launched_++;
   }
+  
+  // If no valid piles found, return
+  if (valid_piles.empty())
+    return;
+    
+  // Select a random pile from the valid piles
+  int random_pile_index = valid_piles[rand() % valid_piles.size()];
+  
+  // Find the highest card in this pile that hasn't been animated yet
+  int card_index = -1;
+  for (int i = static_cast<int>(foundation_[random_pile_index].size()) - 1; i >= 0; i--) {
+    if (i < static_cast<int>(animated_foundation_cards_[random_pile_index].size()) && 
+        !animated_foundation_cards_[random_pile_index][i]) {
+      card_index = i;
+      break;
+    }
+  }
+  
+  // If no valid card found, return
+  if (card_index == -1)
+    return;
+
+  // Mark this specific card as animated in the tracking structure
+  animated_foundation_cards_[random_pile_index][card_index] = true;
+
+  // Calculate the starting X position based on the pile
+  double start_x =
+      current_card_spacing_ +
+      (3 + random_pile_index) * (current_card_width_ + current_card_spacing_);
+  double start_y = current_card_spacing_;
+
+  // Randomly choose a launch trajectory (left or right)
+  double angle;
+  if (rand() % 2 == 0) {
+    // Left trajectory
+    angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  } else {
+    // Right trajectory
+    angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  }
+
+  // Randomize launch speed slightly
+  double speed = 15 + (rand() % 5);
+
+  // Create an animated card instance
+  AnimatedCard anim_card;
+  anim_card.card = foundation_[random_pile_index][card_index];
+  anim_card.x = start_x;
+  anim_card.y = start_y;
+
+  // Calculate velocity components
+  anim_card.velocity_x = cos(angle) * speed;
+  anim_card.velocity_y = sin(angle) * speed;
+
+  // Add some rotation for visual interest
+  anim_card.rotation = 0;
+  anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+
+  // Set card as active and not yet exploded
+  anim_card.active = true;
+  anim_card.exploded = false;
+
+  // Set card to face up
+  anim_card.face_up = true;
+
+  // Add to the list of animated cards
+  animated_cards_.push_back(anim_card);
+  cards_launched_++;
 }
 
 void SolitaireGame::updateCardFragments(AnimatedCard &card) {
