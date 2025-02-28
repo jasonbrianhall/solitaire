@@ -285,6 +285,7 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
   GtkAllocation allocation;
   gtk_widget_get_allocation(game_area_, &allocation);
 
+  // Simple approach: just update existing fragments without creating new ones
   for (auto &fragment : card.fragments) {
     if (!fragment.active)
       continue;
@@ -297,6 +298,26 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
     // Update rotation
     fragment.rotation += fragment.rotation_velocity;
 
+    // Check if fragment is in the lower part of the screen for potential "bounce" effect
+    const double min_height = allocation.height * 0.5;
+    if (fragment.y > min_height && fragment.y < allocation.height - fragment.height &&
+        fragment.velocity_y > 0 && // Only when moving downward
+        (rand() % 1000 < 5)) { // 0.5% chance per frame
+      
+      // Instead of creating new fragments, just give this one an upward boost
+      // and maybe change its direction slightly
+      fragment.velocity_y = -fragment.velocity_y * 0.8; // Reverse with reduced energy
+      
+      // Add a slight horizontal randomization
+      fragment.velocity_x += (rand() % 11 - 5); // -5 to +5 adjustment
+      
+      // Increase rotation for visual effect
+      fragment.rotation_velocity *= 1.5;
+      
+      // Play a sound for the "bounce"
+      playSound(GameSoundEvent::Firework);
+    }
+    
     // Check if fragment is off screen
     if (fragment.x < -fragment.width || fragment.x > allocation.width ||
         fragment.y > allocation.height + fragment.height) {
