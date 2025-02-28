@@ -1148,6 +1148,11 @@ void SolitaireGame::setupMenuBar() {
 
 void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  
+  // Check if win animation is active
+  if (game->win_animation_active_)
+    return;
+
   game->initializeGame();
   game->refreshDisplay();
 }
