@@ -6,6 +6,11 @@ gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
                                    gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
+if (game->win_animation_active_) {
+  game->stopWinAnimation();
+  return TRUE;
+}
+
   // Check for control key modifier
   bool ctrl_pressed = (event->state & GDK_CONTROL_MASK);
 

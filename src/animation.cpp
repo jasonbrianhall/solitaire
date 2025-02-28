@@ -15,7 +15,18 @@ void SolitaireGame::updateWinAnimation() {
   launch_timer_ += ANIMATION_INTERVAL;
   if (launch_timer_ >= 100) { // Launch a new card every 100ms
     launch_timer_ = 0;
-    launchNextCard();
+    if (rand() % 100 < 10) {
+        // Launch 4 cards in rapid succession
+        for (int i = 0; i < 4; i++) {
+            launchNextCard();
+            
+            // Check if we've reached the limit - break if needed
+            if (cards_launched_ >= 52) 
+                break;
+        }
+    } else {    
+       launchNextCard();
+    }
   }
 
   // Update physics for all active cards
@@ -73,8 +84,17 @@ void SolitaireGame::updateWinAnimation() {
   }
 
   // Stop animation if all cards are done and we've launched them all
-  if (all_cards_finished && cards_launched_ >= 52) {
+  /*if (all_cards_finished && cards_launched_ >= 52) {
     stopWinAnimation();
+  } */
+  
+  if (all_cards_finished) {
+  // Reset tracking for animated cards to allow reusing the piles
+  for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
+    std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
+  }
+  // Reset cards_launched_ counter to allow showing which cards we've used
+  cards_launched_ = 0;
   }
 
   refreshDisplay();
@@ -88,11 +108,31 @@ void SolitaireGame::startWinAnimation() {
 
   playSound(GameSoundEvent::WinGame);
   // Show win message
-  GtkWidget *dialog = gtk_message_dialog_new(
-      GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
-      GTK_BUTTONS_OK, "Congratulations! You've won!");
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
+GtkWidget *dialog = gtk_message_dialog_new(
+    GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+    GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
+
+// Get the message area to apply formatting
+GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
+
+// Create a label with centered text
+GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
+gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+gtk_widget_set_margin_start(label, 20);
+gtk_widget_set_margin_end(label, 20);
+gtk_widget_set_margin_top(label, 10);
+gtk_widget_set_margin_bottom(label, 10);
+
+// Add the label to the message area
+gtk_container_add(GTK_CONTAINER(message_area), label);
+gtk_widget_show(label);
+
+// Run the dialog
+gtk_dialog_run(GTK_DIALOG(dialog));
+gtk_widget_destroy(dialog);
 
   win_animation_active_ = true;
   cards_launched_ = 0;
@@ -158,63 +198,124 @@ void SolitaireGame::launchNextCard() {
   if (cards_launched_ >= 52)
     return;
 
-  // Calculate which foundation pile and card to launch
-  // This uses a clever algorithm to launch cards from each pile
-  // 0-12 cards from first pile, 13-25 from second, etc.
-  int pile_index = cards_launched_ / 13;
-  int card_index =
-      12 - (cards_launched_ % 13); // Start with King (12) down to Ace (0)
-
-  if (pile_index < foundation_.size() && card_index >= 0 &&
-      card_index < static_cast<int>(foundation_[pile_index].size())) {
-
-    // Mark this specific card as animated in the tracking structure
-    animated_foundation_cards_[pile_index][card_index] = true;
-
-    // Calculate the starting X position based on the pile
-    double start_x =
-        current_card_spacing_ +
-        (3 + pile_index) * (current_card_width_ + current_card_spacing_);
-    double start_y = current_card_spacing_;
-
-    // Randomly choose a launch trajectory (left or right)
-    double angle;
-    if (rand() % 2 == 0) {
-      // Left trajectory
-      angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
-    } else {
-      // Right trajectory
-      angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  // Create a vector to store valid foundation piles that still have cards
+  std::vector<int> valid_piles;
+  
+  // Check each foundation pile
+  for (size_t pile_index = 0; pile_index < foundation_.size(); pile_index++) {
+    // Skip empty piles
+    if (foundation_[pile_index].empty())
+      continue;
+      
+    // Find the highest card in this pile that hasn't been animated yet
+    for (int card_index = static_cast<int>(foundation_[pile_index].size()) - 1; card_index >= 0; card_index--) {
+      // Check if this card has already been animated
+      if (card_index < static_cast<int>(animated_foundation_cards_[pile_index].size()) && 
+          !animated_foundation_cards_[pile_index][card_index]) {
+        // This card is available for animation
+        valid_piles.push_back(pile_index);
+        break;
+      }
     }
-
-    // Randomize launch speed slightly
-    double speed = 15 + (rand() % 5);
-
-    // Create an animated card instance
-    AnimatedCard anim_card;
-    anim_card.card = foundation_[pile_index][card_index];
-    anim_card.x = start_x;
-    anim_card.y = start_y;
-
-    // Calculate velocity components
-    anim_card.velocity_x = cos(angle) * speed;
-    anim_card.velocity_y = sin(angle) * speed;
-
-    // Add some rotation for visual interest
-    anim_card.rotation = 0;
-    anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
-
-    // Set card as active and not yet exploded
-    anim_card.active = true;
-    anim_card.exploded = false;
-
-    // KEY MODIFICATION: Force face-down state
-    anim_card.face_up = true;
-
-    // Add to the list of animated cards
-    animated_cards_.push_back(anim_card);
-    cards_launched_++;
   }
+  
+  // If no valid piles found, return
+  if (valid_piles.empty())
+    return;
+    
+  // Select a random pile from the valid piles
+  int random_pile_index = valid_piles[rand() % valid_piles.size()];
+  
+  // Find the highest card in this pile that hasn't been animated yet
+  int card_index = -1;
+  for (int i = static_cast<int>(foundation_[random_pile_index].size()) - 1; i >= 0; i--) {
+    if (i < static_cast<int>(animated_foundation_cards_[random_pile_index].size()) && 
+        !animated_foundation_cards_[random_pile_index][i]) {
+      card_index = i;
+      break;
+    }
+  }
+  
+  // If no valid card found, return
+  if (card_index == -1)
+    return;
+
+  // Mark this specific card as animated in the tracking structure
+  animated_foundation_cards_[random_pile_index][card_index] = true;
+
+  // Calculate the starting X position based on the pile
+  double start_x =
+      current_card_spacing_ +
+      (3 + random_pile_index) * (current_card_width_ + current_card_spacing_);
+  double start_y = current_card_spacing_;
+
+  // Randomly choose a launch trajectory (left or right)
+  double angle;
+/*  if (rand() % 2 == 0) {
+    // Left trajectory
+    angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  } else {
+    // Right trajectory
+    angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  }*/
+  
+// Randomly choose a launch trajectory (left, right, straight up, or high arc)
+  int trajectory_choice = rand() % 100;  // Random number between 0-99
+  
+  // Randomize launch speed slightly
+  int direction=rand() %2;
+  
+  double speed = (15 + (rand() % 5));
+  if (direction==1) {
+      speed*=-1;
+  }
+
+  if (trajectory_choice < 5) {
+    // 5% chance to go straight up (with slight random variation)
+    angle = G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
+  } else if (trajectory_choice < 15) {
+    // 10% chance for high arc launch (steeper angle for higher trajectory)
+    if (rand() % 2 == 0) {
+      // High arc left
+      angle = G_PI * 0.6 + (rand() % 500) / 1000.0 * G_PI / 6;
+    } else {
+      // High arc right
+      angle = G_PI * 0.4 - (rand() % 500) / 1000.0 * G_PI / 6;
+    }
+    
+  } else if (trajectory_choice < 55) {
+    // 40% chance for left trajectory
+    angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  } else {
+    // 45% chance for right trajectory
+    angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  }
+  
+
+  // Create an animated card instance
+  AnimatedCard anim_card;
+  anim_card.card = foundation_[random_pile_index][card_index];
+  anim_card.x = start_x;
+  anim_card.y = start_y;
+
+  // Calculate velocity components
+  anim_card.velocity_x = cos(angle) * speed;
+  anim_card.velocity_y = sin(angle) * speed;
+
+  // Add some rotation for visual interest
+  anim_card.rotation = 0;
+  anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+
+  // Set card as active and not yet exploded
+  anim_card.active = true;
+  anim_card.exploded = false;
+
+  // Set card to face up
+  anim_card.face_up = true;
+
+  // Add to the list of animated cards
+  animated_cards_.push_back(anim_card);
+  cards_launched_++;
 }
 
 void SolitaireGame::updateCardFragments(AnimatedCard &card) {
@@ -224,6 +325,7 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
   GtkAllocation allocation;
   gtk_widget_get_allocation(game_area_, &allocation);
 
+  // Simple approach: just update existing fragments without creating new ones
   for (auto &fragment : card.fragments) {
     if (!fragment.active)
       continue;
@@ -236,6 +338,26 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
     // Update rotation
     fragment.rotation += fragment.rotation_velocity;
 
+    // Check if fragment is in the lower part of the screen for potential "bounce" effect
+    const double min_height = allocation.height * 0.5;
+    if (fragment.y > min_height && fragment.y < allocation.height - fragment.height &&
+        fragment.velocity_y > 0 && // Only when moving downward
+        (rand() % 1000 < 5)) { // 0.5% chance per frame
+      
+      // Instead of creating new fragments, just give this one an upward boost
+      // and maybe change its direction slightly
+      fragment.velocity_y = -fragment.velocity_y * 0.8; // Reverse with reduced energy
+      
+      // Add a slight horizontal randomization
+      fragment.velocity_x += (rand() % 11 - 5); // -5 to +5 adjustment
+      
+      // Increase rotation for visual effect
+      fragment.rotation_velocity *= 1.5;
+      
+      // Play a sound for the "bounce"
+      playSound(GameSoundEvent::Firework);
+    }
+    
     // Check if fragment is off screen
     if (fragment.x < -fragment.width || fragment.x > allocation.width ||
         fragment.y > allocation.height + fragment.height) {
