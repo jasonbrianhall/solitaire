@@ -211,16 +211,46 @@ void SolitaireGame::launchNextCard() {
 
   // Randomly choose a launch trajectory (left or right)
   double angle;
-  if (rand() % 2 == 0) {
+/*  if (rand() % 2 == 0) {
     // Left trajectory
     angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
   } else {
     // Right trajectory
     angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  }*/
+  
+// Randomly choose a launch trajectory (left, right, straight up, or high arc)
+  int trajectory_choice = rand() % 100;  // Random number between 0-99
+  
+  // Randomize launch speed slightly
+  int direction=rand() %2;
+  
+  double speed = (15 + (rand() % 5));
+  if (direction==1) {
+      speed*=-1;
   }
 
-  // Randomize launch speed slightly
-  double speed = 15 + (rand() % 5);
+  if (trajectory_choice < 5) {
+    // 5% chance to go straight up (with slight random variation)
+    angle = G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
+  } else if (trajectory_choice < 15) {
+    // 10% chance for high arc launch (steeper angle for higher trajectory)
+    if (rand() % 2 == 0) {
+      // High arc left
+      angle = G_PI * 0.6 + (rand() % 500) / 1000.0 * G_PI / 6;
+    } else {
+      // High arc right
+      angle = G_PI * 0.4 - (rand() % 500) / 1000.0 * G_PI / 6;
+    }
+    
+  } else if (trajectory_choice < 55) {
+    // 40% chance for left trajectory
+    angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  } else {
+    // 45% chance for right trajectory
+    angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
+  }
+  
 
   // Create an animated card instance
   AnimatedCard anim_card;
