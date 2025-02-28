@@ -1154,8 +1154,9 @@ void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
   
   // Check if win animation is active
-  if (game->win_animation_active_)
-    return;
+  if (game->win_animation_active_) {
+    game->stopWinAnimation();
+  }
 
   game->initializeGame();
   game->refreshDisplay();
