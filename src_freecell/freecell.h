@@ -113,6 +113,7 @@ private:
   void drawCard(cairo_t *cr, int x, int y, const cardlib::Card *card);
   void drawEmptyPile(cairo_t *cr, int x, int y);
   void drawAnimatedCard(cairo_t *cr, const AnimatedCard &anim_card);
+  void highlightSelectedCard(cairo_t *cr); // Added for keyboard navigation
   
   // Drag and drop state
   bool dragging_;
@@ -179,6 +180,26 @@ private:
   int source_pile_;
   int source_card_idx_;
   
+  // Keyboard navigation methods
+  void selectNextPile();
+  void selectPreviousPile();
+  void selectCardUp();
+  void selectCardDown();
+  void activateSelected();
+  void resetKeyboardNavigation();
+  bool tryMoveSelectedCard();
+  bool canSelectForMove();
+  
+  // Card movement helpers
+  bool tryMoveFromFreecell();
+  bool tryMoveFromFoundation();
+  bool tryMoveFromTableau();
+  bool canMoveToFoundation(const cardlib::Card& card, int foundation_idx);
+  bool canMoveToTableau(const cardlib::Card& card, int tableau_idx);
+  bool canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx);
+  bool isValidTableauSequence(const std::vector<cardlib::Card>& cards);
+  bool isCardRed(const cardlib::Card& card);
+  
   // Sound system
   std::string sounds_zip_path_;
   bool sound_enabled_;
@@ -192,6 +213,9 @@ private:
   bool extractFileFromZip(const std::string &zipFilePath,
                          const std::string &fileName,
                          std::vector<uint8_t> &fileData);
+                         
+  // For drawing allocation
+  GtkAllocation allocation;
 };
 
 #endif // FREECELL_H

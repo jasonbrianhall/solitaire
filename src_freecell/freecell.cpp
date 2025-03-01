@@ -371,6 +371,9 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   // Get the widget dimensions
   GtkAllocation allocation;
   gtk_widget_get_allocation(widget, &allocation);
+  
+  // Store allocation for use in highlighting
+  game->allocation = allocation;
 
   // Create or resize buffer surface if needed
   if (!game->buffer_surface_ ||
@@ -488,6 +491,11 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
 
       game->drawAnimatedCard(game->buffer_cr_, anim_card);
     }
+  }
+  
+  // Draw keyboard navigation highlights if active
+  if (game->keyboard_navigation_active_ || game->keyboard_selection_active_) {
+    game->highlightSelectedCard(game->buffer_cr_);
   }
 
   // Copy buffer to window
@@ -808,68 +816,6 @@ gboolean FreecellGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event, 
   }
 
   return TRUE;
-}
-
-gboolean FreecellGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointer data) {
-  FreecellGame *game = static_cast<FreecellGame *>(data);
-
-  // If win animation is active, stop it
-  if (game->win_animation_active_) {
-    game->stopWinAnimation();
-    return TRUE;
-  }
-
-  // Check for control key modifier
-  bool ctrl_pressed = (event->state & GDK_CONTROL_MASK);
-
-  // If deal animation is active, block keyboard input except Escape
-  if (game->deal_animation_active_) {
-    if (event->keyval == GDK_KEY_Escape) {
-      // Allow Escape to cancel animations
-      return TRUE;
-    }
-    return FALSE; // Ignore other keys during animations
-  }
-
-  switch (event->keyval) {
-  case GDK_KEY_F11:
-    game->toggleFullscreen();
-    return TRUE;
-
-  case GDK_KEY_Escape:
-    if (game->is_fullscreen_) {
-      game->toggleFullscreen();
-      return TRUE;
-    }
-    break;
-
-  case GDK_KEY_n:
-  case GDK_KEY_N:
-    if (ctrl_pressed) {
-      game->initializeGame();
-      game->refreshDisplay();
-      return TRUE;
-    }
-    break;
-
-  case GDK_KEY_q:
-  case GDK_KEY_Q:
-    if (ctrl_pressed) {
-      gtk_main_quit();
-      return TRUE;
-    }
-    break;
-
-  case GDK_KEY_h:
-  case GDK_KEY_H:
-    if (ctrl_pressed) {
-      onAbout(nullptr, game);
-      return TRUE;
-    }
-    break;
-  }
-
-  return FALSE; // Let other handlers process this key event
 }
 
 void FreecellGame::toggleFullscreen() {
