@@ -758,66 +758,6 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   gtk_widget_destroy(dialog);
 }
 
-// Event handlers
-
-gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-  FreecellGame *game = static_cast<FreecellGame *>(data);
-
-  // Reset keyboard navigation
-  game->keyboard_navigation_active_ = false;
-  game->keyboard_selection_active_ = false;
-
-  // If win animation is active, stop it
-  if (game->win_animation_active_) {
-    game->stopWinAnimation();
-    return TRUE;
-  }
-
-  // If deal animation is active, block interactions
-  if (game->deal_animation_active_) {
-    return TRUE;
-  }
-
-  if (event->button == 1) { // Left click
-    // We would determine what was clicked and start a drag operation
-    // Placeholder for basic implementation
-    return TRUE;
-  } else if (event->button == 3) { // Right click
-    // Auto-move to foundation would go here
-    return TRUE;
-  }
-
-  return TRUE;
-}
-
-gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-  FreecellGame *game = static_cast<FreecellGame *>(data);
-
-  // If dragging, complete drag operation
-  if (event->button == 1 && game->dragging_) {
-    game->dragging_ = false;
-    game->drag_card_ = std::nullopt;
-    game->drag_source_pile_ = -1;
-    
-    // Queue redraw to update game state
-    gtk_widget_queue_draw(game->game_area_);
-  }
-
-  return TRUE;
-}
-
-gboolean FreecellGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
-  FreecellGame *game = static_cast<FreecellGame *>(data);
-
-  if (game->dragging_) {
-    game->drag_start_x_ = event->x;
-    game->drag_start_y_ = event->y;
-    gtk_widget_queue_draw(game->game_area_);
-  }
-
-  return TRUE;
-}
-
 void FreecellGame::toggleFullscreen() {
   if (is_fullscreen_) {
     gtk_window_unfullscreen(GTK_WINDOW(window_));
@@ -992,23 +932,6 @@ void FreecellGame::refreshDisplay() {
   if (game_area_) {
     gtk_widget_queue_draw(game_area_);
   }
-}
-
-void FreecellGame::stopWinAnimation() {
-  win_animation_active_ = false;
-
-  if (animation_timer_id_ > 0) {
-    g_source_remove(animation_timer_id_);
-    animation_timer_id_ = 0;
-  }
-
-  animated_cards_.clear();
-  cards_launched_ = 0;
-  launch_timer_ = 0;
-
-  // Restart the game
-  initializeGame();
-  refreshDisplay();
 }
 
 // This is a simplified version of the sound setup from SolitaireGame
