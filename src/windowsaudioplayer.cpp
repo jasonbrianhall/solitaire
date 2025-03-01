@@ -63,36 +63,52 @@ bool canAddMoreSounds() const {
     }
     
     // Clean up completed sounds (call periodically)
-    void cleanupCompletedSounds() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto it = activeSounds_.begin(); it != activeSounds_.end();) {
-            if (it->second.isCompleted) {
-                // Clean up resources
+void cleanupCompletedSounds() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto it = activeSounds_.begin(); it != activeSounds_.end();) {
+        if (it->second.isCompleted) {
+            // Make sure to reset before unpreparing header
+            waveOutReset(it->second.hWaveOut);
+            
+            // Only unprepare if the header was prepared (check the WHDR_PREPARED flag)
+            if (it->second.waveHeader.dwFlags & WHDR_PREPARED) {
                 waveOutUnprepareHeader(it->second.hWaveOut, &it->second.waveHeader, sizeof(WAVEHDR));
-                waveOutClose(it->second.hWaveOut);
-                it = activeSounds_.erase(it);
-            } else {
-                ++it;
             }
+            
+            // Close the waveOut device
+            waveOutClose(it->second.hWaveOut);
+            it = activeSounds_.erase(it);
+        } else {
+            ++it;
         }
     }
+}
+
     
     // Clean up all sounds (for shutdown)
-    void cleanupAllSounds() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto& pair : activeSounds_) {
-            ActiveSound& sound = pair.second;
-            if (!sound.isCompleted) {
-                waveOutReset(sound.hWaveOut);
-                if (sound.completionPromise) {
-                    sound.completionPromise->set_value();
-                }
-            }
-            waveOutUnprepareHeader(sound.hWaveOut, &sound.waveHeader, sizeof(WAVEHDR));
-            waveOutClose(sound.hWaveOut);
+void cleanupAllSounds() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& pair : activeSounds_) {
+        ActiveSound& sound = pair.second;
+        
+        // First reset the device to stop playback
+        waveOutReset(sound.hWaveOut);
+        
+        // Signal completion to any waiting promises
+        if (sound.completionPromise) {
+            sound.completionPromise->set_value();
         }
-        activeSounds_.clear();
+        
+        // Only unprepare if the header was prepared
+        if (sound.waveHeader.dwFlags & WHDR_PREPARED) {
+            waveOutUnprepareHeader(sound.hWaveOut, &sound.waveHeader, sizeof(WAVEHDR));
+        }
+        
+        // Close the waveOut device
+        waveOutClose(sound.hWaveOut);
     }
+    activeSounds_.clear();
+}
     
 private:
     std::mutex mutex_;
@@ -108,7 +124,10 @@ void CALLBACK WaveOutProc(HWAVEOUT hwo, UINT uMsg, DWORD_PTR dwInstance, DWORD_P
     if (uMsg == WOM_DONE) {
         // Get the sound ID from the instance data
         uint32_t soundId = static_cast<uint32_t>(dwInstance);
+        // Mark the sound as completed so it will be cleaned up
         g_SoundManager.completeSound(soundId);
+        // Force an immediate cleanup rather than waiting for the timer
+        g_SoundManager.cleanupCompletedSounds();
     }
 }
 
@@ -177,15 +196,13 @@ private:
     
 void playWavSound(const std::vector<uint8_t>& data, 
                  std::shared_ptr<std::promise<void>> completionPromise) {
-
-if (!g_SoundManager.canAddMoreSounds()) {
-    std::cerr << "Too many active sounds, skipping playback" << std::endl;
-    if (completionPromise) {
-        completionPromise->set_value();
+    if (!g_SoundManager.canAddMoreSounds()) {
+        std::cerr << "Too many active sounds, skipping playback" << std::endl;
+        if (completionPromise) {
+            completionPromise->set_value();
+        }
+        return;
     }
-    return;
-}
-
 
     if (data.size() < 44) {
         std::cerr << "Invalid WAV file: too small" << std::endl;
@@ -235,13 +252,14 @@ if (!g_SoundManager.canAddMoreSounds()) {
     wfx.nBlockAlign = numChannels * bitsPerSample / 8;
     wfx.nAvgBytesPerSec = sampleRate * wfx.nBlockAlign;
     
+    // Create a new sound entry and get its ID
     ActiveSound sound;
     sound.soundData = data;
     sound.completionPromise = completionPromise;
     
     uint32_t soundId = g_SoundManager.addSound(std::move(sound));
-    
     ActiveSound* activeSound = g_SoundManager.getSound(soundId);
+    
     if (!activeSound) {
         std::cerr << "Failed to retrieve active sound" << std::endl;
         if (completionPromise) {
@@ -250,6 +268,7 @@ if (!g_SoundManager.canAddMoreSounds()) {
         return;
     }
     
+    // Open the waveOut device
     MMRESULT result = waveOutOpen(&activeSound->hWaveOut, WAVE_MAPPER, &wfx, 
                                 (DWORD_PTR)WaveOutProc, soundId, 
                                 CALLBACK_FUNCTION);
@@ -257,16 +276,15 @@ if (!g_SoundManager.canAddMoreSounds()) {
     if (result != MMSYSERR_NOERROR) {
         std::cerr << "Failed to open waveOut device, error code: " << result << std::endl;
         g_SoundManager.completeSound(soundId);
-        if (completionPromise) {
-            completionPromise->set_value();
-        }
-        return;
+        return;  // No need for manual cleanup as completeSound handles it
     }
     
+    // Setup the wave header
     activeSound->waveHeader.lpData = (LPSTR)activeSound->soundData.data() + dataOffset;
     activeSound->waveHeader.dwBufferLength = activeSound->soundData.size() - dataOffset;
     activeSound->waveHeader.dwFlags = 0;
     
+    // Prepare the header
     result = waveOutPrepareHeader(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
     if (result != MMSYSERR_NOERROR) {
         std::cerr << "Failed to prepare waveOut header, error code: " << result << std::endl;
@@ -275,14 +293,18 @@ if (!g_SoundManager.canAddMoreSounds()) {
         return;
     }
     
+    // Write the wave data
     result = waveOutWrite(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
     if (result != MMSYSERR_NOERROR) {
         std::cerr << "Failed to write wave data, error code: " << result << std::endl;
+        // Need to unprepare the header before closing
         waveOutUnprepareHeader(activeSound->hWaveOut, &activeSound->waveHeader, sizeof(WAVEHDR));
         waveOutClose(activeSound->hWaveOut);
         g_SoundManager.completeSound(soundId);
         return;
     }
+    
+    // If we got here, the sound is playing and will be cleaned up in the callback
 }
 };
 
