@@ -116,6 +116,15 @@ gboolean FreecellGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointe
     game->selectPreviousPile();
     return TRUE;
 
+  case GDK_KEY_f:
+  case GDK_KEY_F:
+    // Auto-finish game by moving cards to foundation
+    // Don't do anything if an animation is already active
+    if (!game->foundation_move_animation_active_ && !game->win_animation_active_) {
+      game->autoFinishGame();
+    }
+    return TRUE;
+    
   case GDK_KEY_Right:
     // Select the next (right) pile
     game->keyboard_navigation_active_ = true;

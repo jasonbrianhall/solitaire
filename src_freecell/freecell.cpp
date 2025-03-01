@@ -401,7 +401,14 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   
   for (int i = 0; i < 4; i++) {
     if (i < game->freecells_.size()) {
-      if (game->freecells_[i].has_value()) {
+      // Skip drawing the source card if it's being animated to foundation
+      bool is_animated = game->foundation_move_animation_active_ && 
+                         game->foundation_source_pile_ == i &&
+                         game->freecells_[i].has_value() &&
+                         game->foundation_move_card_.card.suit == game->freecells_[i].value().suit &&
+                         game->foundation_move_card_.card.rank == game->freecells_[i].value().rank;
+                         
+      if (game->freecells_[i].has_value() && !is_animated) {
         // Draw the card in this freecell
         game->drawCard(game->buffer_cr_, x, y, &(game->freecells_[i].value()));
       } else {
@@ -462,15 +469,23 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
         } else {
           // Normal drawing (not during animation)
           for (size_t j = 0; j < game->tableau_[i].size(); j++) {
-            // Skip dragged cards
+            // Skip dragged cards and cards being animated to foundation
+            bool is_animated = game->foundation_move_animation_active_ && 
+                               game->foundation_source_pile_ == i + 8 &&
+                               j == game->tableau_[i].size() - 1 &&
+                               game->foundation_move_card_.card.suit == game->tableau_[i][j].suit &&
+                               game->foundation_move_card_.card.rank == game->tableau_[i][j].rank;
+                               
             if (game->dragging_ && game->drag_source_pile_ >= 8 && 
                 game->drag_source_pile_ - 8 == i && 
-                j == game->tableau_[i].size() - 1) {
+                j >= game->drag_source_card_idx_) {
               continue;  // Skip the card being dragged
             }
             
-            int card_y = tableau_y + j * game->current_vert_spacing_;
-            game->drawCard(game->buffer_cr_, x, card_y, &game->tableau_[i][j]);
+            if (!is_animated) {
+              int card_y = tableau_y + j * game->current_vert_spacing_;
+              game->drawCard(game->buffer_cr_, x, card_y, &game->tableau_[i][j]);
+            }
           }
         }
       }
@@ -478,21 +493,22 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   }
 
   // Draw dragged card
-if (game->dragging_ && game->drag_card_.has_value()) {
-  int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
-  int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
-  
-  // If dragging multiple cards from tableau, draw them all with proper spacing
-  if (game->drag_source_pile_ >= 8 && game->drag_cards_.size() > 1) {
-    for (size_t i = 0; i < game->drag_cards_.size(); i++) {
-      int card_y = drag_y + i * game->current_vert_spacing_;
-      game->drawCard(game->buffer_cr_, drag_x, card_y, &game->drag_cards_[i]);
+  if (game->dragging_ && game->drag_card_.has_value()) {
+    int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
+    int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
+    
+    // If dragging multiple cards from tableau, draw them all with proper spacing
+    if (game->drag_source_pile_ >= 8 && game->drag_cards_.size() > 1) {
+      for (size_t i = 0; i < game->drag_cards_.size(); i++) {
+        int card_y = drag_y + i * game->current_vert_spacing_;
+        game->drawCard(game->buffer_cr_, drag_x, card_y, &game->drag_cards_[i]);
+      }
+    } else {
+      // Just draw the single card
+      game->drawCard(game->buffer_cr_, drag_x, drag_y, &game->drag_card_.value());
     }
-  } else {
-    // Just draw the single card
-    game->drawCard(game->buffer_cr_, drag_x, drag_y, &game->drag_card_.value());
   }
-}
+
   // Draw animated cards for deal animation
   if (game->deal_animation_active_) {
     for (const auto &anim_card : game->deal_cards_) {
@@ -500,6 +516,20 @@ if (game->dragging_ && game->drag_card_.has_value()) {
         continue;
 
       game->drawAnimatedCard(game->buffer_cr_, anim_card);
+    }
+  }
+  
+  // Draw foundation move animation if active
+  if (game->foundation_move_animation_active_) {
+    game->drawAnimatedCard(game->buffer_cr_, game->foundation_move_card_);
+  }
+  
+  // Draw win animation if active
+  if (game->win_animation_active_) {
+    for (const auto &anim_card : game->animated_cards_) {
+      if (anim_card.active) {
+        game->drawAnimatedCard(game->buffer_cr_, anim_card);
+      }
     }
   }
   
@@ -1080,19 +1110,73 @@ void FreecellGame::setupEasyGame() {
   tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO});
   tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE});
   
-  // Show a message to the user
-  GtkWidget *message = gtk_message_dialog_new(
-      GTK_WINDOW(window_),
-      GTK_DIALOG_MODAL,
-      GTK_MESSAGE_INFO,
-      GTK_BUTTONS_OK,
-      "Easter Egg: Easy Game Mode!\n\nCards are arranged by suit with Kings at the top\nand Aces at the bottom, split across all 8 columns.");
-  
-  gtk_dialog_run(GTK_DIALOG(message));
-  gtk_widget_destroy(message);
-  
   // Refresh the display
   refreshDisplay();
+}
+
+bool FreecellGame::autoFinishMoves() {
+  bool moved_any = false;
+  bool continue_checking = true;
+  
+  // Keep looking for moves until we can't find any more
+  while (continue_checking) {
+    continue_checking = false;
+    
+    // First check freecells for cards that can move to foundation
+    for (int i = 0; i < freecells_.size(); i++) {
+      if (!freecells_[i].has_value()) {
+        continue;
+      }
+      
+      const cardlib::Card& card = freecells_[i].value();
+      
+      // Try to move to foundation
+      for (int foundation_idx = 0; foundation_idx < foundation_.size(); foundation_idx++) {
+        if (canMoveToFoundation(card, foundation_idx)) {
+          // Move card to foundation
+          foundation_[foundation_idx].push_back(card);
+          freecells_[i] = std::nullopt;
+          moved_any = true;
+          continue_checking = true;
+          
+          // Play card movement sound
+          playSound(GameSoundEvent::CardPlace);
+          break;
+        }
+      }
+    }
+    
+    // Then check tableau piles for cards that can move to foundation
+    for (int i = 0; i < tableau_.size(); i++) {
+      if (tableau_[i].empty()) {
+        continue;
+      }
+      
+      const cardlib::Card& card = tableau_[i].back();
+      
+      // Try to move to foundation
+      for (int foundation_idx = 0; foundation_idx < foundation_.size(); foundation_idx++) {
+        if (canMoveToFoundation(card, foundation_idx)) {
+          // Move card to foundation
+          foundation_[foundation_idx].push_back(card);
+          tableau_[i].pop_back();
+          moved_any = true;
+          continue_checking = true;
+          
+          // Play card movement sound
+          playSound(GameSoundEvent::CardPlace);
+          break;
+        }
+      }
+    }
+  }
+  
+  // Check if all cards are in the foundation (win condition)
+  if (checkWinCondition()) {
+    startWinAnimation();
+  }
+  
+  return moved_any;
 }
 
 // Define main function to run the game

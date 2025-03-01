@@ -190,3 +190,263 @@ void FreecellGame::stopWinAnimation() {
   initializeGame();
   refreshDisplay();
 }
+
+// This function starts the animation to move a card to the foundation
+void FreecellGame::startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
+  // If there's already an animation running, complete it immediately
+  // before starting a new one to avoid race conditions
+  if (foundation_move_animation_active_) {
+    // Add the card to the foundation pile immediately
+    foundation_[foundation_target_pile_].push_back(foundation_move_card_.card);
+
+    // Check for win condition after adding the card
+    if (checkWinCondition()) {
+      // Stop the current animation and start win animation
+      if (animation_timer_id_ > 0) {
+        g_source_remove(animation_timer_id_);
+        animation_timer_id_ = 0;
+      }
+      foundation_move_animation_active_ = false;
+      startWinAnimation();
+      return;
+    }
+  }
+
+  foundation_move_animation_active_ = true;
+  foundation_source_pile_ = source_pile;
+  foundation_target_pile_ = target_pile;
+  foundation_move_timer_ = 0;
+
+  // Calculate start position based on source pile
+  double start_x, start_y;
+
+  if (source_pile < 4) {
+    // Freecell
+    start_x = current_card_spacing_ + source_pile * (current_card_width_ + current_card_spacing_);
+    start_y = current_card_spacing_;
+  } else if (source_pile >= 8) {
+    // Tableau pile
+    int tableau_index = source_pile - 8;
+    start_x = current_card_spacing_ + tableau_index * (current_card_width_ + current_card_spacing_);
+    start_y = (2 * current_card_spacing_ + current_card_height_) + source_index * current_vert_spacing_;
+  } else {
+    // Shouldn't happen, but just in case
+    foundation_move_animation_active_ = false;
+    return;
+  }
+
+  // Calculate target position in foundation
+  double target_x = allocation.width - (4 - target_pile) * (current_card_width_ + current_card_spacing_);
+  double target_y = current_card_spacing_;
+  
+  // Initialize animation card
+  foundation_move_card_.card = card;
+  foundation_move_card_.x = start_x;
+  foundation_move_card_.y = start_y;
+  foundation_move_card_.target_x = target_x;
+  foundation_move_card_.target_y = target_y;
+  foundation_move_card_.velocity_x = 0;
+  foundation_move_card_.velocity_y = 0;
+  foundation_move_card_.rotation = 0;
+  foundation_move_card_.rotation_velocity = 0;
+  foundation_move_card_.active = true;
+  foundation_move_card_.exploded = false;
+
+  // Set up animation timer
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+
+  animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onFoundationMoveAnimationTick, this);
+
+  // Force a redraw
+  refreshDisplay();
+}
+
+// Timer callback for foundation move animation
+gboolean FreecellGame::onFoundationMoveAnimationTick(gpointer data) {
+  FreecellGame *game = static_cast<FreecellGame *>(data);
+  game->updateFoundationMoveAnimation();
+  return game->foundation_move_animation_active_ ? TRUE : FALSE;
+}
+
+// Update function for foundation move animation
+void FreecellGame::updateFoundationMoveAnimation() {
+  if (!foundation_move_animation_active_)
+    return;
+
+  // Calculate distance to target
+  double dx = foundation_move_card_.target_x - foundation_move_card_.x;
+  double dy = foundation_move_card_.target_y - foundation_move_card_.y;
+  double distance = sqrt(dx * dx + dy * dy);
+
+  if (distance < 5.0) {
+    // Card has arrived at destination
+
+    // Add card to the foundation pile
+    foundation_[foundation_target_pile_].push_back(foundation_move_card_.card);
+
+    // Play sound effect
+    playSound(GameSoundEvent::CardPlace);
+
+    // Mark animation as complete
+    foundation_move_animation_active_ = false;
+
+    // Stop the animation timer
+    if (animation_timer_id_ > 0) {
+      g_source_remove(animation_timer_id_);
+      animation_timer_id_ = 0;
+    }
+
+    // Check if the player has won - BUT only if auto-finish is not active
+    if (!auto_finish_active_ && checkWinCondition()) {
+      startWinAnimation();
+    }
+
+    // Continue auto-finish if active
+    if (auto_finish_active_) {
+      // Set a short timer to avoid recursion
+      if (auto_finish_timer_id_ > 0) {
+        g_source_remove(auto_finish_timer_id_);
+      }
+      auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
+    }
+  } else {
+    // Move card toward destination with a smooth curve
+    double speed = distance * FOUNDATION_MOVE_SPEED;
+    double move_x = dx * speed / distance;
+    double move_y = dy * speed / distance;
+
+    // Add a slight arc to the motion
+    double progress = 1.0 - (distance / sqrt(dx * dx + dy * dy));
+    double arc_height = 30.0; // Maximum height of the arc in pixels
+    double arc_offset = sin(progress * M_PI) * arc_height;
+
+    foundation_move_card_.x += move_x;
+    foundation_move_card_.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
+
+    // Add a slight rotation
+    foundation_move_card_.rotation = sin(progress * M_PI * 2) * 0.1;
+  }
+
+  refreshDisplay();
+}
+
+void FreecellGame::autoFinishGame() {
+  // If auto-finish is already active, don't restart it
+  if (auto_finish_active_ || foundation_move_animation_active_) {
+    return;
+  }
+
+  // Explicitly deactivate keyboard navigation and selection
+  keyboard_navigation_active_ = false;
+  keyboard_selection_active_ = false;
+
+  auto_finish_active_ = true;
+
+  // Try to make the first move immediately
+  processNextAutoFinishMove();
+}
+
+// Replace the existing processNextAutoFinishMove function with this improved version
+void FreecellGame::processNextAutoFinishMove() {
+  if (!auto_finish_active_) {
+    return;
+  }
+
+  // If a foundation animation is currently running, wait for it to complete
+  if (foundation_move_animation_active_) {
+    // Set up a timer to check again after a short delay
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+    }
+    auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
+    return;
+  }
+
+  bool found_move = false;
+
+  // Check freecells first
+  for (int i = 0; i < freecells_.size(); i++) {
+    if (!freecells_[i].has_value()) {
+      continue;
+    }
+
+    const cardlib::Card &freecell_card = freecells_[i].value();
+
+    // Try to move to foundation
+    for (int f = 0; f < foundation_.size(); f++) {
+      if (canMoveToFoundation(freecell_card, f)) {
+        // Start the animation to move the card
+        startFoundationMoveAnimation(freecell_card, i, 0, f);
+        
+        // Remove the card from the freecell
+        freecells_[i] = std::nullopt;
+        
+        found_move = true;
+        break;
+      }
+    }
+
+    if (found_move) {
+      break;
+    }
+  }
+
+  // Try each tableau pile if no move was found yet
+  if (!found_move) {
+    for (int t = 0; t < tableau_.size(); t++) {
+      auto &pile = tableau_[t];
+
+      if (!pile.empty()) {
+        const cardlib::Card &top_card = pile.back();
+
+        // Try to move to foundation
+        for (int f = 0; f < foundation_.size(); f++) {
+          if (canMoveToFoundation(top_card, f)) {
+            // Start the animation to move the card
+            startFoundationMoveAnimation(top_card, t + 8, pile.size() - 1, f);
+            
+            // Remove the card from the tableau
+            pile.pop_back();
+            
+            found_move = true;
+            break;
+          }
+        }
+
+        if (found_move) {
+          break;
+        }
+      }
+    }
+  }
+
+  if (found_move) {
+    // Set up a timer to check for the next move after the animation completes
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+    }
+    auto_finish_timer_id_ = g_timeout_add(200, onAutoFinishTick, this);
+  } else {
+    // No more moves to make
+    auto_finish_active_ = false;
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+      auto_finish_timer_id_ = 0;
+    }
+
+    // Check if the player has won
+    if (checkWinCondition()) {
+      startWinAnimation();
+    }
+  }
+}
+
+// Auto-finish timer callback
+gboolean FreecellGame::onAutoFinishTick(gpointer data) {
+  FreecellGame *game = static_cast<FreecellGame *>(data);
+  game->processNextAutoFinishMove();
+  return FALSE; // Don't repeat the timer
+}
