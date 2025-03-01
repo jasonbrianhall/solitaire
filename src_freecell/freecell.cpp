@@ -763,8 +763,24 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   // Show all widgets before running the dialog
   gtk_widget_show_all(dialog);
 
-  // Run dialog
-  gtk_dialog_run(GTK_DIALOG(dialog));
+  // Run dialog and check result
+  gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+  
+  // Check for Ctrl key when OK button is pressed
+  if (result == GTK_RESPONSE_OK) {
+    GdkModifierType modifiers;
+    gdk_window_get_pointer(gtk_widget_get_window(GTK_WIDGET(dialog)), NULL, NULL, &modifiers);
+    
+    if (modifiers & GDK_CONTROL_MASK) {
+      // Close dialog first
+      gtk_widget_destroy(dialog);
+      
+      // Activate easter egg with easy game
+      game->setupEasyGame();
+      return;
+    }
+  }
+
   gtk_widget_destroy(dialog);
 }
 
@@ -982,9 +998,108 @@ bool FreecellGame::setSoundsZipPath(const std::string &path) {
   return true;
 }
 
+void FreecellGame::setupEasyGame() {
+  // Clear all piles
+  freecells_.clear();
+  foundation_.clear();
+  tableau_.clear();
+
+  // Initialize freecells (4 empty cells)
+  freecells_.resize(4);
+  
+  // Initialize foundation piles (4 empty piles for aces)
+  foundation_.resize(4);
+
+  // Initialize tableau (8 piles for Freecell)
+  tableau_.resize(8);
+
+  // Create a pre-arranged deck that's easy to solve
+  // Distribute cards across all 8 columns, arranging by suit and rank
+  
+  // Hearts (K to A) in columns 0 and 1
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING});
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN});
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK});
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN});
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE});
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT});
+  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN});
+  
+  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX});
+  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE});
+  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR});
+  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE});
+  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO});
+  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE});
+  
+  // Diamonds (K to A) in columns 2 and 3
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING});
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN});
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK});
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN});
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE});
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT});
+  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN});
+  
+  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX});
+  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE});
+  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR});
+  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE});
+  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO});
+  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE});
+  
+  // Clubs (K to A) in columns 4 and 5
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING});
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN});
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK});
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN});
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE});
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT});
+  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN});
+  
+  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX});
+  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE});
+  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR});
+  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE});
+  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO});
+  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE});
+  
+  // Spades (K to A) in columns 6 and 7
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING});
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN});
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK});
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN});
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE});
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT});
+  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN});
+  
+  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX});
+  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE});
+  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR});
+  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE});
+  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO});
+  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE});
+  
+  // Show a message to the user
+  GtkWidget *message = gtk_message_dialog_new(
+      GTK_WINDOW(window_),
+      GTK_DIALOG_MODAL,
+      GTK_MESSAGE_INFO,
+      GTK_BUTTONS_OK,
+      "Easter Egg: Easy Game Mode!\n\nCards are arranged by suit with Kings at the top\nand Aces at the bottom, split across all 8 columns.");
+  
+  gtk_dialog_run(GTK_DIALOG(message));
+  gtk_widget_destroy(message);
+  
+  // Refresh the display
+  refreshDisplay();
+}
+
 // Define main function to run the game
 int main(int argc, char **argv) {
   FreecellGame game;
   game.run(argc, argv);
   return 0;
 }
+
+

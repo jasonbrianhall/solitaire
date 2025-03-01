@@ -156,7 +156,7 @@ private:
   static void onQuit(GtkWidget *widget, gpointer data);
   static void onAbout(GtkWidget *widget, gpointer data);
   static void onToggleFullscreen(GtkWidget *widget, gpointer data);
-  
+  void setupEasyGame();
   // Helper functions
   void refreshDisplay();
   
