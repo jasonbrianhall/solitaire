@@ -37,7 +37,7 @@ public:
     }
 
 bool canAddMoreSounds() const {
-    return activeSounds_.size() < 16;
+    return activeSounds_.size() < 5;
 }
     
     // Get a sound by ID
