@@ -189,6 +189,7 @@ private:
   void resetKeyboardNavigation();
   bool tryMoveSelectedCard();
   bool canSelectForMove();
+  bool isCardPlayable();
   
   // Card movement helpers
   bool tryMoveFromFreecell();
@@ -199,11 +200,10 @@ private:
   bool canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx);
   bool isValidTableauSequence(const std::vector<cardlib::Card>& cards);
   bool isCardRed(const cardlib::Card& card);
-  
+  int findFirstPlayableCard(int tableau_idx);
   // Sound system
   std::string sounds_zip_path_;
   bool sound_enabled_;
-  
   bool initializeAudio();
   bool loadSoundFromZip(GameSoundEvent event, const std::string &soundFileName);
   void playSound(GameSoundEvent event);

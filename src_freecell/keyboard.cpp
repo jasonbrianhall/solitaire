@@ -144,6 +144,42 @@ gboolean FreecellGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointe
   return FALSE; // Let other handlers process this key event
 }
 
+int FreecellGame::findFirstPlayableCard(int tableau_idx) {
+  if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size() || tableau_[tableau_idx].empty()) {
+    return -1;
+  }
+  
+  // In Freecell, the first playable card is the one that starts a valid sequence
+  // going to the bottom of the pile
+  int candidate = -1;
+  
+  // Start from bottom and work upward
+  for (int i = tableau_[tableau_idx].size() - 1; i >= 0; i--) {
+    // If this is the bottom card, it's always playable
+    if (i == static_cast<int>(tableau_[tableau_idx].size() - 1)) {
+      candidate = i;
+      continue;
+    }
+    
+    // Check if this card and the one below it form a valid sequence
+    const cardlib::Card& current_card = tableau_[tableau_idx][i];
+    const cardlib::Card& next_card = tableau_[tableau_idx][i + 1];
+    
+    bool different_colors = isCardRed(current_card) != isCardRed(next_card);
+    bool descending_rank = static_cast<int>(current_card.rank) == static_cast<int>(next_card.rank) + 1;
+    
+    // If they form a valid sequence, this card could be a candidate
+    if (different_colors && descending_rank) {
+      candidate = i;
+    } else {
+      // We found a break in valid sequences
+      break;
+    }
+  }
+  
+  return candidate;
+}
+
 // Select the next (right) pile
 void FreecellGame::selectNextPile() {
   if (selected_pile_ == -1) {
@@ -222,7 +258,7 @@ void FreecellGame::selectCardUp() {
   }
 
   int tableau_idx = selected_pile_ - 8;
-  if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
+  if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size()) {
     return;
   }
 
@@ -230,9 +266,11 @@ void FreecellGame::selectCardUp() {
   if (tableau_[tableau_idx].empty()) {
     return;
   }
-
-  // If we're at the top card already, move to freecell or foundation
-  if (selected_card_idx_ == 0) {
+  
+  // If we're at the top playable card already, move to freecell or foundation
+  int first_playable = findFirstPlayableCard(tableau_idx);
+  
+  if (selected_card_idx_ == first_playable || first_playable == -1) {
     // For the first 4 tableau piles, go to corresponding freecell
     if (tableau_idx < 4) {
       selected_pile_ = tableau_idx; // Freecell index matches first 4 tableau
@@ -245,12 +283,36 @@ void FreecellGame::selectCardUp() {
     return;
   }
 
-  // Move up one card in the tableau pile
-  if (selected_card_idx_ > 0) {
-    selected_card_idx_--;
+  // Find the next valid playable card above the current one
+  int next_playable = -1;
+  for (int i = selected_card_idx_ - 1; i >= first_playable; i--) {
+    // Check if cards from i to the bottom form a valid sequence
+    bool valid_sequence = true;
+    for (size_t j = i; j < tableau_[tableau_idx].size() - 1; j++) {
+      const cardlib::Card& card1 = tableau_[tableau_idx][j];
+      const cardlib::Card& card2 = tableau_[tableau_idx][j + 1];
+      
+      bool different_colors = isCardRed(card1) != isCardRed(card2);
+      bool descending_rank = static_cast<int>(card1.rank) == static_cast<int>(card2.rank) + 1;
+      
+      if (!different_colors || !descending_rank) {
+        valid_sequence = false;
+        break;
+      }
+    }
+    
+    if (valid_sequence) {
+      next_playable = i;
+      break;
+    }
+  }
+  
+  if (next_playable != -1) {
+    selected_card_idx_ = next_playable;
     refreshDisplay();
   }
 }
+
 
 // Move selection down in a tableau pile
 void FreecellGame::selectCardDown() {
@@ -259,17 +321,45 @@ void FreecellGame::selectCardDown() {
     // Map the freecell/foundation index to tableau index
     selected_pile_ = selected_pile_ + 8;
     
-    // In tableau piles - select top card
+    // In tableau piles - select top playable card
     int tableau_idx = selected_pile_ - 8;
-    selected_card_idx_ = tableau_[tableau_idx].empty() ? 
-                        -1 : 0; // Start with top card
+    int first_playable = findFirstPlayableCard(tableau_idx);
+    
+    if (first_playable != -1) {
+      selected_card_idx_ = first_playable;
+    } else {
+      selected_card_idx_ = tableau_[tableau_idx].empty() ? -1 : 0;
+    }
   }
-  // If we're already in the tableau, move down
+  // If we're already in the tableau, move down to next playable card or sequence
   else if (selected_pile_ >= 8 && selected_pile_ <= 15) {
     int tableau_idx = selected_pile_ - 8;
     if (!tableau_[tableau_idx].empty() && selected_card_idx_ >= 0) {
-      if (static_cast<size_t>(selected_card_idx_) < tableau_[tableau_idx].size() - 1) {
-        selected_card_idx_++;
+      // Find the next playable card/sequence below the current one
+      int next_card = -1;
+      
+      // We'll only go down if we're in a valid sequence of cards that can be moved together
+      bool valid_sequence = true;
+      for (size_t i = selected_card_idx_; i < tableau_[tableau_idx].size() - 1; i++) {
+        const cardlib::Card& card1 = tableau_[tableau_idx][i];
+        const cardlib::Card& card2 = tableau_[tableau_idx][i + 1];
+        
+        bool different_colors = isCardRed(card1) != isCardRed(card2);
+        bool descending_rank = static_cast<int>(card1.rank) == static_cast<int>(card2.rank) + 1;
+        
+        if (!different_colors || !descending_rank) {
+          valid_sequence = false;
+          break;
+        }
+        
+        // This is a candidate for the next card
+        next_card = i + 1;
+      }
+      
+      if (valid_sequence && next_card != -1 && 
+          static_cast<size_t>(selected_card_idx_) < tableau_[tableau_idx].size() - 1) {
+        selected_card_idx_ = next_card;
+        refreshDisplay();
       }
     }
   }
@@ -296,20 +386,28 @@ void FreecellGame::activateSelected() {
       keyboard_selection_active_ = false;
       source_pile_ = -1;
       source_card_idx_ = -1;
+      
+      // Play card movement sound
+      playSound(GameSoundEvent::CardPlace);
+    } else {
+      // Move failed, play error sound (optional)
+      // playSound(GameSoundEvent::Error); // If you have an error sound
     }
     // Always refresh display whether move succeeded or not
     refreshDisplay();
     return;
   }
 
-  // Select a card for moving
-  if (canSelectForMove()) {
+  // Select a card for moving - only if it's playable
+  if (canSelectForMove() && isCardPlayable()) {
     keyboard_selection_active_ = true;
     source_pile_ = selected_pile_;
     source_card_idx_ = selected_card_idx_;
+    
     refreshDisplay();
   }
 }
+
 
 // Check if the current selection can be selected for a move
 bool FreecellGame::canSelectForMove() {
@@ -719,4 +817,46 @@ void FreecellGame::resetKeyboardNavigation() {
   source_card_idx_ = -1;
   selected_pile_ = -1;
   selected_card_idx_ = -1;
+}
+
+bool FreecellGame::isCardPlayable() {
+  // Freecells always have playable cards
+  if (selected_pile_ >= 0 && selected_pile_ <= 3) {
+    return freecells_[selected_pile_].has_value();
+  }
+  
+  // Foundation cards are only playable if they're at the top
+  if (selected_pile_ >= 4 && selected_pile_ <= 7) {
+    int foundation_idx = selected_pile_ - 4;
+    return !foundation_[foundation_idx].empty() && 
+           selected_card_idx_ == static_cast<int>(foundation_[foundation_idx].size() - 1);
+  }
+  
+  // Tableau cards - check if they're in a valid sequence to the bottom
+  if (selected_pile_ >= 8 && selected_pile_ <= 15) {
+    int tableau_idx = selected_pile_ - 8;
+    
+    if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size() || 
+        tableau_[tableau_idx].empty() || selected_card_idx_ < 0 || 
+        static_cast<size_t>(selected_card_idx_) >= tableau_[tableau_idx].size()) {
+      return false;
+    }
+    
+    // Check if there's a valid sequence from this card to the bottom
+    for (size_t i = selected_card_idx_; i < tableau_[tableau_idx].size() - 1; i++) {
+      const cardlib::Card& card1 = tableau_[tableau_idx][i];
+      const cardlib::Card& card2 = tableau_[tableau_idx][i + 1];
+      
+      bool different_colors = isCardRed(card1) != isCardRed(card2);
+      bool descending_rank = static_cast<int>(card1.rank) == static_cast<int>(card2.rank) + 1;
+      
+      if (!different_colors || !descending_rank) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
+  return false;
 }
