@@ -7,7 +7,7 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 DEBUG_FLAGS = -g -DDEBUG
 
 # Source files
-SRCS_COMMON = src_freecell/freecell.cpp src_freecell/cardlib.cpp
+SRCS_COMMON = src_freecell/freecell.cpp src_freecell/cardlib.cpp src_freecell/keyboard.cpp src_freecell/mouse.cpp src_freecell/animation.cpp
 SRCS_LINUX = 
 SRCS_WIN = src_freecell/windowsaudioplayer.cpp
 
