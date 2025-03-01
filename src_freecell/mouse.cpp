@@ -27,6 +27,7 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
       if (game->isValidDragSource(pile_index, card_index)) {
         game->dragging_ = true;
         game->drag_source_pile_ = pile_index;
+        game->drag_source_card_idx_ = card_index; // Store the source card index
         game->drag_start_x_ = event->x;
         game->drag_start_y_ = event->y;
         
@@ -151,7 +152,7 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
   FreecellGame *game = static_cast<FreecellGame *>(data);
 
   if (event->button == 1 && game->dragging_) {
-    auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
+    auto [target_pile, target_card_index] = game->getPileAt(event->x, event->y);
 
     if (target_pile >= 0 && game->drag_card_.has_value()) {
       bool move_successful = false;
@@ -174,7 +175,7 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
           else if (game->drag_source_pile_ >= 8) {
             // From tableau - check if it's the bottom card
             int tableau_idx = game->drag_source_pile_ - 8;
-            is_single_card_source = (card_index == game->tableau_[tableau_idx].size() - 1);
+            is_single_card_source = (game->drag_source_card_idx_ == game->tableau_[tableau_idx].size() - 1);
           }
           
           if (is_single_card_source) {
@@ -274,6 +275,7 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
     game->dragging_ = false;
     game->drag_card_ = std::nullopt;
     game->drag_source_pile_ = -1;
+    game->drag_source_card_idx_ = -1; // Reset the stored card index
     
     // Refresh display
     game->refreshDisplay();

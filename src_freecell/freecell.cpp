@@ -18,7 +18,8 @@ FreecellGame::FreecellGame()
       selected_pile_(-1), selected_card_idx_(-1),
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
-      sound_enabled_(true),
+      drag_source_card_idx_(-1),
+      sound_enabled_(true),      
       sounds_zip_path_("sound.zip") {
   initializeGame();
   initializeSettingsDir();

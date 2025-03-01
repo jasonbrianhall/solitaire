@@ -59,6 +59,8 @@ public:
   void run(int argc, char **argv);
 
 private:
+
+
   // Game state
   static constexpr int BASE_WINDOW_WIDTH = 1024;
   static constexpr int BASE_WINDOW_HEIGHT = 768;
@@ -66,6 +68,7 @@ private:
   static constexpr int BASE_CARD_HEIGHT = 145;
   static constexpr int BASE_CARD_SPACING = 20;
   static constexpr int BASE_VERT_SPACING = 25;
+  int drag_source_card_idx_;
   
   // Current dynamic dimensions
   int current_card_width_;
@@ -87,6 +90,10 @@ private:
   int cards_launched_ = 0;
   double launch_timer_ = 0;
   void stopWinAnimation();
+  void startWinAnimation();
+  void updateWinAnimation();
+  void launchNextCard();
+  static gboolean onAnimationTick(gpointer data);
   
   // Deal animation fields
   bool deal_animation_active_ = false;
@@ -191,16 +198,19 @@ private:
   bool canSelectForMove();
   bool isCardPlayable();
   
+  std::pair<int, int> getPileAt(int x, int y) const;
+  
   // Card movement helpers
   bool tryMoveFromFreecell();
   bool tryMoveFromFoundation();
   bool tryMoveFromTableau();
-  bool canMoveToFoundation(const cardlib::Card& card, int foundation_idx);
-  bool canMoveToTableau(const cardlib::Card& card, int tableau_idx);
-  bool canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx);
-  bool isValidTableauSequence(const std::vector<cardlib::Card>& cards);
-  bool isCardRed(const cardlib::Card& card);
+  bool canMoveToFoundation(const cardlib::Card& card, int foundation_idx) const;
+  bool canMoveToTableau(const cardlib::Card& card, int tableau_idx) const;
+  bool canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) const;
+  bool isValidTableauSequence(const std::vector<cardlib::Card>& cards) const;
+  bool isCardRed(const cardlib::Card& card) const;
   int findFirstPlayableCard(int tableau_idx);
+  
   // Sound system
   std::string sounds_zip_path_;
   bool sound_enabled_;
@@ -208,7 +218,15 @@ private:
   bool loadSoundFromZip(GameSoundEvent event, const std::string &soundFileName);
   void playSound(GameSoundEvent event);
   void cleanupAudio();
-  
+  bool isValidDragSource(int pile_index, int card_index) const;
+  bool checkWinCondition() const;
+
+  bool canMoveToFoundation(const cardlib::Card& card, int foundation_idx);
+  bool canMoveToTableau(const cardlib::Card& card, int tableau_idx);
+  bool isValidTableauSequence(const std::vector<cardlib::Card>& cards);
+  bool isCardRed(const cardlib::Card&);
+  bool canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx);
+
   // Helper function to extract files from ZIP
   bool extractFileFromZip(const std::string &zipFilePath,
                          const std::string &fileName,
