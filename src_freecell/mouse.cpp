@@ -30,11 +30,16 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
         game->drag_source_card_idx_ = card_index; // Store the source card index
         game->drag_start_x_ = event->x;
         game->drag_start_y_ = event->y;
+        game->drag_cards_.clear(); // Clear any previous drag sequence
         
         // Get the card being dragged
         if (pile_index < 4) {
           // Dragging from freecell
           game->drag_card_ = game->freecells_[pile_index];
+          // For freecell, only one card is dragged
+          if (game->drag_card_.has_value()) {
+            game->drag_cards_.push_back(game->drag_card_.value());
+          }
           
           // Calculate offset from top-left of card
           game->drag_offset_x_ = event->x - (game->current_card_spacing_ + 
@@ -46,10 +51,13 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
           int foundation_idx = pile_index - 4;
           if (!game->foundation_[foundation_idx].empty()) {
             game->drag_card_ = game->foundation_[foundation_idx].back();
+            // For foundation, only one card is dragged
+            game->drag_cards_.push_back(game->drag_card_.value());
             
             // Calculate offset from top-left of card
-            game->drag_offset_x_ = event->x - (game->current_card_spacing_ + 
-                                   (4 + pile_index - 4) * (game->current_card_width_ + game->current_card_spacing_));
+            int x_pos = game->allocation.width - (4 - foundation_idx) * 
+                        (game->current_card_width_ + game->current_card_spacing_);
+            game->drag_offset_x_ = event->x - x_pos;
             game->drag_offset_y_ = event->y - game->current_card_spacing_;
           }
         }
@@ -57,13 +65,19 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
           // Dragging from tableau
           int tableau_idx = pile_index - 8;
           if (card_index >= 0 && card_index < game->tableau_[tableau_idx].size()) {
+            // Store top card for visual representation during drag
             game->drag_card_ = game->tableau_[tableau_idx][card_index];
+            
+            // Store all cards from the selected index to the bottom
+            for (size_t i = card_index; i < game->tableau_[tableau_idx].size(); i++) {
+              game->drag_cards_.push_back(game->tableau_[tableau_idx][i]);
+            }
             
             // Calculate offset from top-left of card
             game->drag_offset_x_ = event->x - (game->current_card_spacing_ + 
                                    tableau_idx * (game->current_card_width_ + game->current_card_spacing_));
-            game->drag_offset_y_ = event->y - (game->current_card_spacing_ + game->current_card_height_ + 
-                                   card_index * game->current_vert_spacing_);
+            game->drag_offset_y_ = event->y - (2 * game->current_card_spacing_ + 
+                                   game->current_card_height_ + card_index * game->current_vert_spacing_);
           }
         }
         
@@ -160,56 +174,39 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
       // Handle dropping on freecell (0-3)
       if (target_pile < 4) {
         // Can only drop a single card on an empty freecell
-        if (!game->freecells_[target_pile].has_value()) {
-          // Check if source is a single card
-          bool is_single_card_source = false;
+        if (!game->freecells_[target_pile].has_value() && game->drag_cards_.size() == 1) {
+          // Move card to freecell
+          game->freecells_[target_pile] = game->drag_cards_[0];
           
+          // Remove from source
           if (game->drag_source_pile_ < 4) {
-            // From freecell - always a single card
-            is_single_card_source = true;
+            game->freecells_[game->drag_source_pile_] = std::nullopt;
           }
           else if (game->drag_source_pile_ >= 4 && game->drag_source_pile_ < 8) {
-            // From foundation - always a single card
-            is_single_card_source = true;
+            int foundation_idx = game->drag_source_pile_ - 4;
+            if (!game->foundation_[foundation_idx].empty()) {
+              game->foundation_[foundation_idx].pop_back();
+            }
           }
           else if (game->drag_source_pile_ >= 8) {
-            // From tableau - check if it's the bottom card
             int tableau_idx = game->drag_source_pile_ - 8;
-            is_single_card_source = (game->drag_source_card_idx_ == game->tableau_[tableau_idx].size() - 1);
+            if (!game->tableau_[tableau_idx].empty()) {
+              game->tableau_[tableau_idx].pop_back();
+            }
           }
           
-          if (is_single_card_source) {
-            // Move card to freecell
-            game->freecells_[target_pile] = game->drag_card_;
-            
-            // Remove from source
-            if (game->drag_source_pile_ < 4) {
-              game->freecells_[game->drag_source_pile_] = std::nullopt;
-            }
-            else if (game->drag_source_pile_ >= 4 && game->drag_source_pile_ < 8) {
-              int foundation_idx = game->drag_source_pile_ - 4;
-              if (!game->foundation_[foundation_idx].empty()) {
-                game->foundation_[foundation_idx].pop_back();
-              }
-            }
-            else if (game->drag_source_pile_ >= 8) {
-              int tableau_idx = game->drag_source_pile_ - 8;
-              if (!game->tableau_[tableau_idx].empty()) {
-                game->tableau_[tableau_idx].pop_back();
-              }
-            }
-            
-            move_successful = true;
-          }
+          move_successful = true;
         }
       }
       // Handle dropping on foundation (4-7)
       else if (target_pile >= 4 && target_pile < 8) {
         int foundation_idx = target_pile - 4;
         
-        if (game->canMoveToFoundation(game->drag_card_.value(), foundation_idx)) {
+        // Can only move a single card to foundation
+        if (game->drag_cards_.size() == 1 && 
+            game->canMoveToFoundation(game->drag_cards_[0], foundation_idx)) {
           // Add to foundation
-          game->foundation_[foundation_idx].push_back(game->drag_card_.value());
+          game->foundation_[foundation_idx].push_back(game->drag_cards_[0]);
           
           // Remove from source
           if (game->drag_source_pile_ < 4) {
@@ -235,9 +232,33 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
       else if (target_pile >= 8) {
         int tableau_idx = target_pile - 8;
         
-        if (game->canMoveToTableau(game->drag_card_.value(), tableau_idx)) {
+        // If dragging from tableau with multiple cards
+        if (game->drag_source_pile_ >= 8 && game->drag_cards_.size() > 0) {
+          // Check if we can move the entire stack
+          if (game->canMoveTableauStack(game->drag_cards_, tableau_idx)) {
+            // Add all cards to destination tableau
+            for (const auto& card : game->drag_cards_) {
+              game->tableau_[tableau_idx].push_back(card);
+            }
+            
+            // Remove cards from source tableau
+            int source_tableau = game->drag_source_pile_ - 8;
+            if (!game->tableau_[source_tableau].empty()) {
+              // Remove the cards from drag_source_card_idx_ to the end
+              game->tableau_[source_tableau].erase(
+                game->tableau_[source_tableau].begin() + game->drag_source_card_idx_,
+                game->tableau_[source_tableau].end()
+              );
+            }
+            
+            move_successful = true;
+          }
+        }
+        // Single card move (from freecell, foundation, or tableau)
+        else if (game->drag_cards_.size() == 1 && 
+                 game->canMoveToTableau(game->drag_cards_[0], tableau_idx)) {
           // Add to tableau
-          game->tableau_[tableau_idx].push_back(game->drag_card_.value());
+          game->tableau_[tableau_idx].push_back(game->drag_cards_[0]);
           
           // Remove from source
           if (game->drag_source_pile_ < 4) {
@@ -274,23 +295,12 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
     // Reset drag state
     game->dragging_ = false;
     game->drag_card_ = std::nullopt;
+    game->drag_cards_.clear();
     game->drag_source_pile_ = -1;
-    game->drag_source_card_idx_ = -1; // Reset the stored card index
+    game->drag_source_card_idx_ = -1;
     
     // Refresh display
     game->refreshDisplay();
-  }
-
-  return TRUE;
-}
-
-gboolean FreecellGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
-  FreecellGame *game = static_cast<FreecellGame *>(data);
-
-  if (game->dragging_) {
-    game->drag_start_x_ = event->x;
-    game->drag_start_y_ = event->y;
-    gtk_widget_queue_draw(game->game_area_);
   }
 
   return TRUE;
@@ -495,4 +505,16 @@ bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, 
   bool descending_rank = static_cast<int>(bottom_card.rank) + 1 == static_cast<int>(top_card.rank);
   
   return different_colors && descending_rank;
+}
+
+gboolean FreecellGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
+  FreecellGame *game = static_cast<FreecellGame *>(data);
+
+  if (game->dragging_) {
+    game->drag_start_x_ = event->x;
+    game->drag_start_y_ = event->y;
+    gtk_widget_queue_draw(game->game_area_);
+  }
+
+  return TRUE;
 }

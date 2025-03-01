@@ -478,12 +478,21 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   }
 
   // Draw dragged card
-  if (game->dragging_ && game->drag_card_.has_value()) {
-    int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
-    int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
+if (game->dragging_ && game->drag_card_.has_value()) {
+  int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
+  int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
+  
+  // If dragging multiple cards from tableau, draw them all with proper spacing
+  if (game->drag_source_pile_ >= 8 && game->drag_cards_.size() > 1) {
+    for (size_t i = 0; i < game->drag_cards_.size(); i++) {
+      int card_y = drag_y + i * game->current_vert_spacing_;
+      game->drawCard(game->buffer_cr_, drag_x, card_y, &game->drag_cards_[i]);
+    }
+  } else {
+    // Just draw the single card
     game->drawCard(game->buffer_cr_, drag_x, drag_y, &game->drag_card_.value());
   }
-
+}
   // Draw animated cards for deal animation
   if (game->deal_animation_active_) {
     for (const auto &anim_card : game->deal_cards_) {

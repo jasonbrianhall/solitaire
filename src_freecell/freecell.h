@@ -69,7 +69,7 @@ private:
   static constexpr int BASE_CARD_SPACING = 20;
   static constexpr int BASE_VERT_SPACING = 25;
   int drag_source_card_idx_;
-  
+  std::vector<cardlib::Card> drag_cards_;
   // Current dynamic dimensions
   int current_card_width_;
   int current_card_height_;
