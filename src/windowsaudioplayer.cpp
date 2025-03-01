@@ -9,13 +9,19 @@
 #include <mutex>
 #include <map>
 #include <memory>
+#include <functional>
 #pragma comment(lib, "winmm.lib")
 
-// A self-contained sound object that manages its own resources
-class Sound {
-public:
-    Sound(const std::vector<uint8_t>& data, std::shared_ptr<std::promise<void>> promise)
-        : soundData(data), completionPromise(promise), hWaveOut(NULL), isPlaying(false) {
+// Simple structure to hold sound data and resources
+struct Sound {
+    HWAVEOUT hWaveOut;
+    WAVEHDR waveHeader;
+    std::vector<uint8_t> data;
+    std::shared_ptr<std::promise<void>> completionPromise;
+    bool isPlaying;
+    int id;
+    
+    Sound() : hWaveOut(NULL), isPlaying(false), id(0) {
         ZeroMemory(&waveHeader, sizeof(WAVEHDR));
     }
     
@@ -24,8 +30,8 @@ public:
     }
     
     void cleanup() {
-        if (hWaveOut) {
-            // Stop playback
+        if (hWaveOut != NULL) {
+            // Reset to stop playback
             waveOutReset(hWaveOut);
             
             // Unprepare header if it was prepared
@@ -38,43 +44,181 @@ public:
             hWaveOut = NULL;
         }
         
-        // Signal completion promise if not already done
+        // Signal completion if needed
         if (completionPromise) {
             try {
                 completionPromise->set_value();
             } catch (...) {
-                // Promise might have already been fulfilled
+                // Ignore exceptions from setting a value on an already-satisfied promise
             }
-            completionPromise = nullptr;
         }
         
         isPlaying = false;
     }
-
-    // Deleted copy operations
-    Sound(const Sound&) = delete;
-    Sound& operator=(const Sound&) = delete;
-    
-    // Data members
-    std::vector<uint8_t> soundData;
-    std::shared_ptr<std::promise<void>> completionPromise;
-    HWAVEOUT hWaveOut;
-    WAVEHDR waveHeader;
-    bool isPlaying;
 };
 
-// Forward declaration of callback
-void CALLBACK waveOutProc(HWAVEOUT hwo, UINT uMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2);
+// We'll use a singleton manager to track sounds
+class SoundManager {
+public:
+    static SoundManager& getInstance() {
+        static SoundManager instance;
+        return instance;
+    }
+    
+    // Add a new sound and start playing it
+    int playSound(const std::vector<uint8_t>& data, 
+                 std::shared_ptr<std::promise<void>> completionPromise) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        // Clean up any completed sounds first
+        cleanupCompletedSounds();
+        
+        // Limit number of concurrent sounds
+        if (activeSounds_.size() >= MAX_SOUNDS) {
+            // Find oldest sound to replace
+            int oldestId = -1;
+            for (const auto& pair : activeSounds_) {
+                if (oldestId == -1 || pair.first < oldestId) {
+                    oldestId = pair.first;
+                }
+            }
+            
+            // Stop and remove the oldest sound
+            if (oldestId != -1) {
+                activeSounds_.erase(oldestId);
+            }
+        }
+        
+        // Find data chunk in WAV file
+        size_t dataOffset = 0;
+        for (size_t i = 12; i < data.size() - 8; ) {
+            if (memcmp(data.data() + i, "data", 4) == 0) {
+                dataOffset = i + 8;
+                break;
+            }
+            
+            uint32_t chunkSize = *reinterpret_cast<const uint32_t*>(&data[i + 4]);
+            i += 8 + chunkSize;
+            
+            if (i >= data.size()) break;
+        }
+        
+        if (dataOffset == 0 || dataOffset >= data.size()) {
+            if (completionPromise) completionPromise->set_value();
+            return -1;
+        }
+        
+        // Setup WAV format
+        WAVEFORMATEX wfx = {0};
+        wfx.wFormatTag = *reinterpret_cast<const uint16_t*>(&data[20]);
+        wfx.nChannels = *reinterpret_cast<const uint16_t*>(&data[22]);
+        wfx.nSamplesPerSec = *reinterpret_cast<const uint32_t*>(&data[24]);
+        wfx.wBitsPerSample = *reinterpret_cast<const uint16_t*>(&data[34]);
+        wfx.nBlockAlign = wfx.nChannels * wfx.wBitsPerSample / 8;
+        wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
+        
+        // Create a new sound
+        std::unique_ptr<Sound> sound = std::make_unique<Sound>();
+        sound->data = data;
+        sound->completionPromise = completionPromise;
+        sound->id = nextSoundId_++;
+        sound->isPlaying = true;
+        
+        // Open the wave device
+        MMRESULT result = waveOutOpen(&sound->hWaveOut, WAVE_MAPPER, &wfx, 
+                                     (DWORD_PTR)waveOutCallback, 
+                                     (DWORD_PTR)sound->id, 
+                                     CALLBACK_FUNCTION);
+        
+        if (result != MMSYSERR_NOERROR) {
+            if (completionPromise) completionPromise->set_value();
+            return -1;
+        }
+        
+        // Set up the header
+        sound->waveHeader.lpData = (LPSTR)(sound->data.data() + dataOffset);
+        sound->waveHeader.dwBufferLength = static_cast<DWORD>(sound->data.size() - dataOffset);
+        sound->waveHeader.dwUser = (DWORD_PTR)sound->id;
+        
+        // Prepare the header
+        result = waveOutPrepareHeader(sound->hWaveOut, &sound->waveHeader, sizeof(WAVEHDR));
+        if (result != MMSYSERR_NOERROR) {
+            waveOutClose(sound->hWaveOut);
+            if (completionPromise) completionPromise->set_value();
+            return -1;
+        }
+        
+        // Write the data
+        result = waveOutWrite(sound->hWaveOut, &sound->waveHeader, sizeof(WAVEHDR));
+        if (result != MMSYSERR_NOERROR) {
+            waveOutUnprepareHeader(sound->hWaveOut, &sound->waveHeader, sizeof(WAVEHDR));
+            waveOutClose(sound->hWaveOut);
+            if (completionPromise) completionPromise->set_value();
+            return -1;
+        }
+        
+        // Store the sound
+        int soundId = sound->id;
+        activeSounds_[soundId] = std::move(sound);
+        return soundId;
+    }
+    
+    // Mark a sound as completed
+    void completeSound(int soundId) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        auto it = activeSounds_.find(soundId);
+        if (it != activeSounds_.end()) {
+            it->second->isPlaying = false;
+        }
+    }
+    
+    // Clean up all sounds
+    void cleanup() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        activeSounds_.clear();
+    }
+    
+    // Clean up just finished sounds
+    void cleanupCompletedSounds() {
+        for (auto it = activeSounds_.begin(); it != activeSounds_.end();) {
+            if (!it->second->isPlaying) {
+                it = activeSounds_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+private:
+    SoundManager() : nextSoundId_(1) {}
+    ~SoundManager() { cleanup(); }
+    
+    // Deleted copy and move constructors and assignment operators
+    SoundManager(const SoundManager&) = delete;
+    SoundManager& operator=(const SoundManager&) = delete;
+    SoundManager(SoundManager&&) = delete;
+    SoundManager& operator=(SoundManager&&) = delete;
+    
+    static void CALLBACK waveOutCallback(HWAVEOUT hwo, UINT uMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2) {
+        if (uMsg == WOM_DONE) {
+            int soundId = static_cast<int>(dwInstance);
+            SoundManager::getInstance().completeSound(soundId);
+        }
+    }
+    
+    std::mutex mutex_;
+    std::map<int, std::unique_ptr<Sound>> activeSounds_;
+    int nextSoundId_;
+    static constexpr int MAX_SOUNDS = 16; // Limit concurrent sounds to avoid resource issues
+};
 
 class WindowsAudioPlayer : public AudioPlayer {
 public:
-    WindowsAudioPlayer() : volume_(1.0f) {
-        InitializeCriticalSection(&cs_);
-    }
+    WindowsAudioPlayer() : volume_(1.0f) {}
     
     ~WindowsAudioPlayer() override {
         shutdown();
-        DeleteCriticalSection(&cs_);
     }
     
     bool initialize() override {
@@ -82,253 +226,38 @@ public:
     }
     
     void shutdown() override {
-        EnterCriticalSection(&cs_);
-        
-        // Clean up all active sounds
-        for (auto& pair : activeSounds_) {
-            pair.second->cleanup();
-        }
-        
-        activeSounds_.clear();
-        
-        LeaveCriticalSection(&cs_);
+        SoundManager::getInstance().cleanup();
     }
     
     void playSound(const std::vector<uint8_t>& data, 
                   const std::string& format,
                   std::shared_ptr<std::promise<void>> completionPromise = nullptr) override {
-        
-        // Only support WAV format
         if (format != "wav") {
             std::cerr << "Only WAV format is supported" << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
+            if (completionPromise) completionPromise->set_value();
             return;
         }
         
         // Basic validation
-        if (data.size() < 44) {
-            std::cerr << "Invalid WAV file: too small" << std::endl;
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
+        if (data.size() < 44 || 
+            memcmp(data.data(), "RIFF", 4) != 0 || 
+            memcmp(data.data() + 8, "WAVE", 4) != 0) {
+            std::cerr << "Invalid WAV file" << std::endl;
+            if (completionPromise) completionPromise->set_value();
             return;
         }
         
-        try {
-            EnterCriticalSection(&cs_);
-            
-            // Limit the number of simultaneously playing sounds
-            if (activeSounds_.size() >= 10) {
-                std::cerr << "Too many active sounds, skipping playback" << std::endl;
-                LeaveCriticalSection(&cs_);
-                if (completionPromise) {
-                    completionPromise->set_value();
-                }
-                return;
-            }
-            
-            // Create a new sound object
-            std::shared_ptr<Sound> sound = std::make_shared<Sound>(data, completionPromise);
-            
-            // Check for RIFF/WAVE header
-            if (memcmp(data.data(), "RIFF", 4) != 0 || memcmp(data.data() + 8, "WAVE", 4) != 0) {
-                std::cerr << "Invalid WAV file: missing RIFF/WAVE header" << std::endl;
-                LeaveCriticalSection(&cs_);
-                if (completionPromise) {
-                    completionPromise->set_value();
-                }
-                return;
-            }
-            
-            // Extract format info
-            WAVEFORMATEX wfx = {0};
-            uint16_t audioFormat = *reinterpret_cast<const uint16_t*>(&data[20]);
-            uint16_t numChannels = *reinterpret_cast<const uint16_t*>(&data[22]);
-            uint32_t sampleRate = *reinterpret_cast<const uint32_t*>(&data[24]);
-            uint16_t bitsPerSample = *reinterpret_cast<const uint16_t*>(&data[34]);
-            
-            // Find the data chunk
-            size_t dataOffset = 0;
-            for (size_t i = 12; i < data.size() - 8; ) {
-                if (memcmp(data.data() + i, "data", 4) == 0) {
-                    dataOffset = i + 8;
-                    break;
-                }
-                uint32_t chunkSize = *reinterpret_cast<const uint32_t*>(&data[i + 4]);
-                i += 8 + chunkSize;
-                
-                // Safety check
-                if (i >= data.size()) {
-                    break;
-                }
-            }
-            
-            if (dataOffset == 0 || dataOffset >= data.size()) {
-                std::cerr << "Invalid WAV file: data chunk not found" << std::endl;
-                LeaveCriticalSection(&cs_);
-                if (completionPromise) {
-                    completionPromise->set_value();
-                }
-                return;
-            }
-            
-            // Set up the WAVEFORMATEX structure
-            wfx.wFormatTag = audioFormat;
-            wfx.nChannels = numChannels;
-            wfx.nSamplesPerSec = sampleRate;
-            wfx.wBitsPerSample = bitsPerSample;
-            wfx.nBlockAlign = numChannels * bitsPerSample / 8;
-            wfx.nAvgBytesPerSec = sampleRate * wfx.nBlockAlign;
-            
-            // Open a waveOut device
-            MMRESULT result = waveOutOpen(&sound->hWaveOut, WAVE_MAPPER, &wfx, 
-                                         (DWORD_PTR)waveOutProc, 
-                                         (DWORD_PTR)this, 
-                                         CALLBACK_FUNCTION);
-                                         
-            if (result != MMSYSERR_NOERROR) {
-                std::cerr << "Failed to open waveOut device, error: " << result << std::endl;
-                LeaveCriticalSection(&cs_);
-                if (completionPromise) {
-                    completionPromise->set_value();
-                }
-                return;
-            }
-            
-            // Apply volume
-            if (volume_ < 1.0f) {
-                DWORD volumeValue = static_cast<DWORD>(volume_ * 0xFFFF);
-                DWORD stereoVolume = volumeValue | (volumeValue << 16);
-                waveOutSetVolume(sound->hWaveOut, stereoVolume);
-            }
-            
-            // Set up the WAVEHDR
-            sound->waveHeader.lpData = (LPSTR)(sound->soundData.data() + dataOffset);
-            sound->waveHeader.dwBufferLength = static_cast<DWORD>(sound->soundData.size() - dataOffset);
-            sound->waveHeader.dwUser = (DWORD_PTR)sound->hWaveOut;  // Store the device handle for the callback
-            
-            // Prepare the header
-            result = waveOutPrepareHeader(sound->hWaveOut, &sound->waveHeader, sizeof(WAVEHDR));
-            if (result != MMSYSERR_NOERROR) {
-                std::cerr << "Failed to prepare waveOut header, error: " << result << std::endl;
-                waveOutClose(sound->hWaveOut);
-                sound->hWaveOut = NULL;
-                LeaveCriticalSection(&cs_);
-                if (completionPromise) {
-                    completionPromise->set_value();
-                }
-                return;
-            }
-            
-            // Add to active sounds map
-            sound->isPlaying = true;
-            activeSounds_[sound->hWaveOut] = sound;
-            
-            // Write the data
-            result = waveOutWrite(sound->hWaveOut, &sound->waveHeader, sizeof(WAVEHDR));
-            if (result != MMSYSERR_NOERROR) {
-                std::cerr << "Failed to write wave data, error: " << result << std::endl;
-                
-                // Remove from active sounds
-                activeSounds_.erase(sound->hWaveOut);
-                
-                // Clean up resources
-                waveOutUnprepareHeader(sound->hWaveOut, &sound->waveHeader, sizeof(WAVEHDR));
-                waveOutClose(sound->hWaveOut);
-                sound->hWaveOut = NULL;
-                
-                LeaveCriticalSection(&cs_);
-                if (completionPromise) {
-                    completionPromise->set_value();
-                }
-                return;
-            }
-            
-            LeaveCriticalSection(&cs_);
-            // The sound is now playing, and the callback will handle completion
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Exception in playSound: " << e.what() << std::endl;
-            LeaveCriticalSection(&cs_);
-            if (completionPromise) {
-                completionPromise->set_value();
-            }
-        }
+        // Start playing the sound
+        SoundManager::getInstance().playSound(data, completionPromise);
     }
     
     void setVolume(float volume) override {
-        volume_ = std::max(0.0f, std::min(1.0f, volume));
-        
-        // Apply to all active devices
-        EnterCriticalSection(&cs_);
-        
-        DWORD volumeValue = static_cast<DWORD>(volume_ * 0xFFFF);
-        DWORD stereoVolume = volumeValue | (volumeValue << 16);
-        
-        for (auto& pair : activeSounds_) {
-            if (pair.second->hWaveOut) {
-                waveOutSetVolume(pair.second->hWaveOut, stereoVolume);
-            }
-        }
-        
-        LeaveCriticalSection(&cs_);
-    }
-    
-    // Helper for the callback function
-    void handlePlaybackComplete(HWAVEOUT hwo) {
-        EnterCriticalSection(&cs_);
-        
-        auto it = activeSounds_.find(hwo);
-        if (it != activeSounds_.end()) {
-            // Get the sound object
-            std::shared_ptr<Sound> sound = it->second;
-            
-            // Clean up resources
-            if (sound->waveHeader.dwFlags & WHDR_PREPARED) {
-                waveOutUnprepareHeader(hwo, &sound->waveHeader, sizeof(WAVEHDR));
-            }
-            
-            waveOutClose(hwo);
-            sound->hWaveOut = NULL;
-            sound->isPlaying = false;
-            
-            // Fulfill the promise
-            if (sound->completionPromise) {
-                try {
-                    sound->completionPromise->set_value();
-                } catch (...) {
-                    // Promise might have already been fulfilled
-                }
-                sound->completionPromise = nullptr;
-            }
-            
-            // Remove from active sounds
-            activeSounds_.erase(it);
-        }
-        
-        LeaveCriticalSection(&cs_);
+        volume_ = volume;
     }
     
 private:
     float volume_;
-    CRITICAL_SECTION cs_;
-    std::map<HWAVEOUT, std::shared_ptr<Sound>> activeSounds_;
-    
-    friend void CALLBACK waveOutProc(HWAVEOUT, UINT, DWORD_PTR, DWORD_PTR, DWORD_PTR);
 };
-
-// Callback function for waveOut
-void CALLBACK waveOutProc(HWAVEOUT hwo, UINT uMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2) {
-    if (uMsg == WOM_DONE) {
-        // The instance parameter is a pointer to our WindowsAudioPlayer
-        WindowsAudioPlayer* player = reinterpret_cast<WindowsAudioPlayer*>(dwInstance);
-        if (player) {
-            player->handlePlaybackComplete(hwo);
-        }
-    }
-}
 
 // Factory function implementation for Windows
 std::unique_ptr<AudioPlayer> createAudioPlayer() {
