@@ -60,6 +60,26 @@ public:
 
 private:
 
+  bool auto_finish_active_ = false;
+  guint auto_finish_timer_id_ = 0;
+  
+  // Foundation move animation fields
+  bool foundation_move_animation_active_ = false;
+  AnimatedCard foundation_move_card_;
+  int foundation_source_pile_ = -1;
+  int foundation_target_pile_ = -1;
+  double foundation_move_timer_ = 0;
+  static constexpr double FOUNDATION_MOVE_SPEED = 0.2;
+
+  // Auto-finish methods
+  void autoFinishGame();
+  void processNextAutoFinishMove();
+  static gboolean onAutoFinishTick(gpointer data);
+  
+  // Foundation move animation methods
+  void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile);
+  void updateFoundationMoveAnimation();
+  static gboolean onFoundationMoveAnimationTick(gpointer data);
 
   // Game state
   static constexpr int BASE_WINDOW_WIDTH = 1024;
@@ -210,7 +230,8 @@ private:
   bool isValidTableauSequence(const std::vector<cardlib::Card>& cards) const;
   bool isCardRed(const cardlib::Card& card) const;
   int findFirstPlayableCard(int tableau_idx);
-  
+  bool autoFinishMoves();
+
   // Sound system
   std::string sounds_zip_path_;
   bool sound_enabled_;
