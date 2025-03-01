@@ -268,8 +268,27 @@ void SolitaireGame::selectCardUp() {
     return;
   }
 
-  // Only proceed if the tableau pile has cards
+  // If the tableau pile is empty, move to the corresponding pile in the top row
   if (tableau_[tableau_idx].empty()) {
+    if (tableau_idx == 0) {
+      // Pile 0 goes to stock pile
+      selected_pile_ = 0;
+      selected_card_idx_ = stock_.empty() ? -1 : 0;
+    } else if (tableau_idx == 1) {
+      // Pile 1 goes to waste pile
+      selected_pile_ = 1;
+      selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
+    } else if (tableau_idx >= 2) {
+      // Other piles go to corresponding foundation (if available)
+      int foundation_idx = tableau_idx - 2;
+      if (foundation_idx < foundation_.size()) {
+        selected_pile_ = 2 + foundation_idx;
+        selected_card_idx_ = foundation_[foundation_idx].empty()
+                                ? -1
+                                : foundation_[foundation_idx].size() - 1;
+      }
+    }
+    refreshDisplay();
     return;
   }
 
@@ -313,15 +332,14 @@ void SolitaireGame::selectCardUp() {
       if (foundation_idx < foundation_.size()) {
         selected_pile_ = 2 + foundation_idx;
         selected_card_idx_ = foundation_[foundation_idx].empty()
-                                 ? -1
-                                 : foundation_[foundation_idx].size() - 1;
+                                ? -1
+                                : foundation_[foundation_idx].size() - 1;
       }
     }
   }
 
   refreshDisplay();
 }
-
 // Move selection down in a tableau pile
 void SolitaireGame::selectCardDown() {
   // If we're in the top row, move down to the corresponding tableau pile
