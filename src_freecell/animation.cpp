@@ -741,31 +741,51 @@ void FreecellGame::startWinAnimation() {
   if (win_animation_active_)
     return;
 
+  resetKeyboardNavigation();
+
+  playSound(GameSoundEvent::WinGame);
+  // Show win message
+GtkWidget *dialog = gtk_message_dialog_new(
+    GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+    GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
+
+// Get the message area to apply formatting
+GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
+
+// Create a label with centered text
+GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
+gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+gtk_widget_set_margin_start(label, 20);
+gtk_widget_set_margin_end(label, 20);
+gtk_widget_set_margin_top(label, 10);
+gtk_widget_set_margin_bottom(label, 10);
+
+// Add the label to the message area
+gtk_container_add(GTK_CONTAINER(message_area), label);
+gtk_widget_show(label);
+
+// Run the dialog
+gtk_dialog_run(GTK_DIALOG(dialog));
+gtk_widget_destroy(dialog);
+
   win_animation_active_ = true;
   cards_launched_ = 0;
   launch_timer_ = 0;
-  
-  // Initialize tracking for animated foundation cards
-  animated_foundation_cards_.clear();
-  animated_foundation_cards_.resize(4);
-  for (auto& pile : animated_foundation_cards_) {
-    pile.resize(13, false);  // Each foundation can have at most 13 cards
-  }
-  
-  // Clear any existing animated cards
   animated_cards_.clear();
-  
-  // Set up animation timer
-  if (animation_timer_id_ > 0) {
-    g_source_remove(animation_timer_id_);
+
+  // Initialize tracking for animated cards
+  animated_foundation_cards_.clear();
+  animated_foundation_cards_.resize(4); // 4 foundation piles
+  for (size_t i = 0; i < 4; i++) {
+    animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
   }
-  
-  animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
-  
-  // Play win sound
-  playSound(GameSoundEvent::WinGame);
-  
-  refreshDisplay();
+
+  // Set up animation timer
+  animation_timer_id_ =
+      g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
 }
 
 gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
