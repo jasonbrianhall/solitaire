@@ -81,6 +81,13 @@ void FreecellGame::initializeGame() {
 
     // Initialize tableau (8 piles for Freecell)
     tableau_.resize(8);
+    
+    // Initialize the foundation cards tracking vector
+    animated_foundation_cards_.clear();
+    animated_foundation_cards_.resize(4);
+    for (auto& pile : animated_foundation_cards_) {
+      pile.resize(13, false);  // Each foundation can have at most 13 cards (A to K)
+    }
 
     // Deal cards
     deal();

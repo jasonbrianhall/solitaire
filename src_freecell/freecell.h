@@ -15,7 +15,8 @@ enum class GameSoundEvent {
   StockRefill,
   WinGame,
   DealCard,
-  Firework
+  Firework,
+  CardDeal
 };
 
 // Reusing CardFragment struct
@@ -43,6 +44,7 @@ struct AnimatedCard {
   double rotation_velocity;
   bool active;
   bool exploded;
+  bool face_up;
   std::vector<CardFragment> fragments;
 
   // For deal animation
@@ -62,7 +64,7 @@ private:
 
   bool auto_finish_active_ = false;
   guint auto_finish_timer_id_ = 0;
-  
+  std::vector<std::vector<bool>> animated_foundation_cards_;
   // Foundation move animation fields
   bool foundation_move_animation_active_ = false;
   AnimatedCard foundation_move_card_;
@@ -252,7 +254,12 @@ private:
   bool extractFileFromZip(const std::string &zipFilePath,
                          const std::string &fileName,
                          std::vector<uint8_t> &fileData);
-                         
+
+  void explodeCard(AnimatedCard&);
+  void updateCardFragments(AnimatedCard &card);
+  void drawCardFragment(cairo_t *cr, const CardFragment &fragment);                   
+  cairo_surface_t* getCardSurface(const cardlib::Card& card);
+
   // For drawing allocation
   GtkAllocation allocation;
 };
