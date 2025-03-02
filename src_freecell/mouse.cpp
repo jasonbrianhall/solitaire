@@ -13,9 +13,7 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
     game->stopWinAnimation();
     return TRUE;
   }
-
-  // If deal animation is active, block interactions
-  if (game->deal_animation_active_) {
+  if (game->foundation_move_animation_active_ || game->deal_animation_active_) {
     return TRUE;
   }
 

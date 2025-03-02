@@ -161,7 +161,7 @@ void FreecellGame::launchNextCard() {
             (G_PI * 0.4 - (rand() % 500) / 1000.0 * G_PI / 6);
         } else {
           // Otherwise, spread left and right
-          angle = trajectory_choice < 55 ? 
+          angle = trajectory_choice < 85 ? 
             (G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4) : 
             (G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4);
         }
@@ -242,8 +242,6 @@ void FreecellGame::launchNextCard() {
 }
 
 void FreecellGame::explodeCard(AnimatedCard &card) {
-  // Debug: Check if the method is even being called
-         static_cast<int>(card.card.suit), static_cast<int>(card.card.rank));
 
   // Check if card surface exists
   cairo_surface_t *card_surface = getCardSurface(card.card);
