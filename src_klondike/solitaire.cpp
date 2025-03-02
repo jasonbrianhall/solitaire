@@ -20,10 +20,12 @@ SolitaireGame::SolitaireGame()
       source_pile_(-1), source_card_idx_(-1),
       sound_enabled_(true),           // Set sound to enabled by default
       sounds_zip_path_("sound.zip"),
-      current_seed_(rand()) { // Set the default sound zip path
+      current_seed_(0) { // Initialize to 0 temporarily
+  srand(time(NULL));  // Seed the random number generator with current time
+  current_seed_ = rand();  // Generate random seed
   initializeGame();
   initializeSettingsDir();
-  initializeAudio(); // This will handle loading all sounds from the zip file
+  initializeAudio();
   loadSettings();
 }
 
@@ -65,7 +67,7 @@ void SolitaireGame::initializeGame() {
     if (!loaded) {
       throw std::runtime_error("Could not find cards.zip in any search path");
     }
-
+    
     deck_.shuffle(current_seed_);
 
     // Clear all piles

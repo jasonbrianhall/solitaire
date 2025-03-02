@@ -401,6 +401,7 @@ void SolitaireGame::activateSelected() {
       source_card_idx_ = -1;
     }
     // Always refresh display whether move succeeded or not
+    playSound(GameSoundEvent::CardPlace);
     refreshDisplay();
     return;
   }
@@ -472,6 +473,7 @@ void SolitaireGame::activateSelected() {
             // Flip new top card if needed
             if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
               tableau_pile.back().face_up = true;
+              playSound(GameSoundEvent::CardFlip);
             }
 
             // Update selection to point to new top card
@@ -660,6 +662,7 @@ bool SolitaireGame::tryMoveSelectedCard() {
     // Flip the new top card if needed
     if (!source_tableau.empty() && !source_tableau.back().face_up) {
       source_tableau.back().face_up = true;
+      playSound(GameSoundEvent::CardFlip);
     }
 
     if (is_foundation) {
