@@ -143,6 +143,24 @@ gboolean FreecellGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointe
     game->selectCardDown();
     return TRUE;
 
+  case GDK_KEY_space:
+    // Spacebar behaves like right-click - try to auto-move cards
+    if (game->keyboard_navigation_active_ && !game->keyboard_selection_active_) {
+      if (game->handleSpacebarAction()) {
+        return TRUE;
+      }
+    }
+    break;
+
+  case GDK_KEY_r:
+  case GDK_KEY_R:
+    if (ctrl_pressed) {
+      // Restart the current game with the same seed
+      game->restartGame();
+      return TRUE;
+    }
+    break;
+
   case GDK_KEY_Return:
   case GDK_KEY_KP_Enter:
     // Activate the currently selected card/pile
@@ -839,6 +857,133 @@ bool FreecellGame::isCardPlayable() {
       }
     }
     
+    return true;
+  }
+  
+  return false;
+}
+
+// Function to handle the spacebar action (similar to right-click)
+// Fixed function to handle the spacebar action (similar to right-click)
+bool FreecellGame::handleSpacebarAction() {
+  if (selected_pile_ == -1) {
+    return false;
+  }
+
+  bool card_moved = false;
+
+  // Source: freecell (0-3)
+  if (selected_pile_ < 4 && freecells_[selected_pile_].has_value()) {
+    const cardlib::Card card = freecells_[selected_pile_].value();
+    
+    // Try to find a valid foundation
+    int target_foundation = -1;
+    for (int i = 0; i < 4; i++) {
+      if (canMoveToFoundation(card, i)) {
+        target_foundation = i;
+        break;
+      }
+    }
+    
+    if (target_foundation != -1) {
+      // Move card to foundation
+      foundation_[target_foundation].push_back(card);
+      freecells_[selected_pile_] = std::nullopt;
+      
+      // Play sound
+      playSound(GameSoundEvent::CardPlace);
+      
+      // Check for win
+      if (checkWinCondition()) {
+        startWinAnimation();
+      }
+      
+      card_moved = true;
+    }
+    // If cannot move to foundation, we don't need to check for freecell
+    // as the card is already in a freecell
+  }
+  // Source: foundation (4-7)
+  else if (selected_pile_ >= 4 && selected_pile_ < 8) {
+    // We typically don't want to auto-move cards from the foundation
+    // as that would be counter-productive to winning
+    return false;
+  }
+  // Source: tableau (8-15)
+  else if (selected_pile_ >= 8) {
+    int tableau_idx = selected_pile_ - 8;
+    auto &pile = tableau_[tableau_idx];
+    
+    if (!pile.empty()) {
+      const cardlib::Card &card = pile.back();
+      
+      // Try to find a valid foundation
+      int target_foundation = -1;
+      for (int i = 0; i < 4; i++) {
+        if (canMoveToFoundation(card, i)) {
+          target_foundation = i;
+          break;
+        }
+      }
+      
+      if (target_foundation != -1) {
+        // Move card to foundation
+        foundation_[target_foundation].push_back(card);
+        pile.pop_back();
+        
+        // Play sound
+        playSound(GameSoundEvent::CardPlace);
+        
+        // Check for win
+        if (checkWinCondition()) {
+          startWinAnimation();
+        }
+        
+        card_moved = true;
+      } 
+      else {
+        // If cannot move to foundation, try to move to the first available freecell
+        int target_freecell = -1;
+        for (int i = 0; i < 4; i++) {
+          if (!freecells_[i].has_value()) {
+            target_freecell = i;
+            break;
+          }
+        }
+        
+        if (target_freecell != -1) {
+          // Move card to freecell
+          freecells_[target_freecell] = card;
+          pile.pop_back();
+          
+          // Play sound
+          playSound(GameSoundEvent::CardPlace);
+          
+          card_moved = true;
+        }
+      }
+    }
+  }
+  
+  // If a card was moved, refresh the display but keep the same pile selected
+  if (card_moved) {
+    // For tableau, if there's another card now at the top, select it
+    if (selected_pile_ >= 8) {
+      int tableau_idx = selected_pile_ - 8;
+      if (!tableau_[tableau_idx].empty()) {
+        selected_card_idx_ = tableau_[tableau_idx].size() - 1;
+      } else {
+        // If tableau is now empty, just keep the pile selected
+        selected_card_idx_ = -1;
+      }
+    } else if (selected_pile_ < 4) {
+      // For freecell, if the cell is now empty, just keep the pile selected
+      if (!freecells_[selected_pile_].has_value()) {
+        selected_card_idx_ = -1;
+      }
+    }
+    
+    refreshDisplay();
     return true;
   }
   

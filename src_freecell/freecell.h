@@ -250,7 +250,7 @@ private:
   bool isValidTableauSequence(const std::vector<cardlib::Card>& cards);
   bool isCardRed(const cardlib::Card&);
   bool canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx);
-
+  bool handleSpacebarAction();
   // Helper function to extract files from ZIP
   bool extractFileFromZip(const std::string &zipFilePath,
                          const std::string &fileName,

@@ -483,7 +483,7 @@ void FreecellGame::setupMenuBar() {
   g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
-  GtkWidget *restartGameItem = gtk_menu_item_new_with_label("Restart Game");
+  GtkWidget *restartGameItem = gtk_menu_item_new_with_mnemonic("_Restart Game (CTRL+R)");
   g_signal_connect(G_OBJECT(restartGameItem), "activate", 
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
                     static_cast<FreecellGame *>(data)->restartGame();
