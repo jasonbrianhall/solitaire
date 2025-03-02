@@ -575,17 +575,31 @@ void FreecellGame::promptForSeed() {
       "_OK", GTK_RESPONSE_ACCEPT,
       NULL);
 
+  // Set the default response to ACCEPT (OK button)
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+
   GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   gtk_container_set_border_width(GTK_CONTAINER(content_area), 10);
 
   GtkWidget *label = gtk_label_new("Enter a number to use as the game seed:");
   gtk_container_add(GTK_CONTAINER(content_area), label);
 
+  // Create an entry with the current seed as the default value
   GtkWidget *entry = gtk_entry_new();
-  gtk_entry_set_text(GTK_ENTRY(entry), "");
+  gtk_entry_set_text(GTK_ENTRY(entry), std::to_string(current_seed_).c_str());
+  
+  // Select all text by default so it's easy to replace
+  gtk_editable_select_region(GTK_EDITABLE(entry), 0, -1);
+  
+  // Make the entry activate the default response (OK button) when Enter is pressed
+  gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
+  
   gtk_container_add(GTK_CONTAINER(content_area), entry);
 
   gtk_widget_show_all(dialog);
+
+  // Create tooltip for the seed entry field to provide more context
+  gtk_widget_set_tooltip_text(entry, "Current game seed. Press Enter to accept.");
 
   if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
     const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
@@ -606,7 +620,6 @@ void FreecellGame::promptForSeed() {
 
   gtk_widget_destroy(dialog);
 }
-
 
 void FreecellGame::onQuit(GtkWidget *widget, gpointer data) {
   gtk_main_quit();

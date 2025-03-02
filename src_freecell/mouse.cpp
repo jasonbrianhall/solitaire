@@ -84,7 +84,7 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
       }
     }
   } 
-  else if (event->button == 3) { // Right click
+else if (event->button == 3) { // Right click
     auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
     // Try to automatically move card to foundation
@@ -118,6 +118,8 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
           game->refreshDisplay();
           return TRUE;
         }
+        // If cannot move to foundation, we don't need to check for freecell
+        // as the card is already in a freecell
       }
       // Source: tableau
       else if (pile_index >= 8) {
@@ -151,6 +153,28 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
             
             game->refreshDisplay();
             return TRUE;
+          } 
+          else {
+            // If cannot move to foundation, try to move to the first available freecell
+            int target_freecell = -1;
+            for (int i = 0; i < 4; i++) {
+              if (!game->freecells_[i].has_value()) {
+                target_freecell = i;
+                break;
+              }
+            }
+            
+            if (target_freecell != -1) {
+              // Move card to freecell
+              game->freecells_[target_freecell] = card;
+              pile.pop_back();
+              
+              // Play sound
+              game->playSound(GameSoundEvent::CardPlace);
+              
+              game->refreshDisplay();
+              return TRUE;
+            }
           }
         }
       }
