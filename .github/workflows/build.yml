@@ -113,12 +113,12 @@ jobs:
               <Directory Id="ProgramMenuFolder">
                 <Directory Id="ApplicationProgramsFolder" Name="Solitaire GTK">
                   <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
-                    <Shortcut Id="ApplicationStartMenu" 
+                    <Shortcut Id="ApplicationStartMenuKlondike" 
                              Name="Solitaire GTK" 
                              Target="[INSTALLFOLDER]solitaire.exe" 
                              WorkingDirectory="INSTALLFOLDER"
                              Icon="SolitaireIcon"/>
-                    <Shortcut Id="ApplicationStartMenu" 
+                    <Shortcut Id="ApplicationStartMenuFreeCell" 
                              Name="Freecell GTK" 
                              Target="[INSTALLFOLDER]freecell.exe" 
                              WorkingDirectory="INSTALLFOLDER"
