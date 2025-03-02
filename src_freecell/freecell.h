@@ -71,7 +71,7 @@ private:
   int foundation_source_pile_ = -1;
   int foundation_target_pile_ = -1;
   double foundation_move_timer_ = 0;
-  static constexpr double FOUNDATION_MOVE_SPEED = 0.2;
+  static constexpr double FOUNDATION_MOVE_SPEED = 0.4;
 
   // Auto-finish methods
   void autoFinishGame();

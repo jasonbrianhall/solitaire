@@ -829,8 +829,14 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
                          game->freecells_[i].has_value() &&
                          game->foundation_move_card_.card.suit == game->freecells_[i].value().suit &&
                          game->foundation_move_card_.card.rank == game->freecells_[i].value().rank;
-                         
-      if (game->freecells_[i].has_value() && !is_animated) {
+      
+      // Skip drawing if this card is being dragged
+      bool is_dragged = game->dragging_ && game->drag_source_pile_ == i &&
+                        game->freecells_[i].has_value() && game->drag_card_.has_value() &&
+                        game->drag_card_.value().suit == game->freecells_[i].value().suit &&
+                        game->drag_card_.value().rank == game->freecells_[i].value().rank;
+                       
+      if (game->freecells_[i].has_value() && !is_animated && !is_dragged) {
         // Draw the card in this freecell
         game->drawCard(game->buffer_cr_, x, y, &(game->freecells_[i].value()));
       } else {
@@ -847,8 +853,19 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   for (int i = 0; i < 4; i++) {
     if (i < game->foundation_.size()) {
       if (!game->foundation_[i].empty()) {
-        // Draw top card of the foundation pile
-        game->drawCard(game->buffer_cr_, x, y, &(game->foundation_[i].back()));
+        // Skip drawing if this card is being dragged
+        bool is_dragged = game->dragging_ && game->drag_source_pile_ == (i + 4) &&
+                          game->drag_card_.has_value() &&
+                          game->drag_card_.value().suit == game->foundation_[i].back().suit &&
+                          game->drag_card_.value().rank == game->foundation_[i].back().rank;
+        
+        if (!is_dragged) {
+          // Draw top card of the foundation pile
+          game->drawCard(game->buffer_cr_, x, y, &(game->foundation_[i].back()));
+        } else {
+          // Draw empty foundation pile when dragging
+          game->drawEmptyPile(game->buffer_cr_, x, y);
+        }
       } else {
         // Draw empty foundation pile
         game->drawEmptyPile(game->buffer_cr_, x, y);
