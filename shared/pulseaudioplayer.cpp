@@ -80,9 +80,10 @@ public:
           uint32_t chunkSize =
               *reinterpret_cast<const uint32_t *>(&data[i + 4]);
 
+#ifdef DEBUG
           std::cout << "Found chunk: " << chunkId << ", size: " << chunkSize
                     << std::endl;
-
+#endif
           // If this is the 'fmt ' chunk, parse audio format
           if (strcmp(chunkId, "fmt ") == 0) {
             uint16_t audioFormat =
@@ -103,12 +104,13 @@ public:
               ss.format = PA_SAMPLE_S32LE;
             }
 
+#ifdef DEBUG
             std::cout << "Audio format: " << audioFormat
                       << ", Channels: " << ss.channels
                       << ", Sample rate: " << ss.rate
                       << ", Bits per sample: " << bitsPerSample << std::endl;
+#endif
           }
-
           // If this is the 'data' chunk, we've found our audio data
           if (strcmp(chunkId, "data") == 0) {
             dataOffset = i + 8; // Skip chunk ID and size
@@ -131,9 +133,10 @@ public:
           }
           return;
         }
-
+#ifdef DBUG
         std::cout << "Found data at offset: " << dataOffset
                   << ", length: " << (data.size() - dataOffset) << std::endl;
+#endif
       }
 
       // Rest of your existing code for opening the PulseAudio stream and
