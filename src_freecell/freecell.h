@@ -255,6 +255,12 @@ private:
                          const std::string &fileName,
                          std::vector<uint8_t> &fileData);
 
+  unsigned int current_seed_;
+
+  void promptForSeed();
+  void restartGame();
+
+
   void explodeCard(AnimatedCard&);
   void updateCardFragments(AnimatedCard &card);
   void drawCardFragment(cairo_t *cr, const CardFragment &fragment);                   

@@ -8,9 +8,9 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 DEBUG_FLAGS = -g -DDEBUG
 
 # Source files for Solitaire
-SRCS_COMMON_SOLITAIRE = src/solitaire.cpp src/cardlib.cpp src/sound.cpp src/animation.cpp src/keyboard.cpp src/audiomanager.cpp
-SRCS_LINUX_SOLITAIRE = src/pulseaudioplayer.cpp
-SRCS_WIN_SOLITAIRE = src/windowsaudioplayer.cpp
+SRCS_COMMON_SOLITAIRE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp
+SRCS_LINUX_SOLITAIRE = src_klondike/pulseaudioplayer.cpp
+SRCS_WIN_SOLITAIRE = src_klondike/windowsaudioplayer.cpp
 
 # Source files for FreeCell
 SRCS_COMMON_FREECELL = src_freecell/freecell.cpp src_freecell/cardlib.cpp src_freecell/keyboard.cpp src_freecell/mouse.cpp src_freecell/animation.cpp src_freecell/sound.cpp src_freecell/audiomanager.cpp
@@ -83,7 +83,7 @@ $(shell mkdir -p $(BUILD_DIR_LINUX)/src $(BUILD_DIR_LINUX)/src_freecell $(BUILD_
 
 # Default target
 .PHONY: all
-all: all-linux all-windows
+all: solitaire-linux freecell-linux
 
 windows: solitaire-windows freecell-windows
 
