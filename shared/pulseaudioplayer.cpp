@@ -36,8 +36,11 @@ public:
       pa_simple_free(s);
       return true;
     } else {
+#ifdef DEBUG
+
       std::cerr << "Failed to initialize PulseAudio: " << pa_strerror(error)
                 << std::endl;
+#endif
       return false;
     }
   }
@@ -60,7 +63,9 @@ public:
         // First verify this is actually a WAV file
         if (memcmp(data.data(), "RIFF", 4) != 0 ||
             memcmp(data.data() + 8, "WAVE", 4) != 0) {
+#ifdef DEBUG
           std::cerr << "Not a valid WAV file" << std::endl;
+#endif
           if (completionPromise) {
             completionPromise->set_value();
           }
@@ -118,7 +123,9 @@ public:
         }
 
         if (dataOffset == 0) {
+#ifdef DEBUG
           std::cerr << "No 'data' chunk found in WAV file" << std::endl;
+#endif
           if (completionPromise) {
             completionPromise->set_value();
           }
@@ -137,8 +144,10 @@ public:
                         format.c_str(), &ss, NULL, NULL, &error);
 
       if (!s) {
+#ifdef DEBUG
         std::cerr << "Failed to open PulseAudio stream: " << pa_strerror(error)
                   << std::endl;
+#endif
         if (completionPromise) {
           completionPromise->set_value();
         }
@@ -148,7 +157,9 @@ public:
       // Add a sanity check for data length
       size_t dataLength = data.size() - dataOffset;
       if (dataLength > 100 * 1024 * 1024) { // Limit to 100MB as a safety check
+#ifdef DEBUG
         std::cerr << "Data size too large: " << dataLength << std::endl;
+#endif
         pa_simple_free(s);
         if (completionPromise) {
           completionPromise->set_value();
@@ -159,8 +170,10 @@ public:
       // Write audio data to the stream
       if (pa_simple_write(s, data.data() + dataOffset, dataLength, &error) <
           0) {
+#ifdef DEBUG
         std::cerr << "Failed to write audio data: " << pa_strerror(error)
                   << std::endl;
+#endif
         pa_simple_free(s);
         if (completionPromise) {
           completionPromise->set_value();
@@ -170,8 +183,10 @@ public:
 
       // Rest of your existing code for draining and cleanup
       if (pa_simple_drain(s, &error) < 0) {
+#ifdef DEBUG
         std::cerr << "Failed to drain audio: " << pa_strerror(error)
                   << std::endl;
+#endif
       }
 
       pa_simple_free(s);

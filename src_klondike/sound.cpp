@@ -72,9 +72,10 @@ bool SolitaireGame::extractFileFromZip(const std::string &zipFilePath,
   // Close everything
   zip_fclose(file);
   zip_close(archive);
-
+#ifdef DEBUG
   std::cout << "Successfully extracted file (" << fileData.size() << " bytes)"
             << std::endl;
+#endif
   return true;
 }
 
@@ -112,11 +113,15 @@ bool SolitaireGame::initializeAudio() {
         loadSoundFromZip(GameSoundEvent::DealCard, "deal.wav") &&
         loadSoundFromZip(GameSoundEvent::Firework, "firework.wav")) {
 
+#ifdef DEBUG
       std::cout << "Sound system initialized successfully." << std::endl;
+#endif
       return true;
     } else {
+#ifdef DEBUG
       std::cerr << "Failed to load all sound effects. Sound will be disabled."
                 << std::endl;
+#endif
       AudioManager::getInstance().shutdown();
       sound_enabled_ = false;
 

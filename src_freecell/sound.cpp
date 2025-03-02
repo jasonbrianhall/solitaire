@@ -23,8 +23,10 @@ bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
   if (!archive) {
     zip_error_t zipError;
     zip_error_init_with_code(&zipError, errCode);
+#ifdef DEBUG
     std::cerr << "Failed to open ZIP archive: " << zip_error_strerror(&zipError)
               << std::endl;
+#endif
     zip_error_fini(&zipError);
     return false;
   }
@@ -32,7 +34,9 @@ bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
   // Find the file in the archive
   zip_int64_t index = zip_name_locate(archive, fileName.c_str(), 0);
   if (index < 0) {
+#ifdef DEBUG
     std::cerr << "File not found in ZIP archive: " << fileName << std::endl;
+#endif
     zip_close(archive);
     return false;
   }
@@ -49,8 +53,10 @@ bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
   // Get file size
   zip_stat_t stat;
   if (zip_stat_index(archive, index, 0, &stat) < 0) {
+#ifdef DEBUG
     std::cerr << "Failed to get file stats: " << zip_strerror(archive)
               << std::endl;
+#endif
     zip_fclose(file);
     zip_close(archive);
     return false;
@@ -62,8 +68,10 @@ bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
   // Read the file content
   zip_int64_t bytesRead = zip_fread(file, fileData.data(), stat.size);
   if (bytesRead < 0 || static_cast<zip_uint64_t>(bytesRead) != stat.size) {
+#ifdef DEBUG
     std::cerr << "Failed to read file: " << zip_file_strerror(file)
               << std::endl;
+#endif
     zip_fclose(file);
     zip_close(archive);
     return false;
@@ -83,7 +91,9 @@ bool loadSoundFromMemory(SoundEvent event, const std::vector<uint8_t> &data,
                          const std::string &format) {
   // Get file extension to determine format
   if (format != "wav" && format != "mp3") {
+#ifdef DEBUG
     std::cerr << "Unsupported audio format: " << format << std::endl;
+#endif
     return false;
   }
 
@@ -112,11 +122,15 @@ bool FreecellGame::initializeAudio() {
         loadSoundFromZip(GameSoundEvent::DealCard, "deal.wav") &&
         loadSoundFromZip(GameSoundEvent::Firework, "firework.wav")) {
 
+#ifdef DEBUG
       std::cout << "Sound system initialized successfully." << std::endl;
+#endif
       return true;
     } else {
+#ifdef DEBUG
       std::cerr << "Failed to load all sound effects. Sound will be disabled."
                 << std::endl;
+#endif
       AudioManager::getInstance().shutdown();
       sound_enabled_ = false;
 
@@ -159,8 +173,10 @@ bool FreecellGame::initializeAudio() {
       return false;
     }
   } else {
+#ifdef DEBUG
     std::cerr << "Failed to initialize audio system. Sound will be disabled."
               << std::endl;
+#endif
     sound_enabled_ = false;
     return false;
   }
@@ -171,8 +187,10 @@ bool FreecellGame::loadSoundFromZip(GameSoundEvent event,
   // Extract the sound file from the ZIP archive
   std::vector<uint8_t> soundData;
   if (!extractFileFromZip(sounds_zip_path_, soundFileName, soundData)) {
+#ifdef DEBUG
     std::cerr << "Failed to extract sound file from ZIP archive: "
               << soundFileName << std::endl;
+#endif
     return false;
   }
 
@@ -185,7 +203,9 @@ bool FreecellGame::loadSoundFromZip(GameSoundEvent event,
     std::transform(format.begin(), format.end(), format.begin(),
                    [](unsigned char c) { return std::tolower(c); });
   } else {
+#ifdef DEBUG
     std::cerr << "Sound file has no extension: " << soundFileName << std::endl;
+#endif
     return false;
   }
 
@@ -215,7 +235,9 @@ bool FreecellGame::loadSoundFromZip(GameSoundEvent event,
     break;
 
   default:
+#ifdef DEBUG
     std::cerr << "Unknown sound event" << std::endl;
+#endif
     return false;
   }
 

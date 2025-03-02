@@ -40,7 +40,10 @@ bool AudioManager::initialize() {
     return true;
   }
 
+#ifdef DEBUG
   std::cerr << "Failed to initialize audio system" << std::endl;
+#endif
+
   return false;
 }
 
@@ -81,7 +84,9 @@ bool AudioManager::loadSound(SoundEvent event, const std::string &filePath) {
   // Read file content
   std::ifstream file(filePath, std::ios::binary | std::ios::ate);
   if (!file) {
+#ifdef DEBUG
     std::cerr << "Failed to open audio file: " << filePath << std::endl;
+#endif
     return false;
   }
 
@@ -95,7 +100,9 @@ bool AudioManager::loadSound(SoundEvent event, const std::string &filePath) {
   soundData.data.resize(size);
 
   if (!file.read(reinterpret_cast<char *>(soundData.data.data()), size)) {
+#ifdef DEBUG
     std::cerr << "Failed to read audio file: " << filePath << std::endl;
+#endif
     return false;
   }
 
@@ -119,7 +126,9 @@ bool AudioManager::loadSoundFromMemory(SoundEvent event,
                  ::tolower);
 
   if (formatLower != "wav" && formatLower != "mp3") {
+#ifdef DEBUG
     std::cerr << "Unsupported audio format: " << format << std::endl;
+#endif
     return false;
   }
 

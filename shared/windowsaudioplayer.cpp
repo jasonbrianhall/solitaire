@@ -56,7 +56,9 @@ public:
         
         // Check if audio devices are available
         if (waveOutGetNumDevs() == 0) {
+#ifdef DEBUG
             std::cerr << "No audio output devices available" << std::endl;
+#endif
             return false;
         }
         
@@ -73,7 +75,9 @@ public:
         MMRESULT result = waveOutOpen(&hWaveOut_, WAVE_MAPPER, &wfx_, 
                                      (DWORD_PTR)waveOutProc, (DWORD_PTR)this, CALLBACK_FUNCTION);
         if (result != MMSYSERR_NOERROR) {
+#ifdef DEBUG
             std::cerr << "Failed to open wave device, error: " << result << std::endl;
+#endif
             return false;
         }
         
@@ -91,7 +95,9 @@ public:
             // Prepare the header
             result = waveOutPrepareHeader(hWaveOut_, &waveHeaders_[i], sizeof(WAVEHDR));
             if (result != MMSYSERR_NOERROR) {
+#ifdef DEBUG
                 std::cerr << "Failed to prepare header, error: " << result << std::endl;
+#endif
                 waveOutClose(hWaveOut_);
                 return false;
             }
@@ -149,7 +155,9 @@ public:
                  std::shared_ptr<std::promise<void>> completionPromise) {
         // Only support WAV format
         if (format != "wav") {
+#ifdef DEBUG
             std::cerr << "Only WAV format is supported" << std::endl;
+#endif
             if (completionPromise) completionPromise->set_value();
             return false;
         }
@@ -158,7 +166,9 @@ public:
         if (data.size() < 44 || 
             memcmp(data.data(), "RIFF", 4) != 0 || 
             memcmp(data.data() + 8, "WAVE", 4) != 0) {
+#ifdef DEBUG
             std::cerr << "Invalid WAV file" << std::endl;
+#endif
             if (completionPromise) completionPromise->set_value();
             return false;
         }
@@ -209,7 +219,9 @@ private:
         
         // Only support 16-bit PCM for now (for simplicity)
         if (sound.bitsPerSample != 16) {
+#ifdef DEBUG
             std::cerr << "Only 16-bit PCM WAV is supported" << std::endl;
+#endif
             return false;
         }
         
@@ -228,7 +240,9 @@ private:
         }
         
         if (sound.dataOffset == 0 || sound.dataOffset >= data.size()) {
+#ifdef DEBUG
             std::cerr << "Data chunk not found in WAV file" << std::endl;
+#endif
             return false;
         }
         
@@ -327,7 +341,9 @@ private:
                 // Write the buffer to the output device
                 MMRESULT result = waveOutWrite(hWaveOut_, &waveHeaders_[bufferIndex], sizeof(WAVEHDR));
                 if (result != MMSYSERR_NOERROR) {
+#ifdef DEBUG
                     std::cerr << "Failed to write audio buffer, error: " << result << std::endl;
+#endif
                 }
             }
             
