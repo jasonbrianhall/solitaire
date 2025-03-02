@@ -154,22 +154,22 @@ void FreecellGame::launchNextCard() {
 
   if (trajectory_choice < 5) {
     // 5% chance to go straight down
-    angle = 3 * M_PI / 2 + (rand() % 200 - 100) / 1000.0 * M_PI / 8;
+    angle = 3 * G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
   } else if (trajectory_choice < 15) {
     // 10% chance for high arc launch
     if (rand() % 2 == 0) {
       // High arc left
-      angle = M_PI + (rand() % 500) / 1000.0 * M_PI / 4;
+      angle = G_PI + (rand() % 500) / 1000.0 * G_PI / 4;
     } else {
       // High arc right
-      angle = 0 + (rand() % 500) / 1000.0 * M_PI / 4;
+      angle = 0 + (rand() % 500) / 1000.0 * G_PI / 4;
     }
   } else if (trajectory_choice < 55) {
     // 40% chance for left trajectory
-    angle = M_PI - (rand() % 1000) / 1000.0 * M_PI / 4;
+    angle = G_PI - (rand() % 1000) / 1000.0 * G_PI / 4;
   } else {
     // 45% chance for right trajectory
-    angle = (rand() % 1000) / 1000.0 * M_PI / 4;
+    angle = (rand() % 1000) / 1000.0 * G_PI / 4;
   }
 
   // Create an animated card instance
@@ -247,7 +247,7 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
         dir_y /= magnitude;
       } else {
         // If fragment is at center, give it a random direction
-        double rand_angle = 2.0 * M_PI * (rand() % 1000) / 1000.0;
+        double rand_angle = 2.0 * G_PI * (rand() % 1000) / 1000.0;
         dir_x = cos(rand_angle);
         dir_y = sin(rand_angle);
       }
@@ -541,13 +541,13 @@ void FreecellGame::updateFoundationMoveAnimation() {
     // Add a slight arc to the motion
     double progress = 1.0 - (distance / sqrt(dx * dx + dy * dy));
     double arc_height = 30.0; // Maximum height of the arc in pixels
-    double arc_offset = sin(progress * M_PI) * arc_height;
+    double arc_offset = sin(progress * G_PI) * arc_height;
 
     foundation_move_card_.x += move_x;
     foundation_move_card_.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
 
     // Add a slight rotation
-    foundation_move_card_.rotation = sin(progress * M_PI * 2) * 0.1;
+    foundation_move_card_.rotation = sin(progress * G_PI * 2) * 0.1;
   }
 
   refreshDisplay();
