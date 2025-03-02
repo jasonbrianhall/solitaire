@@ -21,7 +21,9 @@ FreecellGame::FreecellGame()
       drag_source_card_idx_(-1),
       sound_enabled_(true),      
       sounds_zip_path_("sound.zip"),
-      current_seed_(rand()) {
+      current_seed_(0) {
+  srand(time(NULL));  // Seed the random number generator with current time
+  current_seed_ = rand();  // Generate random seed
   initializeGame();
   initializeSettingsDir();
   initializeAudio();
