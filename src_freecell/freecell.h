@@ -269,6 +269,16 @@ private:
 
   void launchCardFromFreecell();
 
+  void initializeDrawBuffer(int width, int height);
+  void drawFreecells();
+  void drawFoundationPiles();
+  void drawTableau();
+  void drawTableauDuringDealAnimation(int column_index, int x, int tableau_y);
+  void drawNormalTableauColumn(int column_index, int x, int tableau_y);
+  void drawDraggedCards();
+  void drawAnimations();
+  void drawWinAnimation();
+
   // For drawing allocation
   GtkAllocation allocation;
 };
