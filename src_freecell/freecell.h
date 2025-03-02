@@ -46,6 +46,7 @@ struct AnimatedCard {
   bool exploded;
   bool face_up;
   std::vector<CardFragment> fragments;
+  int source_pile;
 
   // For deal animation
   double target_x;
