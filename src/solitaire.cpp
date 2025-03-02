@@ -19,7 +19,8 @@ SolitaireGame::SolitaireGame()
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
       sound_enabled_(true),           // Set sound to enabled by default
-      sounds_zip_path_("sound.zip") { // Set the default sound zip path
+      sounds_zip_path_("sound.zip"),
+      current_seed_(rand()) { // Set the default sound zip path
   initializeGame();
   initializeSettingsDir();
   initializeAudio(); // This will handle loading all sounds from the zip file
@@ -65,7 +66,7 @@ void SolitaireGame::initializeGame() {
       throw std::runtime_error("Could not find cards.zip in any search path");
     }
 
-    deck_.shuffle();
+    deck_.shuffle(current_seed_);
 
     // Clear all piles
     stock_.clear();
@@ -962,6 +963,23 @@ void SolitaireGame::setupMenuBar() {
                    this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
 
+GtkWidget *restartGameItem = gtk_menu_item_new_with_label("Restart Game");
+g_signal_connect(G_OBJECT(restartGameItem), "activate", 
+                G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                  static_cast<SolitaireGame *>(data)->restartGame();
+                }), 
+                this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), restartGameItem);
+
+// Add a Custom Seed option
+GtkWidget *seedItem = gtk_menu_item_new_with_label("Enter Seed...");
+g_signal_connect(G_OBJECT(seedItem), "activate", 
+                G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                  static_cast<SolitaireGame *>(data)->promptForSeed();
+                }), 
+                this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
+
 #ifdef DEBUG
   GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
   g_signal_connect(G_OBJECT(testLayoutItem), "activate",
@@ -1152,14 +1170,27 @@ void SolitaireGame::setupMenuBar() {
 
 void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
-  
+    
   // Check if win animation is active
   if (game->win_animation_active_) {
     game->stopWinAnimation();
   }
 
+  game->current_seed_ = rand();
+
   game->initializeGame();
   game->refreshDisplay();
+}
+
+void SolitaireGame::restartGame() {
+  // Check if win animation is active
+  if (win_animation_active_) {
+    stopWinAnimation();
+  }
+
+  // Keep the current seed and restart the game
+  initializeGame();
+  refreshDisplay();
 }
 
 void SolitaireGame::onQuit(GtkWidget *widget, gpointer data) {
@@ -1729,4 +1760,35 @@ gboolean SolitaireGame::onAutoFinishTick(gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
   game->processNextAutoFinishMove();
   return FALSE; // Don't repeat the timer
+}
+
+void SolitaireGame::promptForSeed() {
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      "Enter Seed", GTK_WINDOW(window_),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
+      "_Cancel", GTK_RESPONSE_CANCEL,
+      "_OK", GTK_RESPONSE_ACCEPT,
+      NULL);
+
+  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  gtk_container_set_border_width(GTK_CONTAINER(content_area), 10);
+
+  GtkWidget *entry = gtk_entry_new();
+  gtk_entry_set_text(GTK_ENTRY(entry), "");
+  gtk_container_add(GTK_CONTAINER(content_area), entry);
+
+  gtk_widget_show_all(dialog);
+
+  if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+    const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
+    try {
+      current_seed_ = std::stoul(text);
+      initializeGame();
+      refreshDisplay();
+    } catch (...) {
+      // Invalid input, ignore
+    }
+  }
+
+  gtk_widget_destroy(dialog);
 }

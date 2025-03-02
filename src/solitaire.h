@@ -206,6 +206,8 @@ private:
 
   void setupMenuBar();
   static void onNewGame(GtkWidget *widget, gpointer data);
+  void restartGame();
+  void promptForSeed();
   static void onQuit(GtkWidget *widget, gpointer data);
   static void onAbout(GtkWidget *widget, gpointer data);
   GtkWidget *vbox_; // Vertical box to hold menu and game area
@@ -297,6 +299,8 @@ private:
 
   // Method to clean up audio resources
   void cleanupAudio();
+
+  unsigned int current_seed_;
 
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
