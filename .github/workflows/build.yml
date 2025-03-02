@@ -62,7 +62,7 @@ jobs:
                 <Directory Id="INSTALLFOLDER" Name="Solitaire GTK">
                   <Component Id="MainExecutable" Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23">
                     <File Id="MainEXE" Name="solitaire.exe" Source="solitaire.exe" KeyPath="yes"/>
-                    <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe" KeyPath="yes"/>
+                    <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe"/>
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
                    <File Id="SoundsZIP" Name="sound.zip" Source="sound.zip"/>
                     <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
