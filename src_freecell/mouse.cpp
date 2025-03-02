@@ -480,33 +480,6 @@ bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) 
   return different_colors && descending_rank;
 }
 
-bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) const {
-  // Tableau must be within range
-  if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size()) {
-    return false;
-  }
-  
-  // First make sure the card sequence itself is valid
-  if (!isValidTableauSequence(cards)) {
-    return false;
-  }
-  
-  // Empty tableau can accept any valid sequence
-  if (tableau_[tableau_idx].empty()) {
-    return true;
-  }
-  
-  // Non-empty tableau - check if the bottom card can be placed on the tableau's top card
-  const cardlib::Card& bottom_card = cards[0];
-  const cardlib::Card& top_card = tableau_[tableau_idx].back();
-  
-  // Bottom card must be of different color and one rank lower than tableau's top card
-  bool different_colors = isCardRed(bottom_card) != isCardRed(top_card);
-  bool descending_rank = static_cast<int>(bottom_card.rank) + 1 == static_cast<int>(top_card.rank);
-  
-  return different_colors && descending_rank;
-}
-
 gboolean FreecellGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
   FreecellGame *game = static_cast<FreecellGame *>(data);
 

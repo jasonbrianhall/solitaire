@@ -85,7 +85,10 @@ void FreecellGame::updateWinAnimation() {
       }
     }
   }
-
+  if (cards_launched_<=0)
+  {
+      all_cards_finished=true;
+  }
   // Stop animation if all cards are done and we've launched them all
   /*if (all_cards_finished && cards_launched_ >= 52) {
     stopWinAnimation();

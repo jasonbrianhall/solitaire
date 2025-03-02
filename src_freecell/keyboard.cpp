@@ -695,31 +695,6 @@ bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) 
   return different_colors && descending_rank;
 }
 
-// Check if a stack of cards can be moved to a tableau pile
-bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) {
-  // Tableau must be within range
-  if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
-    return false;
-  }
-  
-  // Empty tableau can accept any card
-  if (tableau_[tableau_idx].empty()) {
-    // Check the sequence is valid (alternating colors, descending ranks)
-    return isValidTableauSequence(cards);
-  }
-  
-  // Non-empty tableau - check if the bottom card can be placed on the tableau's top card
-  const cardlib::Card& bottom_card = cards[0];
-  const cardlib::Card& top_card = tableau_[tableau_idx].back();
-  
-  // Bottom card must be of different color and one rank lower than tableau's top card
-  bool different_colors = isCardRed(bottom_card) != isCardRed(top_card);
-  bool descending_rank = static_cast<int>(bottom_card.rank) + 1 == static_cast<int>(top_card.rank);
-  
-  // The stack itself must be valid
-  return different_colors && descending_rank && isValidTableauSequence(cards);
-}
-
 // Check if a stack of cards forms a valid tableau sequence
 bool FreecellGame::isValidTableauSequence(const std::vector<cardlib::Card>& cards) {
   if (cards.size() <= 1) {
