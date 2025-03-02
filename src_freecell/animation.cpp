@@ -19,16 +19,22 @@ void FreecellGame::updateWinAnimation() {
   if (launch_timer_ >= 100) { // Launch a new card every 100ms
     launch_timer_ = 0;
     if (rand() % 100 < 10) {
-        // Launch 4 cards in rapid succession
+        // Launch multiple cards in rapid succession
         for (int i = 0; i < 4; i++) {
-            launchNextCard();
-            
-            // Check if we've reached the limit - break if needed
-            if (cards_launched_ >= 52) 
-                break;
+            // Alternate between foundation and freecell launches
+            if (i % 2 == 0) {
+                launchNextCard();        // Launch from foundation
+            } else {
+                launchCardFromFreecell(); // Launch from freecell area
+            }
         }
     } else {    
-       launchNextCard();
+       // Randomly choose launch source
+       if (rand() % 2 == 0) {
+           launchNextCard();          // Launch from foundation
+       } else {
+           launchCardFromFreecell();  // Launch from freecell area
+       }
     }
   }
 
@@ -85,26 +91,22 @@ void FreecellGame::updateWinAnimation() {
       }
     }
   }
-  if (cards_launched_<=0)
-  {
-      all_cards_finished=true;
-  }
-  // Stop animation if all cards are done and we've launched them all
-  /*if (all_cards_finished && cards_launched_ >= 52) {
-    stopWinAnimation();
-  } */
-  
-  if (all_cards_finished) {
-  // Reset tracking for animated cards to allow reusing the piles
-  for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
-    std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
-  }
-  // Reset cards_launched_ counter to allow showing which cards we've used
-  cards_launched_ = 0;
+
+  // Clear inactive cards periodically to prevent memory bloat
+  if (animated_cards_.size() > 200) {
+    // Manual removal of inactive cards without using std::remove_if
+    std::vector<AnimatedCard> active_cards;
+    for (const auto& card : animated_cards_) {
+      if (card.active) {
+        active_cards.push_back(card);
+      }
+    }
+    animated_cards_ = active_cards;
   }
 
   refreshDisplay();
 }
+
 
 void FreecellGame::launchNextCard() {
   // Try each foundation pile in sequence, cycling through them
@@ -392,6 +394,7 @@ void FreecellGame::stopWinAnimation() {
   }
 
   animated_cards_.clear();
+  freecell_animation_cards_.clear();
   cards_launched_ = 0;
   launch_timer_ = 0;
 
@@ -682,31 +685,31 @@ void FreecellGame::startWinAnimation() {
 
   playSound(GameSoundEvent::WinGame);
   // Show win message
-GtkWidget *dialog = gtk_message_dialog_new(
-    GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
-    GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+      GTK_BUTTONS_OK, NULL);
 
-// Get the message area to apply formatting
-GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
+  // Get the message area to apply formatting
+  GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
 
-// Create a label with centered text
-GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
-gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
-gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
-gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
-gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
-gtk_widget_set_margin_start(label, 20);
-gtk_widget_set_margin_end(label, 20);
-gtk_widget_set_margin_top(label, 10);
-gtk_widget_set_margin_bottom(label, 10);
+  // Create a label with centered text
+  GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
+  gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+  gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+  gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_margin_start(label, 20);
+  gtk_widget_set_margin_end(label, 20);
+  gtk_widget_set_margin_top(label, 10);
+  gtk_widget_set_margin_bottom(label, 10);
 
-// Add the label to the message area
-gtk_container_add(GTK_CONTAINER(message_area), label);
-gtk_widget_show(label);
+  // Add the label to the message area
+  gtk_container_add(GTK_CONTAINER(message_area), label);
+  gtk_widget_show(label);
 
-// Run the dialog
-gtk_dialog_run(GTK_DIALOG(dialog));
-gtk_widget_destroy(dialog);
+  // Run the dialog
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 
   win_animation_active_ = true;
   cards_launched_ = 0;
@@ -720,12 +723,41 @@ gtk_widget_destroy(dialog);
     animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
   }
 
+  // Initialize freecell animation cards
+  freecell_animation_cards_.clear();
+  for (int i = 0; i < 4; i++) {
+    std::vector<cardlib::Card> cards;
+    // Copy all cards from all foundation piles
+    for (const auto& pile : foundation_) {
+      for (const auto& card : pile) {
+        cards.push_back(card);
+      }
+    }
+    // Use the deck's shuffle function instead of std::random_shuffle
+    // Create a temporary deck with our cards
+    cardlib::Deck temp_deck;
+    temp_deck = cardlib::Deck(); // Clear the standard deck
+    for (const auto& card : cards) {
+      temp_deck.addCard(card);
+    }
+    temp_deck.shuffle(); // Shuffle using the deck's shuffle method
+    
+    // Extract the shuffled cards
+    cards.clear();
+    while (!temp_deck.isEmpty()) {
+      auto card = temp_deck.drawCard();
+      if (card.has_value()) {
+        cards.push_back(card.value());
+      }
+    }
+    
+    freecell_animation_cards_.push_back(cards);
+  }
+
   // Set up animation timer
-  animation_timer_id_ =
-      g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
+  animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
   animated_freecell_cards_.clear();
   animated_freecell_cards_.resize(4, false);
-
 }
 
 gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
@@ -780,8 +812,15 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
         // Draw the card in this freecell
         game->drawCard(game->buffer_cr_, x, y, &(game->freecells_[i].value()));
       } else {
-        // Draw empty freecell
-        game->drawEmptyPile(game->buffer_cr_, x, y);
+        // If win animation is active, draw a card from freecell_animation_cards if available
+        if (game->win_animation_active_ && !game->freecell_animation_cards_.empty() && 
+            i < game->freecell_animation_cards_.size() && !game->freecell_animation_cards_[i].empty()) {
+          // Draw the top card of the corresponding animation pile
+          game->drawCard(game->buffer_cr_, x, y, &(game->freecell_animation_cards_[i].back()));
+        } else {
+          // Draw empty freecell
+          game->drawEmptyPile(game->buffer_cr_, x, y);
+        }
       }
     }
     x += game->current_card_width_ + game->current_card_spacing_;
@@ -935,3 +974,108 @@ gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   return TRUE;
 }
 
+void FreecellGame::launchCardFromFreecell() {
+  // Use static variables to track state between calls
+  static int current_pile_index = 0;
+  
+  // We'll use a copy of the foundation cards for our second animation source
+  // Make sure we have freecell cards initialized for animation
+  if (freecell_animation_cards_.empty()) {
+    // Create a copy of all foundation cards for each freecell position
+    for (int i = 0; i < 4; i++) {
+      std::vector<cardlib::Card> cards;
+      // Copy all cards from all foundation piles
+      for (const auto& pile : foundation_) {
+        for (const auto& card : pile) {
+          cards.push_back(card);
+        }
+      }
+      
+      // Use the deck's shuffle function instead of std::random_shuffle
+      // Create a temporary deck with our cards
+      cardlib::Deck temp_deck;
+      temp_deck = cardlib::Deck(); // Clear the standard deck
+      for (const auto& card : cards) {
+        temp_deck.addCard(card);
+      }
+      temp_deck.shuffle(); // Shuffle using the deck's shuffle method
+      
+      // Extract the shuffled cards
+      cards.clear();
+      while (!temp_deck.isEmpty()) {
+        auto card = temp_deck.drawCard();
+        if (card.has_value()) {
+          cards.push_back(card.value());
+        }
+      }
+      
+      freecell_animation_cards_.push_back(cards);
+    }
+  }
+
+  // Try each freecell position
+  for (int attempts = 0; attempts < 4; attempts++) {
+    int pile_index = (current_pile_index + attempts) % 4;
+    
+    // Check if this pile has any cards
+    if (!freecell_animation_cards_[pile_index].empty()) {
+      // Calculate the starting X position based on the freecell position
+      double start_x = current_card_spacing_ + pile_index * (current_card_width_ + current_card_spacing_);
+      double start_y = current_card_spacing_;
+
+      // Randomize launch trajectory - OPPOSITE BIAS compared to foundation launches
+      int trajectory_choice = rand() % 100;
+      int direction = rand() % 2;
+      double speed = (15 + (rand() % 5)) * (direction ? 1 : -1);
+
+      double angle;
+      if (trajectory_choice < 5) {
+        // 5% chance to go straight up
+        angle = G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
+      } else if (trajectory_choice < 15) {
+        // 10% chance for high arc launch
+        angle = (rand() % 2 == 0) ? 
+          (G_PI * 0.6 + (rand() % 500) / 1000.0 * G_PI / 6) : 
+          (G_PI * 0.4 - (rand() % 500) / 1000.0 * G_PI / 6);
+      } else {
+        // Otherwise, OPPOSITE bias - mainly launch right instead of left
+        angle = trajectory_choice < 85 ? 
+          (G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4) : 
+          (G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4);
+      }
+
+      // Create animated card
+      AnimatedCard anim_card;
+      anim_card.card = freecell_animation_cards_[pile_index].back();
+      anim_card.x = start_x;
+      anim_card.y = start_y;
+      anim_card.velocity_x = cos(angle) * speed;
+      anim_card.velocity_y = sin(angle) * speed;
+      anim_card.rotation = 0;
+      anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+      anim_card.active = true;
+      anim_card.exploded = false;
+      anim_card.face_up = true;
+      anim_card.source_pile = pile_index + 100; // Mark as from freecell animation
+
+      // Remove the card from the freecell animation pile
+      cardlib::Card card = freecell_animation_cards_[pile_index].back();
+      freecell_animation_cards_[pile_index].pop_back();
+      
+      // Add the card to the BOTTOM of the same freecell animation pile
+      freecell_animation_cards_[pile_index].insert(freecell_animation_cards_[pile_index].begin(), card);
+
+      // Add to animated cards
+      animated_cards_.push_back(anim_card);
+      cards_launched_++;
+      
+      // Move to the next pile for the next card
+      current_pile_index = (pile_index + 1) % 4;
+      return;
+    }
+  }
+  
+  // If we get here, there were no cards in any pile
+  // This shouldn't happen if we've initialized correctly
+  current_pile_index = (current_pile_index + 1) % 4;
+}

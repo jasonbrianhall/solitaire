@@ -138,7 +138,7 @@ private:
   std::vector<std::optional<cardlib::Card>> freecells_; // 4 Free cells for temporary storage
   std::vector<std::vector<cardlib::Card>> foundation_; // 4 piles for aces (one per suit)
   std::vector<std::vector<cardlib::Card>> tableau_;    // 8 tableau columns
-  
+  std::vector<std::vector<cardlib::Card>> freecell_animation_cards_;
   // Drawing methods
   void drawCard(cairo_t *cr, int x, int y, const cardlib::Card *card);
   void drawEmptyPile(cairo_t *cr, int x, int y);
@@ -266,6 +266,8 @@ private:
   void updateCardFragments(AnimatedCard &card);
   void drawCardFragment(cairo_t *cr, const CardFragment &fragment);                   
   cairo_surface_t* getCardSurface(const cardlib::Card& card);
+
+  void launchCardFromFreecell();
 
   // For drawing allocation
   GtkAllocation allocation;
