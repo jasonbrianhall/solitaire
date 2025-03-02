@@ -119,8 +119,8 @@ void FreecellGame::launchNextCard() {
     // Check if this pile has any cards
     if (!foundation_[pile_index].empty()) {
       // Calculate the starting X position based on the pile
-      double start_x = current_card_spacing_ +
-          (3 + pile_index) * (current_card_width_ + current_card_spacing_);
+      // FIXED: Corrected the X position calculation for foundation piles
+      double start_x = allocation.width - (4 - pile_index) * (current_card_width_ + current_card_spacing_);
       double start_y = current_card_spacing_;
 
       // Randomize launch trajectory
@@ -140,8 +140,8 @@ void FreecellGame::launchNextCard() {
       } else {
         // Otherwise, spread left and right
         angle = trajectory_choice < 85 ? 
-          (G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4) : 
-          (G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4);
+          (G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4) : 
+          (G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4);
       }
 
       // Create animated card

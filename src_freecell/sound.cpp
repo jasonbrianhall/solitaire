@@ -80,9 +80,10 @@ bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
   // Close everything
   zip_fclose(file);
   zip_close(archive);
-
+#ifdef DEBUG
   std::cout << "Successfully extracted file (" << fileData.size() << " bytes)"
             << std::endl;
+#endif
   return true;
 }
 
