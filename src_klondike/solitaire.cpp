@@ -464,6 +464,7 @@ if (game->win_animation_active_) {
             game->startFoundationMoveAnimation(*card, pile_index,
                                                tableau_pile.size() - 1,
                                                target_foundation + 2);
+            game->playSound(GameSoundEvent::CardPlace);
 
             // Remove card from tableau
             tableau_pile.pop_back();
