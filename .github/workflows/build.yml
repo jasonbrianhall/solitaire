@@ -3,8 +3,18 @@ name: Build Solitaire
 on:
   push:
     branches: [ dev, master ]
+    paths:
+      - '**.cpp'
+      - '**.h'
+      - 'Makefile'
+      - '**/Makefile'
   pull_request:
     branches: [ dev ]
+    paths:
+      - '**.cpp'
+      - '**.h'
+      - 'Makefile'
+      - '**/Makefile'
 
   workflow_dispatch:
 
