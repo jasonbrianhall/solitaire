@@ -786,6 +786,9 @@ gtk_widget_destroy(dialog);
   // Set up animation timer
   animation_timer_id_ =
       g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
+  animated_freecell_cards_.clear();
+  animated_freecell_cards_.resize(4, false);
+
 }
 
 gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {

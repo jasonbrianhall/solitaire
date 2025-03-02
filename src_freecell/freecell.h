@@ -101,7 +101,7 @@ private:
   // Card dimensions handler
   void updateCardDimensions(int window_width, int window_height);
   double getScaleFactor(int window_width, int window_height) const;
-  
+  std::vector<bool> animated_freecell_cards_;
   // Win animation fields
   bool win_animation_active_ = false;
   std::vector<AnimatedCard> animated_cards_;
