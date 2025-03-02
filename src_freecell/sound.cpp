@@ -1,5 +1,5 @@
 #include "audiomanager.h"
-#include "solitaire.h"
+#include "freecell.h"
 #include <algorithm>
 #include <cctype> // Added for std::tolower
 #include <fstream>
@@ -14,7 +14,7 @@
 #endif
 
 // Function to extract a file from a ZIP archive into memory
-bool SolitaireGame::extractFileFromZip(const std::string &zipFilePath,
+bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
                                        const std::string &fileName,
                                        std::vector<uint8_t> &fileData) {
   int errCode = 0;
@@ -91,7 +91,7 @@ bool loadSoundFromMemory(SoundEvent event, const std::vector<uint8_t> &data,
   return AudioManager::getInstance().loadSoundFromMemory(event, data, format);
 }
 
-bool SolitaireGame::initializeAudio() {
+bool FreecellGame::initializeAudio() {
   // Don't do anything if sound is disabled
   if (!sound_enabled_) {
     return false;
@@ -166,7 +166,7 @@ bool SolitaireGame::initializeAudio() {
   }
 }
 
-bool SolitaireGame::loadSoundFromZip(GameSoundEvent event,
+bool FreecellGame::loadSoundFromZip(GameSoundEvent event,
                                      const std::string &soundFileName) {
   // Extract the sound file from the ZIP archive
   std::vector<uint8_t> soundData;
@@ -224,7 +224,7 @@ bool SolitaireGame::loadSoundFromZip(GameSoundEvent event,
                                                          format);
 }
 
-void SolitaireGame::playSound(GameSoundEvent event) {
+void FreecellGame::playSound(GameSoundEvent event) {
   if (!sound_enabled_) {
     return;
   }
@@ -258,14 +258,14 @@ void SolitaireGame::playSound(GameSoundEvent event) {
   AudioManager::getInstance().playSound(audioEvent);
 }
 
-void SolitaireGame::cleanupAudio() {
+void FreecellGame::cleanupAudio() {
   if (sound_enabled_) {
     AudioManager::getInstance().shutdown();
     sound_enabled_ = false;
   }
 }
 
-bool SolitaireGame::setSoundsZipPath(const std::string &path) {
+bool FreecellGame::setSoundsZipPath(const std::string &path) {
   // Save original path in case of failure
   std::string original_path = sounds_zip_path_;
 

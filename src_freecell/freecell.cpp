@@ -818,44 +818,6 @@ void FreecellGame::refreshDisplay() {
   }
 }
 
-// This is a simplified version of the sound setup from SolitaireGame
-bool FreecellGame::initializeAudio() {
-  // If sound is disabled, return early
-  if (!sound_enabled_) {
-    return false;
-  }
-
-  // Basic placeholder for audio initialization
-  return true;
-}
-
-void FreecellGame::playSound(GameSoundEvent event) {
-  // No-op implementation for now
-  // Would use AudioManager to play sounds
-}
-
-void FreecellGame::cleanupAudio() {
-  // No-op implementation for now
-  // Would clean up AudioManager resources
-}
-
-bool FreecellGame::loadSoundFromZip(GameSoundEvent event, const std::string &soundFileName) {
-  // Placeholder implementation
-  return true;
-}
-
-bool FreecellGame::extractFileFromZip(const std::string &zipFilePath,
-                                     const std::string &fileName,
-                                     std::vector<uint8_t> &fileData) {
-  // Placeholder implementation
-  return true;
-}
-
-bool FreecellGame::setSoundsZipPath(const std::string &path) {
-  sounds_zip_path_ = path;
-  return true;
-}
-
 void FreecellGame::setupEasyGame() {
   // Clear all piles
   freecells_.clear();
