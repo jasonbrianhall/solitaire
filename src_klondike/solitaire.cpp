@@ -257,11 +257,13 @@ void SolitaireGame::deal() {
     for (int j = 0; j < i; j++) {
       if (auto card = deck_.drawCard()) {
         tableau_[i].emplace_back(*card, false); // face down
+        playSound(GameSoundEvent::CardFlip);
       }
     }
     // Deal one card face up at the end
     if (auto card = deck_.drawCard()) {
       tableau_[i].emplace_back(*card, true); // face up
+      playSound(GameSoundEvent::CardFlip);
     }
   }
 
@@ -385,7 +387,7 @@ if (game->win_animation_active_) {
       game->drag_start_x_ = event->x;
       game->drag_start_y_ = event->y;
       game->drag_cards_ = game->getDragCards(pile_index, card_index);
-
+      game->playSound(GameSoundEvent::CardFlip);
       // Calculate offsets
       int x_offset_multiplier;
       if (pile_index >= 6) {
@@ -436,7 +438,7 @@ if (game->win_animation_active_) {
           // Start animation
           game->startFoundationMoveAnimation(*card, pile_index, 0,
                                              target_foundation + 2);
-
+          game->playSound(GameSoundEvent::CardPlace);
           // Remove card from waste pile
           game->waste_.pop_back();
 
@@ -555,6 +557,7 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
             tableau_pile.emplace_back(card, true);
           }
           move_successful = true;
+          game->playSound(GameSoundEvent::CardPlace);
         }
       }
 
@@ -1688,9 +1691,11 @@ void SolitaireGame::processNextAutoFinishMove() {
     // Try to move the waste card to foundation
     for (size_t f = 0; f < foundation_.size(); f++) {
       if (canMoveToFoundation(waste_card, f)) {
+        // Play sound when a move is found and about to be executed
+        playSound(GameSoundEvent::CardPlace);
+        
         // Use the animation to move the card
         startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
-
         // Remove card from waste pile
         waste_.pop_back();
 
@@ -1711,6 +1716,9 @@ void SolitaireGame::processNextAutoFinishMove() {
         // Try to move to foundation
         for (size_t f = 0; f < foundation_.size(); f++) {
           if (canMoveToFoundation(top_card, f)) {
+            // Play sound when a move is found and about to be executed
+            playSound(GameSoundEvent::CardPlace);
+            
             // Use the animation to move the card
             startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1,
                                          f + 2);
@@ -1720,8 +1728,7 @@ void SolitaireGame::processNextAutoFinishMove() {
 
             // Flip the new top card if needed
             if (!pile.empty() && !pile.back().face_up) {
-              // this->playSound(GameSoundEvent::CardFlip);
-
+              playSound(GameSoundEvent::CardFlip);
               pile.back().face_up = true;
             }
 

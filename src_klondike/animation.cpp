@@ -1112,7 +1112,7 @@ void SolitaireGame::drawAnimatedCard(cairo_t *cr,
 void SolitaireGame::startStockToWasteAnimation() {
   if (stock_to_waste_animation_active_ || stock_.empty())
     return;
-
+  playSound(GameSoundEvent::CardFlip);
 #ifdef DEBUG
   std::cout << "Starting stock to waste animation" << std::endl;
 #endif
@@ -1187,9 +1187,11 @@ void SolitaireGame::updateStockToWasteAnimation() {
 
   // Determine if the card has arrived at destination
   if (distance < 5.0) {
+
     // Card has arrived
     waste_.push_back(stock_to_waste_card_.card);
     pending_waste_cards_.pop_back();
+    playSound(GameSoundEvent::CardPlace);
 
     // Check if there are more cards to animate
     if (!pending_waste_cards_.empty()) {
