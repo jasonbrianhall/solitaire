@@ -239,15 +239,22 @@ void FreecellGame::launchNextCard() {
 }
 
 void FreecellGame::explodeCard(AnimatedCard &card) {
+  // Debug: Check if the method is even being called
+  printf("explodeCard called for card with suit %d, rank %d\n", 
+         static_cast<int>(card.card.suit), static_cast<int>(card.card.rank));
+
+  // Check if card surface exists
+  cairo_surface_t *card_surface = getCardSurface(card.card);
+  if (!card_surface) {
+    printf("ERROR: No card surface found!\n");
+    return;
+  }
+
   // Mark the card as exploded
   card.exploded = true;
+  printf("Card marked as exploded\n");
 
   playSound(GameSoundEvent::Firework);
-
-  // Create a surface for the card
-  cairo_surface_t *card_surface = getCardSurface(card.card);
-  if (!card_surface)
-    return;
 
   // Create fragments
   card.fragments.clear();
@@ -256,6 +263,9 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
   const int grid_size = 4;
   const int fragment_width = current_card_width_ / grid_size;
   const int fragment_height = current_card_height_ / grid_size;
+
+  printf("Creating fragments: grid_size=%d, fragment_width=%d, fragment_height=%d\n", 
+         grid_size, fragment_width, fragment_height);
 
   for (int row = 0; row < grid_size; row++) {
     for (int col = 0; col < grid_size; col++) {
@@ -290,11 +300,11 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       }
 
       // Velocity components
-      double speed = 12.0 + (rand() % 8);
-      double upward_bias = -15.0 - (rand() % 10);
+      double speed = 18.0 + (rand() % 12);
+      double upward_bias = -20.0 - (rand() % 15);
 
-      fragment.velocity_x = dir_x * speed + (rand() % 10 - 5);
-      fragment.velocity_y = dir_y * speed + upward_bias;
+      fragment.velocity_x = dir_x * speed + (rand() % 15 - 7);
+      fragment.velocity_y = dir_y * speed + upward_bias * 1.5;
 
       // Rotation
       fragment.rotation = card.rotation;
@@ -305,7 +315,7 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
           CAIRO_FORMAT_ARGB32, fragment_width, fragment_height);
 
       if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS) {
-        // Clean up and skip this fragment if we couldn't create the surface
+        printf("ERROR: Failed to create fragment surface\n");
         cairo_surface_destroy(fragment.surface);
         fragment.surface = nullptr;
         continue;
@@ -314,7 +324,7 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       // Create a context for drawing on the new surface
       cairo_t *cr = cairo_create(fragment.surface);
       if (cairo_status(cr) != CAIRO_STATUS_SUCCESS) {
-        // Clean up and skip this fragment if we couldn't create the context
+        printf("ERROR: Failed to create cairo context\n");
         cairo_destroy(cr);
         cairo_surface_destroy(fragment.surface);
         fragment.surface = nullptr;
@@ -333,6 +343,8 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       if (cairo_status(cr) == CAIRO_STATUS_SUCCESS) {
         cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
         cairo_fill(cr);
+      } else {
+        printf("ERROR: Failed to draw fragment surface\n");
       }
 
       // Clean up the drawing context
@@ -344,8 +356,9 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
     }
   }
 
+  printf("Fragments created: %zu\n", card.fragments.size());
+
   // We're using a cached surface, not creating a new one, so DON'T destroy it
-  // here This was causing a double-free issue
   // cairo_surface_destroy(card_surface);
 }
 
@@ -356,7 +369,7 @@ void FreecellGame::updateCardFragments(AnimatedCard &card) {
   GtkAllocation allocation;
   gtk_widget_get_allocation(game_area_, &allocation);
 
-  // Update existing fragments
+  // Simple approach: just update existing fragments without creating new ones
   for (auto &fragment : card.fragments) {
     if (!fragment.active)
       continue;
@@ -375,7 +388,8 @@ void FreecellGame::updateCardFragments(AnimatedCard &card) {
         fragment.velocity_y > 0 && // Only when moving downward
         (rand() % 1000 < 5)) { // 0.5% chance per frame
       
-      // Give this fragment an upward boost
+      // Instead of creating new fragments, just give this one an upward boost
+      // and maybe change its direction slightly
       fragment.velocity_y = -fragment.velocity_y * 0.8; // Reverse with reduced energy
       
       // Add a slight horizontal randomization
@@ -403,27 +417,41 @@ void FreecellGame::updateCardFragments(AnimatedCard &card) {
 
 void FreecellGame::drawCardFragment(cairo_t *cr, const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
-  if (!fragment.active || !fragment.surface)
+  if (!fragment.active) {
+    printf("Skipping inactive fragment\n");
     return;
+  }
+
+  if (!fragment.surface) {
+    printf("ERROR: Fragment surface is null\n");
+    return;
+  }
 
   // Check surface status before using it
-  if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS)
+  if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS) {
+    printf("ERROR: Fragment surface status is not successful\n");
     return;
+  }
 
   // Save the current transformation state
   cairo_save(cr);
 
   // Move to the center of the fragment for rotation
-  cairo_translate(cr, fragment.x + fragment.width / 2, fragment.y + fragment.height / 2);
+  cairo_translate(cr, fragment.x + fragment.width / 2,
+                  fragment.y + fragment.height / 2);
   cairo_rotate(cr, fragment.rotation);
 
   // Draw the fragment
-  cairo_set_source_surface(cr, fragment.surface, -fragment.width / 2, -fragment.height / 2);
+  cairo_set_source_surface(cr, fragment.surface, -fragment.width / 2,
+                           -fragment.height / 2);
 
   // Only proceed if setting the source was successful
   if (cairo_status(cr) == CAIRO_STATUS_SUCCESS) {
-    cairo_rectangle(cr, -fragment.width / 2, -fragment.height / 2, fragment.width, fragment.height);
+    cairo_rectangle(cr, -fragment.width / 2, -fragment.height / 2,
+                    fragment.width, fragment.height);
     cairo_fill(cr);
+  } else {
+    printf("ERROR: Failed to set fragment source surface\n");
   }
 
   // Restore the transformation state
@@ -755,3 +783,194 @@ void FreecellGame::startWinAnimation() {
   
   refreshDisplay();
 }
+
+gboolean FreecellGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
+  FreecellGame *game = static_cast<FreecellGame *>(data);
+
+  // Get the widget dimensions
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(widget, &allocation);
+  
+  // Store allocation for use in highlighting
+  game->allocation = allocation;
+
+  // Create or resize buffer surface if needed
+  if (!game->buffer_surface_ ||
+      cairo_image_surface_get_width(game->buffer_surface_) != allocation.width ||
+      cairo_image_surface_get_height(game->buffer_surface_) != allocation.height) {
+    
+    if (game->buffer_surface_) {
+      cairo_surface_destroy(game->buffer_surface_);
+      cairo_destroy(game->buffer_cr_);
+    }
+
+    game->buffer_surface_ = cairo_image_surface_create(
+        CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
+    game->buffer_cr_ = cairo_create(game->buffer_surface_);
+  }
+
+  // Clear buffer with green background
+  cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.5, 0.0);
+  cairo_paint(game->buffer_cr_);
+
+  // Draw freecells (4 cells at the top-left)
+  int x = game->current_card_spacing_;
+  int y = game->current_card_spacing_;
+  
+  for (int i = 0; i < 4; i++) {
+    if (i < game->freecells_.size()) {
+      // Skip drawing the source card if it's being animated to foundation
+      bool is_animated = game->foundation_move_animation_active_ && 
+                         game->foundation_source_pile_ == i &&
+                         game->freecells_[i].has_value() &&
+                         game->foundation_move_card_.card.suit == game->freecells_[i].value().suit &&
+                         game->foundation_move_card_.card.rank == game->freecells_[i].value().rank;
+                         
+      if (game->freecells_[i].has_value() && !is_animated) {
+        // Draw the card in this freecell
+        game->drawCard(game->buffer_cr_, x, y, &(game->freecells_[i].value()));
+      } else {
+        // Draw empty freecell
+        game->drawEmptyPile(game->buffer_cr_, x, y);
+      }
+    }
+    x += game->current_card_width_ + game->current_card_spacing_;
+  }
+
+  // Draw foundation piles (4 piles at the top-right)
+  x = allocation.width - 4 * (game->current_card_width_ + game->current_card_spacing_);
+  
+  for (int i = 0; i < 4; i++) {
+    if (i < game->foundation_.size()) {
+      if (!game->foundation_[i].empty()) {
+        // Draw top card of the foundation pile
+        game->drawCard(game->buffer_cr_, x, y, &(game->foundation_[i].back()));
+      } else {
+        // Draw empty foundation pile
+        game->drawEmptyPile(game->buffer_cr_, x, y);
+      }
+    }
+    x += game->current_card_width_ + game->current_card_spacing_;
+  }
+
+  // Draw tableau (8 columns below)
+  int tableau_y = 2 * game->current_card_spacing_ + game->current_card_height_;
+  
+  for (int i = 0; i < 8; i++) {
+    x = game->current_card_spacing_ + i * (game->current_card_width_ + game->current_card_spacing_);
+    
+    if (i < game->tableau_.size()) {
+      // Draw cards in this column
+      if (game->tableau_[i].empty()) {
+        // Draw empty tableau spot
+        game->drawEmptyPile(game->buffer_cr_, x, tableau_y);
+      } else {
+        // During animation, we need to know which cards have been dealt already
+        if (game->deal_animation_active_) {
+          int cards_in_this_column = (game->cards_dealt_ + 7 - i) / 8;
+          
+          for (int j = 0; j < cards_in_this_column && j < game->tableau_[i].size(); j++) {
+            bool is_animating = false;
+            for (const auto &anim_card : game->deal_cards_) {
+              if (anim_card.active && anim_card.card.suit == game->tableau_[i][j].suit &&
+                  anim_card.card.rank == game->tableau_[i][j].rank) {
+                is_animating = true;
+                break;
+              }
+            }
+            
+            if (!is_animating) {
+              int card_y = tableau_y + j * game->current_vert_spacing_;
+              game->drawCard(game->buffer_cr_, x, card_y, &game->tableau_[i][j]);
+            }
+          }
+        } else {
+          // Normal drawing (not during animation)
+          for (size_t j = 0; j < game->tableau_[i].size(); j++) {
+            // Skip dragged cards and cards being animated to foundation
+            bool is_animated = game->foundation_move_animation_active_ && 
+                               game->foundation_source_pile_ == i + 8 &&
+                               j == game->tableau_[i].size() - 1 &&
+                               game->foundation_move_card_.card.suit == game->tableau_[i][j].suit &&
+                               game->foundation_move_card_.card.rank == game->tableau_[i][j].rank;
+                               
+            if (game->dragging_ && game->drag_source_pile_ >= 8 && 
+                game->drag_source_pile_ - 8 == i && 
+                j >= game->drag_source_card_idx_) {
+              continue;  // Skip the card being dragged
+            }
+            
+            if (!is_animated) {
+              int card_y = tableau_y + j * game->current_vert_spacing_;
+              game->drawCard(game->buffer_cr_, x, card_y, &game->tableau_[i][j]);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Draw dragged card
+  if (game->dragging_ && game->drag_card_.has_value()) {
+    int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
+    int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
+    
+    // If dragging multiple cards from tableau, draw them all with proper spacing
+    if (game->drag_source_pile_ >= 8 && game->drag_cards_.size() > 1) {
+      for (size_t i = 0; i < game->drag_cards_.size(); i++) {
+        int card_y = drag_y + i * game->current_vert_spacing_;
+        game->drawCard(game->buffer_cr_, drag_x, card_y, &game->drag_cards_[i]);
+      }
+    } else {
+      // Just draw the single card
+      game->drawCard(game->buffer_cr_, drag_x, drag_y, &game->drag_card_.value());
+    }
+  }
+
+  // Draw animated cards for deal animation
+  if (game->deal_animation_active_) {
+    for (const auto &anim_card : game->deal_cards_) {
+      if (!anim_card.active)
+        continue;
+
+      game->drawAnimatedCard(game->buffer_cr_, anim_card);
+    }
+  }
+  
+  // Draw foundation move animation if active
+  if (game->foundation_move_animation_active_) {
+    game->drawAnimatedCard(game->buffer_cr_, game->foundation_move_card_);
+  }
+  
+  // Draw win animation if active
+  if (game->win_animation_active_) {
+    for (const auto &anim_card : game->animated_cards_) {
+      if (!anim_card.active)
+        continue;
+
+      if (!anim_card.exploded) {
+        // Draw the whole card with rotation
+        game->drawAnimatedCard(game->buffer_cr_, anim_card);
+      } else {
+        // Draw all the fragments for this card
+        for (const auto &fragment : anim_card.fragments) {
+          if (fragment.active) {
+            game->drawCardFragment(game->buffer_cr_, fragment);
+          }
+        }
+      }
+    }
+  }  
+  
+  // Draw keyboard navigation highlights if active
+  if (game->keyboard_navigation_active_ || game->keyboard_selection_active_) {
+    game->highlightSelectedCard(game->buffer_cr_);
+  }
+
+  // Copy buffer to window
+  cairo_set_source_surface(cr, game->buffer_surface_, 0, 0);
+  cairo_paint(cr);
+
+  return TRUE;
+}
+
