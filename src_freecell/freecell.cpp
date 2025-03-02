@@ -352,7 +352,7 @@ void FreecellGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   
   // Draw a rounded rectangle with a thin border
   double radius = 10.0;
-  double degrees = M_PI / 180.0;
+  double degrees = G_PI / 180.0;
   
   cairo_new_sub_path(cr);
   cairo_arc(cr, x + current_card_width_ - radius, y + radius, radius, -90 * degrees, 0 * degrees);
