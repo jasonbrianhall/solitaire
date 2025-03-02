@@ -27,7 +27,6 @@ FreecellGame::FreecellGame()
   initializeGame();
   initializeSettingsDir();
   initializeAudio();
-  loadSettings();
 }
 
 FreecellGame::~FreecellGame() {
