@@ -54,6 +54,34 @@ if (game->win_animation_active_) {
     }
     break;
 
+  case GDK_KEY_l:
+  case GDK_KEY_L:
+    if (ctrl_pressed) {
+      // Show deck loading dialog
+      GtkWidget *dialog = gtk_file_chooser_dialog_new(
+          "Load Deck", GTK_WINDOW(game->window_),
+          GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
+          "_Open", GTK_RESPONSE_ACCEPT, NULL);
+
+      GtkFileFilter *filter = gtk_file_filter_new();
+      gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
+      gtk_file_filter_add_pattern(filter, "*.zip");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);  
+
+      if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename =
+            gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        if (game->loadDeck(filename)) {
+          game->refreshDisplay();
+        }
+        g_free(filename);
+      }
+
+      gtk_widget_destroy(dialog);
+      return TRUE;
+  }
+  break;
+
   case GDK_KEY_q:
   case GDK_KEY_Q:
     if (ctrl_pressed) {

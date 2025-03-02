@@ -1098,7 +1098,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), cardBackItem);
 
   // Load Deck option
-  GtkWidget *loadDeckItem = gtk_menu_item_new_with_mnemonic("_Load Deck");
+  GtkWidget *loadDeckItem = gtk_menu_item_new_with_mnemonic("_Load Deck (CTRL+L)");
   g_signal_connect(
       G_OBJECT(loadDeckItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {

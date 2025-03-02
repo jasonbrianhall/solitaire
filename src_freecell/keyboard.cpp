@@ -152,6 +152,63 @@ gboolean FreecellGame::onKeyPress(GtkWidget *widget, GdkEventKey *event, gpointe
     }
     break;
 
+case GDK_KEY_l:
+case GDK_KEY_L:
+  if (ctrl_pressed) {
+    // Show deck loading dialog
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        "Load Custom Card Deck", GTK_WINDOW(game->window_),
+        GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
+        "_Open", GTK_RESPONSE_ACCEPT, NULL);
+    
+    // Create file filter for ZIP files
+    GtkFileFilter *filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
+    gtk_file_filter_add_pattern(filter, "*.zip");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+    
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+      char *filename =
+          gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+      
+      try {
+        // Try to load the new deck
+        game->deck_ = cardlib::Deck(filename);
+        game->deck_.removeJokers();
+        game->deck_.shuffle(game->current_seed_);
+        
+        // Reinitialize card cache with new deck
+        game->initializeCardCache();
+        
+        // Restart the game with the new deck
+        game->initializeGame();
+        game->refreshDisplay();
+        
+        // Optional: Show success message
+        GtkWidget *success_dialog = gtk_message_dialog_new(
+            GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+            "Custom deck loaded successfully!");
+        gtk_dialog_run(GTK_DIALOG(success_dialog));
+        gtk_widget_destroy(success_dialog);
+        
+      } catch (const std::exception &e) {
+        // Show error message if deck loading fails
+        GtkWidget *error_dialog = gtk_message_dialog_new(
+            GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_MESSAGE_ERROR, GTK_BUTTONS_OK,
+            "Failed to load deck: %s", e.what());
+        gtk_dialog_run(GTK_DIALOG(error_dialog));
+        gtk_widget_destroy(error_dialog);
+      }
+      
+      g_free(filename);
+    }
+    gtk_widget_destroy(dialog);
+    return TRUE;
+  }
+  break;
+
   case GDK_KEY_r:
   case GDK_KEY_R:
     if (ctrl_pressed) {
