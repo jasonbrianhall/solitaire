@@ -19,7 +19,7 @@ void FreecellGame::updateWinAnimation() {
   if (launch_timer_ >= 100) { // Launch a new card every 100ms
     launch_timer_ = 0;
     if (rand() % 100 < 10) {
-        // Launch multiple cards in rapid succession
+        // Launch 4 cards in rapid succession
         for (int i = 0; i < 4; i++) {
             launchNextCard();
             
@@ -53,7 +53,7 @@ void FreecellGame::updateWinAnimation() {
       // Update rotation
       card.rotation += card.rotation_velocity;
 
-      // Check if card should explode (5% chance in the explosion zone)
+      // Check if card should explode (increase random chance from 2% to 5%)
       if (card.y > explosion_min && card.y < explosion_max &&
           (rand() % 100 < 5)) {
         explodeCard(card);
@@ -86,14 +86,18 @@ void FreecellGame::updateWinAnimation() {
     }
   }
 
-  // If all cards are done, reset for next batch
+  // Stop animation if all cards are done and we've launched them all
+  /*if (all_cards_finished && cards_launched_ >= 52) {
+    stopWinAnimation();
+  } */
+  
   if (all_cards_finished) {
-    // Reset tracking for animated cards to allow reusing the foundation cards
-    for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
-      std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
-    }
-    // Reset cards_launched_ counter
-    cards_launched_ = 0;
+  // Reset tracking for animated cards to allow reusing the piles
+  for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
+    std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
+  }
+  // Reset cards_launched_ counter to allow showing which cards we've used
+  cards_launched_ = 0;
   }
 
   refreshDisplay();
@@ -104,100 +108,133 @@ void FreecellGame::launchNextCard() {
   if (cards_launched_ >= 52)
     return;
 
-  // Create a vector to store valid foundation piles that still have cards
-  std::vector<std::pair<int, int>> valid_cards; // (pile_index, card_index)
-  
-  // Check each foundation pile
-  for (size_t pile_index = 0; pile_index < foundation_.size(); pile_index++) {
-    // Skip empty piles
-    if (foundation_[pile_index].empty())
-      continue;
+  // State to track the current launch progress
+  static cardlib::Rank current_rank = cardlib::Rank::KING;
+  static int current_suit_index = 0;
+
+  // Array to map indices to suits in a consistent order
+  const cardlib::Suit suit_order[] = {
+    cardlib::Suit::HEARTS, 
+    cardlib::Suit::DIAMONDS, 
+    cardlib::Suit::CLUBS, 
+    cardlib::Suit::SPADES
+  };
+
+  // Look for the card of the current rank and current suit
+  bool card_found = false;
+  for (int attempts = 0; attempts < foundation_.size(); attempts++) {
+    int pile_index = (current_suit_index + attempts) % foundation_.size();
+    
+    // Check if this pile has the current card
+    if (!foundation_[pile_index].empty() && 
+        foundation_[pile_index].back().rank == current_rank &&
+        foundation_[pile_index].back().suit == suit_order[current_suit_index]) {
       
-    // Find cards in this pile that haven't been animated yet
-    for (int card_index = 0; card_index < static_cast<int>(foundation_[pile_index].size()); card_index++) {
-      // Check if this card has already been animated
-      if (card_index < static_cast<int>(animated_foundation_cards_[pile_index].size()) && 
+      // Mark this card as animated
+      size_t card_index = foundation_[pile_index].size() - 1;
+      if (card_index < animated_foundation_cards_[pile_index].size() && 
           !animated_foundation_cards_[pile_index][card_index]) {
-        // This card is available for animation
-        valid_cards.push_back(std::make_pair(pile_index, card_index));
+        
+        animated_foundation_cards_[pile_index][card_index] = true;
+        
+        // Calculate the starting X position based on the pile
+        double start_x = current_card_spacing_ +
+            (3 + pile_index) * (current_card_width_ + current_card_spacing_);
+        double start_y = current_card_spacing_;
+
+        // Randomize launch trajectory
+        int trajectory_choice = rand() % 100;
+        int direction = rand() % 2;
+        double speed = (15 + (rand() % 5)) * (direction ? 1 : -1);
+
+        double angle;
+        if (trajectory_choice < 5) {
+          // 5% chance to go straight up
+          angle = G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
+        } else if (trajectory_choice < 15) {
+          // 10% chance for high arc launch
+          angle = (rand() % 2 == 0) ? 
+            (G_PI * 0.6 + (rand() % 500) / 1000.0 * G_PI / 6) : 
+            (G_PI * 0.4 - (rand() % 500) / 1000.0 * G_PI / 6);
+        } else {
+          // Otherwise, spread left and right
+          angle = trajectory_choice < 55 ? 
+            (G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4) : 
+            (G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4);
+        }
+
+        // Create animated card
+        AnimatedCard anim_card;
+        anim_card.card = foundation_[pile_index].back();
+        anim_card.x = start_x;
+        anim_card.y = start_y;
+        anim_card.velocity_x = cos(angle) * speed;
+        anim_card.velocity_y = sin(angle) * speed;
+        anim_card.rotation = 0;
+        anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+        anim_card.active = true;
+        anim_card.exploded = false;
+        anim_card.face_up = true;
+
+        // Remove the card from the foundation pile
+        foundation_[pile_index].pop_back();
+
+        // Add to animated cards
+        animated_cards_.push_back(anim_card);
+        cards_launched_++;
+        card_found = true;
+        break;
       }
     }
   }
-  
-  // If no valid cards found, return
-  if (valid_cards.empty())
-    return;
+
+  // Move to next card/suit if current card found or not found
+  current_suit_index++;
+  if (current_suit_index >= 4) {
+    current_suit_index = 0;
     
-  // Select a random card from the valid cards
-  auto random_card = valid_cards[rand() % valid_cards.size()];
-  int pile_index = random_card.first;
-  int card_index = random_card.second;
-  
-  // Mark this specific card as animated in the tracking structure
-  animated_foundation_cards_[pile_index][card_index] = true;
-
-  // Get the widget dimensions
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(game_area_, &allocation);
-  
-  // Calculate starting position (from foundation area)
-  // In Freecell, foundation piles are on the right side
-  double start_x = allocation.width - (4 - pile_index) * (current_card_width_ + current_card_spacing_);
-  double start_y = current_card_spacing_;
-
-  // Randomly choose a launch trajectory
-  int trajectory_choice = rand() % 100;  // Random number between 0-99
-  
-  // Randomize launch speed slightly
-  double speed = (15.0 + (rand() % 5));
-  double angle;
-
-  if (trajectory_choice < 5) {
-    // 5% chance to go straight down
-    angle = 3 * G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
-  } else if (trajectory_choice < 15) {
-    // 10% chance for high arc launch
-    if (rand() % 2 == 0) {
-      // High arc left
-      angle = G_PI + (rand() % 500) / 1000.0 * G_PI / 4;
-    } else {
-      // High arc right
-      angle = 0 + (rand() % 500) / 1000.0 * G_PI / 4;
+    // Move to next rank down
+    switch (current_rank) {
+      case cardlib::Rank::KING:
+        current_rank = cardlib::Rank::QUEEN;
+        break;
+      case cardlib::Rank::QUEEN:
+        current_rank = cardlib::Rank::JACK;
+        break;
+      case cardlib::Rank::JACK:
+        current_rank = cardlib::Rank::TEN;
+        break;
+      case cardlib::Rank::TEN:
+        current_rank = cardlib::Rank::NINE;
+        break;
+      case cardlib::Rank::NINE:
+        current_rank = cardlib::Rank::EIGHT;
+        break;
+      case cardlib::Rank::EIGHT:
+        current_rank = cardlib::Rank::SEVEN;
+        break;
+      case cardlib::Rank::SEVEN:
+        current_rank = cardlib::Rank::SIX;
+        break;
+      case cardlib::Rank::SIX:
+        current_rank = cardlib::Rank::FIVE;
+        break;
+      case cardlib::Rank::FIVE:
+        current_rank = cardlib::Rank::FOUR;
+        break;
+      case cardlib::Rank::FOUR:
+        current_rank = cardlib::Rank::THREE;
+        break;
+      case cardlib::Rank::THREE:
+        current_rank = cardlib::Rank::TWO;
+        break;
+      case cardlib::Rank::TWO:
+        current_rank = cardlib::Rank::ACE;
+        break;
+      case cardlib::Rank::ACE:
+        // All cards have been launched
+        break;
     }
-  } else if (trajectory_choice < 55) {
-    // 40% chance for left trajectory
-    angle = G_PI - (rand() % 1000) / 1000.0 * G_PI / 4;
-  } else {
-    // 45% chance for right trajectory
-    angle = (rand() % 1000) / 1000.0 * G_PI / 4;
-  }
-
-  // Create an animated card instance
-  AnimatedCard anim_card;
-  anim_card.card = foundation_[pile_index][card_index];
-  anim_card.x = start_x;
-  anim_card.y = start_y;
-
-  // Calculate velocity components
-  anim_card.velocity_x = cos(angle) * speed;
-  anim_card.velocity_y = sin(angle) * speed;
-
-  // Add some rotation for visual interest
-  anim_card.rotation = 0;
-  anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
-
-  // Set card as active and not yet exploded
-  anim_card.active = true;
-  anim_card.exploded = false;
-  anim_card.face_up = true;
-
-  // Add to the list of animated cards
-  animated_cards_.push_back(anim_card);
-  cards_launched_++;
-  
-  // Play launch sound occasionally
-  if (rand() % 3 == 0) {
-    playSound(GameSoundEvent::CardDeal);
   }
 }
 
@@ -215,7 +252,7 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
   // Create fragments
   card.fragments.clear();
 
-  // Split the card into smaller fragments (4x4 grid)
+  // Split the card into smaller fragments for more dramatic effect (4x4 grid)
   const int grid_size = 4;
   const int fragment_width = current_card_width_ / grid_size;
   const int fragment_height = current_card_height_ / grid_size;
@@ -290,7 +327,8 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       cairo_fill(cr);
 
       // Draw the fragment of the card
-      cairo_set_source_surface(cr, card_surface, -col * fragment_width, -row * fragment_height);
+      cairo_set_source_surface(cr, card_surface, -col * fragment_width,
+                               -row * fragment_height);
 
       if (cairo_status(cr) == CAIRO_STATUS_SUCCESS) {
         cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
@@ -306,7 +344,9 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
     }
   }
 
-  // Don't destroy the card_surface as it's likely a cached surface
+  // We're using a cached surface, not creating a new one, so DON'T destroy it
+  // here This was causing a double-free issue
+  // cairo_surface_destroy(card_surface);
 }
 
 void FreecellGame::updateCardFragments(AnimatedCard &card) {
@@ -410,6 +450,7 @@ void FreecellGame::stopWinAnimation() {
   initializeGame();
   refreshDisplay();
 }
+
 
 // This function starts the animation to move a card to the foundation
 void FreecellGame::startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
