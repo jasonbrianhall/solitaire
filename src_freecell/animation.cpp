@@ -243,19 +243,16 @@ void FreecellGame::launchNextCard() {
 
 void FreecellGame::explodeCard(AnimatedCard &card) {
   // Debug: Check if the method is even being called
-  printf("explodeCard called for card with suit %d, rank %d\n", 
          static_cast<int>(card.card.suit), static_cast<int>(card.card.rank));
 
   // Check if card surface exists
   cairo_surface_t *card_surface = getCardSurface(card.card);
   if (!card_surface) {
-    printf("ERROR: No card surface found!\n");
     return;
   }
 
   // Mark the card as exploded
   card.exploded = true;
-  printf("Card marked as exploded\n");
 
   playSound(GameSoundEvent::Firework);
 
@@ -266,9 +263,6 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
   const int grid_size = 4;
   const int fragment_width = current_card_width_ / grid_size;
   const int fragment_height = current_card_height_ / grid_size;
-
-  printf("Creating fragments: grid_size=%d, fragment_width=%d, fragment_height=%d\n", 
-         grid_size, fragment_width, fragment_height);
 
   for (int row = 0; row < grid_size; row++) {
     for (int col = 0; col < grid_size; col++) {
@@ -318,7 +312,6 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
           CAIRO_FORMAT_ARGB32, fragment_width, fragment_height);
 
       if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS) {
-        printf("ERROR: Failed to create fragment surface\n");
         cairo_surface_destroy(fragment.surface);
         fragment.surface = nullptr;
         continue;
@@ -327,7 +320,6 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       // Create a context for drawing on the new surface
       cairo_t *cr = cairo_create(fragment.surface);
       if (cairo_status(cr) != CAIRO_STATUS_SUCCESS) {
-        printf("ERROR: Failed to create cairo context\n");
         cairo_destroy(cr);
         cairo_surface_destroy(fragment.surface);
         fragment.surface = nullptr;
@@ -346,8 +338,6 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       if (cairo_status(cr) == CAIRO_STATUS_SUCCESS) {
         cairo_rectangle(cr, 0, 0, fragment_width, fragment_height);
         cairo_fill(cr);
-      } else {
-        printf("ERROR: Failed to draw fragment surface\n");
       }
 
       // Clean up the drawing context
@@ -358,8 +348,6 @@ void FreecellGame::explodeCard(AnimatedCard &card) {
       card.fragments.push_back(fragment);
     }
   }
-
-  printf("Fragments created: %zu\n", card.fragments.size());
 
   // We're using a cached surface, not creating a new one, so DON'T destroy it
   // cairo_surface_destroy(card_surface);
@@ -421,18 +409,15 @@ void FreecellGame::updateCardFragments(AnimatedCard &card) {
 void FreecellGame::drawCardFragment(cairo_t *cr, const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
   if (!fragment.active) {
-    printf("Skipping inactive fragment\n");
     return;
   }
 
   if (!fragment.surface) {
-    printf("ERROR: Fragment surface is null\n");
     return;
   }
 
   // Check surface status before using it
   if (cairo_surface_status(fragment.surface) != CAIRO_STATUS_SUCCESS) {
-    printf("ERROR: Fragment surface status is not successful\n");
     return;
   }
 
@@ -453,8 +438,6 @@ void FreecellGame::drawCardFragment(cairo_t *cr, const CardFragment &fragment) {
     cairo_rectangle(cr, -fragment.width / 2, -fragment.height / 2,
                     fragment.width, fragment.height);
     cairo_fill(cr);
-  } else {
-    printf("ERROR: Failed to set fragment source surface\n");
   }
 
   // Restore the transformation state
