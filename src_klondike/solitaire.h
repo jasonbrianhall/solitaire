@@ -301,6 +301,7 @@ private:
   void cleanupAudio();
 
   unsigned int current_seed_;
+  void drawEmptyPile(cairo_t *cr, int x, int y);
 
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,

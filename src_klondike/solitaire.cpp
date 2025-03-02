@@ -1825,3 +1825,30 @@ void SolitaireGame::promptForSeed() {
 
   gtk_widget_destroy(dialog);
 }
+
+void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
+  // Draw a placeholder for an empty pile (cell or foundation)
+  cairo_save(cr);
+  
+  // Draw a rounded rectangle with a thin border
+  double radius = 10.0;
+  double degrees = G_PI / 180.0;
+  
+  cairo_new_sub_path(cr);
+  cairo_arc(cr, x + current_card_width_ - radius, y + radius, radius, -90 * degrees, 0 * degrees);
+  cairo_arc(cr, x + current_card_width_ - radius, y + current_card_height_ - radius, radius, 0 * degrees, 90 * degrees);
+  cairo_arc(cr, x + radius, y + current_card_height_ - radius, radius, 90 * degrees, 180 * degrees);
+  cairo_arc(cr, x + radius, y + radius, radius, 180 * degrees, 270 * degrees);
+  cairo_close_path(cr);
+  
+  // Set a light gray fill with semi-transparency
+  cairo_set_source_rgba(cr, 0.85, 0.85, 0.85, 0.5);
+  cairo_fill_preserve(cr);
+  
+  // Set a darker gray border
+  cairo_set_source_rgb(cr, 0.5, 0.5, 0.5);
+  cairo_set_line_width(cr, 1.0);
+  cairo_stroke(cr);
+  
+  cairo_restore(cr);
+}

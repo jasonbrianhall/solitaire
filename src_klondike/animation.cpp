@@ -428,8 +428,8 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
     game->buffer_cr_ = cairo_create(game->buffer_surface_);
   }
 
-  // Clear buffer with green background
-  cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.5, 0.0);
+  // Clear buffer with lighter green background
+  cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.6, 0.0);
   cairo_paint(game->buffer_cr_);
 
   // Draw stock pile
@@ -438,11 +438,8 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   if (!game->stock_.empty()) {
     game->drawCard(game->buffer_cr_, x, y, nullptr, false);
   } else {
-    // Draw empty stock pile outline
-    cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-    cairo_rectangle(game->buffer_cr_, x, y, game->current_card_width_,
-                    game->current_card_height_);
-    cairo_stroke(game->buffer_cr_);
+    // Draw empty stock pile outline using rounded rectangle
+    game->drawEmptyPile(game->buffer_cr_, x, y);
   }
 
   // Draw waste pile
@@ -466,20 +463,15 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
     } else {
       // Draw an empty placeholder if top card is being dragged and there are no
       // other cards
-      cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-      cairo_rectangle(game->buffer_cr_, x, y, game->current_card_width_,
-                      game->current_card_height_);
-      cairo_stroke(game->buffer_cr_);
+      game->drawEmptyPile(game->buffer_cr_, x, y);
     }
   }
 
   // Draw foundation piles
   x = 3 * (game->current_card_width_ + game->current_card_spacing_);
   for (size_t i = 0; i < game->foundation_.size(); i++) {
-    cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-    cairo_rectangle(game->buffer_cr_, x, y, game->current_card_width_,
-                    game->current_card_height_);
-    cairo_stroke(game->buffer_cr_);
+    // Draw empty foundation pile with rounded rectangle
+    game->drawEmptyPile(game->buffer_cr_, x, y);
 
     const auto &pile = game->foundation_[i];
     if (!pile.empty()) {
@@ -522,12 +514,9 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
         i * (game->current_card_width_ + game->current_card_spacing_);
     const auto &pile = game->tableau_[i];
 
-    // Draw empty pile outline
+    // Draw empty pile outline with rounded rectangle
     if (pile.empty()) {
-      cairo_set_source_rgb(game->buffer_cr_, 0.2, 0.2, 0.2);
-      cairo_rectangle(game->buffer_cr_, x, tableau_base_y,
-                      game->current_card_width_, game->current_card_height_);
-      cairo_stroke(game->buffer_cr_);
+      game->drawEmptyPile(game->buffer_cr_, x, tableau_base_y);
     }
 
     // During animation, we need to know which cards have been dealt already
