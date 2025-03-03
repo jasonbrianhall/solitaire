@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <numeric> // For std::accumulate
+#include <algorithm>
 
 namespace cardlib {
 
@@ -78,7 +79,13 @@ public:
     std::optional<CardImage> getCardImage(const Card &card) const;
     std::optional<CardImage> getCardBackImage() const;
 
-private:
+    // New methods for derived classes to access decks
+    size_t getDeckCount() const { return decks_.size(); }
+    Deck& getDeck(size_t index) { return decks_[index]; }
+    const Deck& getDeck(size_t index) const { return decks_[index]; }
+
+protected:
+    // Change to protected to allow derived classes to modify decks
     std::vector<Deck> decks_;
     bool include_jokers_;
     bool use_alternate_art_;
@@ -115,6 +122,20 @@ public:
   void includeJokers(bool include = true);
   void setAlternateArt(bool use_alternate = true);
   void replaceCardBackImage(const std::string &image_path);
+
+  // New method to filter cards
+  void filterCards(const std::vector<Suit>& allowed_suits) {
+    cards_.erase(
+      std::remove_if(cards_.begin(), cards_.end(), 
+        [&allowed_suits](const Card& card) {
+          return std::find(allowed_suits.begin(), 
+                           allowed_suits.end(), 
+                           card.suit) == allowed_suits.end();
+        }
+      ),
+      cards_.end()
+    );
+  }
 
 private:
   std::vector<Card> cards_;
