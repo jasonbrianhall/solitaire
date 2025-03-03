@@ -595,20 +595,51 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
 
 void SolitaireGame::handleStockPileClick() {
   if (stock_.empty()) {
-    // If stock is empty, move all waste cards back to stock in reverse order
-    while (!waste_.empty()) {
-      stock_.push_back(waste_.back());
-      waste_.pop_back();
-    }
-    refreshDisplay();
-  } else {
-    // Don't start a new animation if one is already running
-    if (stock_to_waste_animation_active_) {
-      return;
-    }
+    // No more cards in stock pile
+    return;
+  }
 
+  // Check if all piles have at least one card - required for Spider Solitaire
+  bool can_deal = true;
+  for (const auto& pile : tableau_) {
+    if (pile.empty()) {
+      can_deal = false;
+      break;
+    }
+  }
+
+  if (!can_deal) {
+    // Show message that all tableau piles must have at least one card
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_INFO, GTK_BUTTONS_OK, 
+        "All tableau piles must have at least one card before dealing more cards.");
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    return;
+  }
+
+  // Deal one card to each tableau pile (10 cards total for Spider)
+  if (stock_.size() >= tableau_.size()) {
     // Start animation instead of immediately moving cards
-    startStockToWasteAnimation();
+    if (!stock_to_waste_animation_active_) {
+      // Deal 10 cards - one to each tableau pile
+      for (int i = 0; i < tableau_.size(); i++) {
+        if (!stock_.empty()) {
+          // Get a card from stock
+          cardlib::Card card = stock_.back();
+          stock_.pop_back();
+          
+          // Add to tableau pile face up
+          tableau_[i].emplace_back(card, true);
+          
+          // Play card dealing sound
+          playSound(GameSoundEvent::DealCard);
+        }
+      }
+      
+      refreshDisplay();
+    }
   }
 }
 
