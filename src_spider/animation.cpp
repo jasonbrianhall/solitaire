@@ -807,7 +807,7 @@ void SolitaireGame::updateDealAnimation() {
 
   // Check if we're done dealing and all cards have arrived
   if (all_cards_arrived &&
-      cards_dealt_ >= 28) { // 28 = total cards in initial tableau
+      cards_dealt_ >= 54) { // Updated to 54 for Spider (6 piles * 6 cards + 4 piles * 5 cards)
 #ifdef DEBUG
     std::cout << "All cards dealt, completing animation"
               << std::endl; // Debug output
@@ -817,9 +817,8 @@ void SolitaireGame::updateDealAnimation() {
 
   refreshDisplay();
 }
-
 void SolitaireGame::dealNextCard() {
-  if (cards_dealt_ >= 28)
+  if (cards_dealt_ >= 54) // 54 = total cards in initial Spider tableau (6 piles * 6 cards + 4 piles * 5 cards)
     return;
 
 #ifdef DEBUG
@@ -832,14 +831,18 @@ void SolitaireGame::dealNextCard() {
   int card_index = 0;
   int cards_so_far = 0;
 
+  // Spider has 10 tableau piles
+  // First 6 piles get 6 cards, last 4 piles get 5 cards
   // Determine the pile and card index for the current card
-  for (int i = 0; i < 7; i++) {
-    if (cards_so_far + (i + 1) > cards_dealt_) {
+  for (int i = 0; i < 10; i++) {
+    int pile_size = (i < 6) ? 6 : 5; // First 6 piles have 6 cards, last 4 have 5
+    
+    if (cards_so_far + pile_size > cards_dealt_) {
       pile_index = i;
       card_index = cards_dealt_ - cards_so_far;
       break;
     }
-    cards_so_far += (i + 1);
+    cards_so_far += pile_size;
   }
 
   // Start position (from stock pile)
