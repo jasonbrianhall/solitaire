@@ -446,6 +446,7 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
 // Start directly above the second tableau pile
 
 // Calculate the exact X position for the second tableau pile
+// Calculate the exact X position for the second tableau pile
 int foundation_x = game->current_card_spacing_ + 
                   (game->current_card_width_ + game->current_card_spacing_); // Position for second tableau pile
 int foundation_y = game->current_card_spacing_;

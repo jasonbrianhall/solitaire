@@ -275,11 +275,14 @@ void SolitaireGame::deal() {
   tableau_.clear();
   foundation_.clear(); 
 
+  // Initialize foundation - we only need one pile in Spider to track completed sequences
+  foundation_.resize(1);
+
   // Create the appropriate Spider Deck
   cardlib::SpiderDeck spider_deck(num_suits);
   
   // Shuffle the decks
-  spider_deck.shuffle();
+  spider_deck.shuffle(current_seed_);
 
   // Resize tableau to 10 piles
   tableau_.resize(10);
@@ -292,7 +295,7 @@ void SolitaireGame::deal() {
     
     for (int j = 0; j < cards_to_deal; j++) {
       if (auto card = spider_deck.drawCard()) {
-        // First card in each pile is face up, rest are face down
+        // Only the top card in each pile is face up
         tableau_[i].emplace_back(*card, j == cards_to_deal - 1);
         playSound(GameSoundEvent::CardFlip);
       }
@@ -488,74 +491,6 @@ if (game->win_animation_active_) {
       }
     }
   } else if (event->button == 3) { // Right click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-    // Try to move card to foundation
-    if (pile_index >= 0) {
-      const cardlib::Card *card = nullptr;
-      int target_foundation = -1;
-
-      // Get the card based on pile type
-      if (pile_index == 1 && !game->waste_.empty()) {
-        card = &game->waste_.back();
-        // Find which foundation to move to
-        for (int i = 0; i < game->foundation_.size(); i++) {
-          if (game->canMoveToFoundation(*card, i)) {
-            target_foundation = i;
-            break;
-          }
-        }
-
-        if (target_foundation >= 0) {
-          // Start animation
-          game->startFoundationMoveAnimation(*card, pile_index, 0,
-                                             target_foundation + 2);
-          game->playSound(GameSoundEvent::CardPlace);
-          // Remove card from waste pile
-          game->waste_.pop_back();
-
-          // The card will be added to the foundation in
-          // updateFoundationMoveAnimation when animation completes
-          return TRUE;
-        }
-      } else if (pile_index >= 6 && pile_index <= 12) {
-        auto &tableau_pile = game->tableau_[pile_index - 6];
-        if (!tableau_pile.empty() && tableau_pile.back().face_up) {
-          card = &tableau_pile.back().card;
-
-          // Find which foundation to move to
-          for (int i = 0; i < game->foundation_.size(); i++) {
-            if (game->canMoveToFoundation(*card, i)) {
-              target_foundation = i;
-              break;
-            }
-          }
-
-          if (target_foundation >= 0) {
-            // Start animation
-            game->startFoundationMoveAnimation(*card, pile_index,
-                                               tableau_pile.size() - 1,
-                                               target_foundation + 2);
-            game->playSound(GameSoundEvent::CardPlace);
-
-            // Remove card from tableau
-            tableau_pile.pop_back();
-
-            // Flip new top card if needed
-            if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
-              tableau_pile.back().face_up = true;
-            }
-
-            // The card will be added to the foundation in
-            // updateFoundationMoveAnimation when animation completes
-            return TRUE;
-          }
-        }
-      }
-    }
-
     return TRUE;
   }
 
@@ -818,16 +753,23 @@ void SolitaireGame::moveCards(std::vector<cardlib::Card> &from,
 }
 
 bool SolitaireGame::checkWinCondition() const {
-  // Check if all foundation piles have 13 cards
-  for (const auto &pile : foundation_) {
-    if (pile.size() != 13)
-      return false;
+  // For Spider Solitaire, we win when:
+  // 1. We have 8 completed sequences (each sequence is K through A of one suit)
+  // 2. There are no more cards left in stock or tableau piles
+  
+  // Check if we have the required number of completed sequences
+  int completed_sequences = foundation_[0].size();
+  
+  // For single-suit Spider, we need 8 completed sequences
+  if (completed_sequences < 8) {
+    return false;
   }
-
-  // Check if all other piles are empty
-  return stock_.empty() && waste_.empty() &&
-         std::all_of(tableau_.begin(), tableau_.end(),
-                     [](const auto &pile) { return pile.empty(); });
+  
+  // All sequences are completed, now check if we have any cards left
+  // We already know all 104 cards in the Spider deck are accounted for
+  // (8 sequences of 13 cards = 104 cards), so we should win automatically
+  // after the 8th sequence is completed
+  return true;
 }
 
 // Function to refresh the display
@@ -921,7 +863,7 @@ cairo_surface_t *SolitaireGame::getCardBackSurface() {
 
 void SolitaireGame::setupWindow() {
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
+  gtk_window_set_title(GTK_WINDOW(window_), "Spider Solitaire");
   gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
   g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit),
                    NULL);
@@ -1669,25 +1611,54 @@ void SolitaireGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
 }
 
 void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
-  double scale = getScaleFactor(window_width, window_height);
-
-  // Update current dimensions
-  current_card_width_ = static_cast<int>(BASE_CARD_WIDTH * scale);
-  current_card_height_ = static_cast<int>(BASE_CARD_HEIGHT * scale);
-  current_card_spacing_ = static_cast<int>(BASE_CARD_SPACING * scale);
-  current_vert_spacing_ = static_cast<int>(BASE_VERT_SPACING * scale);
-
-  // Ensure minimum sizes
-  current_card_width_ = std::max(current_card_width_, 60);
-  current_card_height_ = std::max(current_card_height_, 87);
-  current_card_spacing_ = std::max(current_card_spacing_, 10);
-  current_vert_spacing_ = std::max(current_vert_spacing_, 15);
-
-  // Ensure cards don't overlap
-  if (current_vert_spacing_ < current_card_height_ / 4) {
-    current_vert_spacing_ = current_card_height_ / 4;
+  // Calculate optimal card width based on window width
+  // Use a more aggressive approach to fill screen space
+  // Allow for minimal spacing between cards
+  int min_spacing = 10; // Minimum spacing between cards
+  int total_spacing = (tableau_.size() + 1) * min_spacing;
+  int available_width = window_width - total_spacing;
+  
+  // Use 90% of available width to ensure we use most of the screen
+  int optimal_card_width = (available_width * 90 / 100) / tableau_.size();
+  
+  // Calculate card height to maintain aspect ratio
+  double card_aspect_ratio = static_cast<double>(BASE_CARD_HEIGHT) / BASE_CARD_WIDTH;
+  int optimal_card_height = static_cast<int>(optimal_card_width * card_aspect_ratio);
+  
+  // Vertical space calculation
+  int header_height = 60; // Height for menu bar
+  int vertical_spacing = std::max(15, optimal_card_height / 5); // Minimum overlap for cascade
+  
+  // Check vertical space constraints
+  // We want to ensure enough vertical space for a reasonable number of cascaded cards
+  int max_cascade_cards = 12; // Maximum expected cascade in spider solitaire
+  int required_height = header_height + optimal_card_height + 
+                       (max_cascade_cards * vertical_spacing);
+  
+  // If required height exceeds window height, adjust accordingly
+  if (required_height > window_height) {
+    double vertical_scale = static_cast<double>(window_height - header_height) / 
+                           (optimal_card_height + (max_cascade_cards * vertical_spacing));
+    
+    optimal_card_width = static_cast<int>(optimal_card_width * vertical_scale);
+    optimal_card_height = static_cast<int>(optimal_card_height * vertical_scale);
+    vertical_spacing = std::max(15, static_cast<int>(vertical_spacing * vertical_scale));
   }
-
+  
+  // Set reasonable limits on card size
+  // Make minimum card size larger for better visibility
+  optimal_card_width = std::min(optimal_card_width, 120); // Increased max width
+  optimal_card_width = std::max(optimal_card_width, 80);  // Increased min width
+  
+  // Recalculate height with constrained width
+  optimal_card_height = static_cast<int>(optimal_card_width * card_aspect_ratio);
+  
+  // Set the current dimensions
+  current_card_width_ = optimal_card_width;
+  current_card_height_ = optimal_card_height;
+  current_card_spacing_ = std::max(min_spacing, optimal_card_width / 10); // Slightly larger spacing
+  current_vert_spacing_ = vertical_spacing;
+  
   // Reinitialize card cache with new dimensions
   initializeCardCache();
 }
@@ -1918,10 +1889,10 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
   }
   
   // In Spider, we need to find a King-to-Ace sequence of the same suit
-  // Look for a sequence starting with a King at the top
+  // Start looking from the end of the pile
   size_t start_pos = pile.size() - 1;
   
-  // Start looking from the end of the pile
+  // Check all possible starting positions for a King
   while (start_pos >= 12) { // Need at least 13 cards for a K-A sequence
     // Must start with a King
     if (pile[start_pos].card.rank == cardlib::Rank::KING) {
@@ -1945,6 +1916,10 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
       
       if (complete_sequence) {
         // We found a complete sequence!
+        
+        // Save the King card for display in the foundation
+        cardlib::Card kingCard = pile[start_pos].card;
+        
         // Remove the 13 cards from the tableau pile
         tableau_[tableau_index].erase(
           tableau_[tableau_index].begin() + (start_pos - 12),
@@ -1958,12 +1933,20 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
         }
         
         // Add to foundation count (we just track completed sequences by adding to pile 0)
-        foundation_[0].push_back(cardlib::Card(suit, cardlib::Rank::KING));
+        // Use the King to represent the completed sequence
+        foundation_[0].push_back(kingCard);
         
         // Play the completion sound
         playSound(GameSoundEvent::WinGame);
         
-        refreshDisplay();
+        // Check if this was the last sequence - if we have 8 completed sequences, the game is won
+        if (foundation_[0].size() >= 8) {
+            // Start win animation
+            startWinAnimation();
+        } else {
+            // Just refresh the display for a normal sequence completion
+            refreshDisplay();
+        }
         
         return true;
       }
