@@ -303,6 +303,8 @@ private:
   unsigned int current_seed_;
   void drawEmptyPile(cairo_t *cr, int x, int y);
 
+  bool checkForCompletedSequence(int tableau_index);
+
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
                           std::vector<uint8_t> &fileData);
