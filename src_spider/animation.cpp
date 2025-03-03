@@ -467,42 +467,29 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
     }
   }
 
-  // Draw foundation piles
-  x = 3 * (game->current_card_width_ + game->current_card_spacing_);
-  for (size_t i = 0; i < game->foundation_.size(); i++) {
-    // Draw empty foundation pile with rounded rectangle
-    game->drawEmptyPile(game->buffer_cr_, x, y);
+// Draw foundation piles - for Spider, these represent completed sequences
+// Display all 8 foundation slots in a single row
 
-    const auto &pile = game->foundation_[i];
-    if (!pile.empty()) {
-      // Only draw the topmost non-animated card
-      if (game->win_animation_active_) {
-        for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-          if (!game->animated_foundation_cards_[i][j]) {
-            game->drawCard(game->buffer_cr_, x, y, &pile[j], true);
-            break;
-          }
-        }
-      } else {
-        // Check if the top card is being dragged from foundation
-        bool top_card_dragging =
-            (game->dragging_ && game->drag_source_pile_ == i + 2 &&
-             !pile.empty() && game->drag_cards_.size() == 1 &&
-             game->drag_cards_[0].suit == pile.back().suit &&
-             game->drag_cards_[0].rank == pile.back().rank);
+int foundation_x = 3 * (game->current_card_width_ + game->current_card_spacing_);
+int foundation_y = game->current_card_spacing_;
 
-        if (!top_card_dragging) {
-          const auto &top_card = pile.back();
-          game->drawCard(game->buffer_cr_, x, y, &top_card, true);
-        } else if (pile.size() > 1) {
-          // Draw the second-to-top card
-          const auto &second_card = pile[pile.size() - 2];
-          game->drawCard(game->buffer_cr_, x, y, &second_card, true);
-        }
-      }
-    }
-    x += game->current_card_width_ + game->current_card_spacing_;
+// Track how many completed sequences we have
+int completed_sequences = game->foundation_[0].size();
+
+// Draw spaces for up to 8 completed sequences (the maximum in Spider)
+for (int i = 0; i < 8; i++) {
+  if (i < completed_sequences) {
+    // For each completed sequence, show a King of the suit that was completed
+    const cardlib::Card &king = game->foundation_[0][i];
+    game->drawCard(game->buffer_cr_, foundation_x, foundation_y, &king, true);
+  } else {
+    // Empty foundation slot
+    game->drawEmptyPile(game->buffer_cr_, foundation_x, foundation_y);
   }
+  
+  // Move to next position - all 8 in one row
+  foundation_x += game->current_card_width_ + game->current_card_spacing_;
+}
 
   // Draw tableau piles
   const int tableau_base_y = game->current_card_spacing_ +
