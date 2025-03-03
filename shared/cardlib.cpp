@@ -4,6 +4,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <zip.h>
+#include <numeric>
 
 namespace cardlib {
 
@@ -403,6 +404,141 @@ std::optional<Card> parseCardString(const std::string &card_str) {
 
 std::optional<CardImage> Deck::getCardBackImage() const {
   return card_back_image_;
+}
+
+MultiDeck::MultiDeck(size_t num_decks) 
+    : include_jokers_(false), use_alternate_art_(false) {
+    initializeMultiDeck(num_decks);
+}
+
+MultiDeck::MultiDeck(size_t num_decks, const std::string &zip_path)
+    : include_jokers_(false), use_alternate_art_(false) {
+    loadCardsFromZip(zip_path, num_decks);
+}
+
+void MultiDeck::initializeMultiDeck(size_t num_decks) {
+    decks_.clear();
+    for (size_t i = 0; i < num_decks; ++i) {
+        Deck deck;
+        if (include_jokers_) {
+            deck.includeJokers(true);
+        }
+        if (use_alternate_art_) {
+            deck.setAlternateArt(true);
+        }
+        decks_.push_back(deck);
+    }
+}
+
+void MultiDeck::loadCardsFromZip(const std::string &zip_path, size_t num_decks) {
+    decks_.clear();
+    for (size_t i = 0; i < num_decks; ++i) {
+        Deck deck(zip_path);
+        decks_.push_back(deck);
+    }
+}
+
+void MultiDeck::shuffle(unsigned seed) {
+    for (auto &deck : decks_) {
+        deck.shuffle(seed);
+    }
+}
+
+std::optional<Card> MultiDeck::drawCard() {
+    // Draw from the first non-empty deck
+    for (auto &deck : decks_) {
+        if (!deck.isEmpty()) {
+            return deck.drawCard();
+        }
+    }
+    return std::nullopt;
+}
+
+void MultiDeck::addCard(const Card &card) {
+    // Add to the first deck by default
+    if (!decks_.empty()) {
+        decks_[0].addCard(card);
+    }
+}
+
+void MultiDeck::addCardToBottom(const Card &card) {
+    // Add to the first deck by default
+    if (!decks_.empty()) {
+        decks_[0].addCardToBottom(card);
+    }
+}
+
+bool MultiDeck::isEmpty() const {
+    // Deck is empty if all decks are empty
+    return std::all_of(decks_.begin(), decks_.end(), 
+                       [](const Deck &deck) { return deck.isEmpty(); });
+}
+
+size_t MultiDeck::size() const {
+    // Total number of cards across all decks
+    return std::accumulate(decks_.begin(), decks_.end(), size_t(0),
+                           [](size_t total, const Deck &deck) { 
+                               return total + deck.size(); 
+                           });
+}
+
+void MultiDeck::reset() {
+    for (auto &deck : decks_) {
+        deck.reset();
+    }
+}
+
+void MultiDeck::shuffleDeck(size_t deck_index, unsigned seed) {
+    if (deck_index < decks_.size()) {
+        decks_[deck_index].shuffle(seed);
+    }
+}
+
+std::optional<Card> MultiDeck::drawCardFromDeck(size_t deck_index) {
+    if (deck_index < decks_.size()) {
+        return decks_[deck_index].drawCard();
+    }
+    return std::nullopt;
+}
+
+std::vector<Card> MultiDeck::getAllCardsInDeck(size_t deck_index) const {
+    if (deck_index < decks_.size()) {
+        return decks_[deck_index].getAllCards();
+    }
+    return {};
+}
+
+void MultiDeck::includeJokersInAllDecks(bool include) {
+    include_jokers_ = include;
+    for (auto &deck : decks_) {
+        deck.includeJokers(include);
+    }
+}
+
+void MultiDeck::setAlternateArtInAllDecks(bool use_alternate) {
+    use_alternate_art_ = use_alternate;
+    for (auto &deck : decks_) {
+        deck.setAlternateArt(use_alternate);
+    }
+}
+
+std::optional<CardImage> MultiDeck::getCardImage(const Card &card) const {
+    // Try to get the image from the first deck with images
+    for (const auto &deck : decks_) {
+        auto image = deck.getCardImage(card);
+        if (image) {
+            return image;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<CardImage> MultiDeck::getCardBackImage() const {
+    // Try to get the card back image from the first deck
+    if (!decks_.empty()) {
+        return decks_[0].getCardBackImage();
+    }
+    return std::nullopt;
 }
 
 } // namespace cardlib

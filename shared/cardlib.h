@@ -7,8 +7,12 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <numeric> // For std::accumulate
 
 namespace cardlib {
+
+// Forward declaration of Deck class
+class Deck;
 
 enum class Suit { CLUBS, DIAMONDS, HEARTS, SPADES, JOKER };
 
@@ -44,6 +48,43 @@ struct CardImage {
   std::string filename;
   std::vector<unsigned char> data;
   std::optional<Card> card_info;
+};
+
+class MultiDeck {
+public:
+    // Constructors
+    MultiDeck(size_t num_decks = 1);
+    MultiDeck(size_t num_decks, const std::string &zip_path);
+
+    // Deck operations that work across multiple decks
+    void shuffle(unsigned seed = std::random_device{}());
+    std::optional<Card> drawCard();
+    void addCard(const Card &card);
+    void addCardToBottom(const Card &card);
+    bool isEmpty() const;
+    size_t size() const;
+    void reset(); // Resets all decks to initial state
+
+    // Deck-specific operations
+    void shuffleDeck(size_t deck_index, unsigned seed = std::random_device{}());
+    std::optional<Card> drawCardFromDeck(size_t deck_index);
+    std::vector<Card> getAllCardsInDeck(size_t deck_index) const;
+    
+    // Customization methods
+    void includeJokersInAllDecks(bool include = true);
+    void setAlternateArtInAllDecks(bool use_alternate = true);
+
+    // Image operations
+    std::optional<CardImage> getCardImage(const Card &card) const;
+    std::optional<CardImage> getCardBackImage() const;
+
+private:
+    std::vector<Deck> decks_;
+    bool include_jokers_;
+    bool use_alternate_art_;
+
+    void initializeMultiDeck(size_t num_decks);
+    void loadCardsFromZip(const std::string &zip_path, size_t num_decks);
 };
 
 class Deck {
