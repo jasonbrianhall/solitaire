@@ -21,6 +21,7 @@ SolitaireGame::SolitaireGame()
       source_pile_(-1), source_card_idx_(-1),
       sound_enabled_(true),           // Set sound to enabled by default
       sounds_zip_path_("sound.zip"),
+      number_of_suits(1),
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
   current_seed_ = rand();  // Generate random seed
@@ -268,7 +269,7 @@ void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
 
 void SolitaireGame::deal() {
   // Determine number of decks based on difficulty
-  int num_suits = 1;  // Default to single suit (difficult)
+  int num_suits = number_of_suits;  // Default to single suit (difficult)
   
   // Clear all piles
   stock_.clear();
@@ -276,7 +277,7 @@ void SolitaireGame::deal() {
   foundation_.clear(); 
 
   // Initialize foundation - we only need one pile in Spider to track completed sequences
-  foundation_.resize(1);
+  foundation_.resize(number_of_suits);
 
   // Create the appropriate Spider Deck
   cardlib::SpiderDeck spider_deck(num_suits);
@@ -993,44 +994,80 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
 #endif
 
   // Draw Mode submenu
-  GtkWidget *drawModeItem = gtk_menu_item_new_with_mnemonic("_Draw Mode");
-  GtkWidget *drawModeMenu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(drawModeItem), drawModeMenu);
+  // Difficulty menu
+  GtkWidget *difficultyItem = gtk_menu_item_new_with_mnemonic("_Difficulty");
+  GtkWidget *difficultyMenu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(difficultyItem), difficultyMenu);
 
-  // Draw One option
-  GtkWidget *drawOneItem =
-      gtk_radio_menu_item_new_with_mnemonic(NULL, "_One (1)");
-  GSList *group =
-      gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
-  g_signal_connect(
-      G_OBJECT(drawOneItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<SolitaireGame *>(data)->draw_three_mode_ = false;
-        }
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawOneItem);
+  // Create radio menu items for difficulty levels
+  GSList *group = NULL;
 
-  // Draw Three option
-  GtkWidget *drawThreeItem =
-      gtk_radio_menu_item_new_with_mnemonic(group, "_Three (3)");
-  g_signal_connect(
-      G_OBJECT(drawThreeItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<SolitaireGame *>(data)->draw_three_mode_ = true;
-        }
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawThreeItem);
+  // Easy option (1 suit)
+  GtkWidget *easyItem = gtk_radio_menu_item_new_with_mnemonic(group, "Easy (1 Suit)");
+  group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(easyItem));
+  
+  // Medium option (2 suits)
+  GtkWidget *mediumItem = gtk_radio_menu_item_new_with_mnemonic(group, "Medium (2 Suits)");
+  group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(mediumItem));
+  
+  // Hard option (4 suits)
+  GtkWidget *hardItem = gtk_radio_menu_item_new_with_mnemonic(group, "Hard (4 Suits)");
+  group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(hardItem));
 
-  // Set initial state
-  gtk_check_menu_item_set_active(
-      GTK_CHECK_MENU_ITEM(draw_three_mode_ ? drawThreeItem : drawOneItem),
-      TRUE);
+  // Set the active radio button based on current difficulty
+  if (number_of_suits == 1) {
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(easyItem), TRUE);
+  } else if (number_of_suits == 2) {
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(mediumItem), TRUE);
+  } else if (number_of_suits == 4) {
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(hardItem), TRUE);
+  }
 
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), drawModeItem);
+  // Connect signals for the difficulty options
+  // Use lambda functions that properly capture 'this'
+  g_signal_connect(G_OBJECT(easyItem), "activate",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      if (game->number_of_suits != 1) {
+                        game->number_of_suits = 1;
+                        game->promptForNewGame("Easy");
+                      }
+                    }
+                  }),
+                  this);
+
+  g_signal_connect(G_OBJECT(mediumItem), "activate",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      if (game->number_of_suits != 2) {
+                        game->number_of_suits = 2;
+                        game->promptForNewGame("Medium");
+                      }
+                    }
+                  }),
+                  this);
+
+  g_signal_connect(G_OBJECT(hardItem), "activate",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      if (game->number_of_suits != 4) {
+                        game->number_of_suits = 4;
+                        game->promptForNewGame("Hard");
+                      }
+                    }
+                  }),
+                  this);
+
+  // Add radio buttons to difficulty menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(difficultyMenu), easyItem);
+  gtk_menu_shell_append(GTK_MENU_SHELL(difficultyMenu), mediumItem);
+  gtk_menu_shell_append(GTK_MENU_SHELL(difficultyMenu), hardItem);
+
+  // Add difficulty menu to main menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), difficultyItem);
 
   // Card Back menu
   GtkWidget *cardBackMenu = gtk_menu_new();
@@ -1941,4 +1978,23 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
     }
     
     return true;
+}
+
+void SolitaireGame::promptForNewGame(const std::string& difficulty) {
+  // Ask if the user wants to start a new game with the new difficulty
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_),
+      GTK_DIALOG_MODAL,
+      GTK_MESSAGE_QUESTION,
+      GTK_BUTTONS_YES_NO,
+      "Start a new game with %s difficulty?", 
+      difficulty.c_str());
+  
+  gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
+  
+  if (response == GTK_RESPONSE_YES) {
+    saveSettings();
+    restartGame();
+  }
 }

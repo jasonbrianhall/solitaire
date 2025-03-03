@@ -88,7 +88,10 @@ private:
   // New method declarations
   void updateCardDimensions(int window_width, int window_height);
   double getScaleFactor(int window_width, int window_height) const;
-
+  int number_of_suits;
+  
+  void promptForNewGame(const std::string& difficulty);
+  
   // Win animation fields
   bool win_animation_active_ = false;
   std::vector<AnimatedCard> animated_cards_;
