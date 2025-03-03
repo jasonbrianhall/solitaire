@@ -122,25 +122,39 @@ bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
       return false;
     }
     
-    // Check if this card and all cards above it form a valid sequence to drag
-    // In Spider, you can drag any sequence of cards, but they must be in descending order
-    // If they're all the same suit, you can drag them as a block regardless of sequence
+    // Check if cards from card_index to the end form a valid sequence
+    // For Spider, a valid sequence requires:
+    // 1. Always: consecutive descending ranks (King, Queen, Jack, etc.)
+    // 2. In order to move multiple cards: they must all be the same suit
+    
+    // Single card is always valid to drag
+    if (card_index == static_cast<int>(pile.size()) - 1) {
+      return true;
+    }
+    
+    // Check if all cards from card_index to end are the same suit
+    bool all_same_suit = true;
+    cardlib::Suit first_suit = pile[card_index].card.suit;
+    
+    // First check if we have consecutive descending ranks
     for (size_t i = card_index; i < pile.size() - 1; i++) {
-      // Check if current card and next card have consecutive ranks
+      // Check consecutive rank
       bool consecutive_rank = static_cast<int>(pile[i].card.rank) == 
                              static_cast<int>(pile[i+1].card.rank) + 1;
       
-      // Check if they are the same suit
-      bool same_suit = pile[i].card.suit == pile[i+1].card.suit;
+      if (!consecutive_rank) {
+        return false; // Can't drag non-consecutive cards
+      }
       
-      // In Spider, you can drag cards of any suit, but they must be in descending sequence
-      // If they're not in a valid sequence, you can only drag if they're the same suit
-      if (!consecutive_rank && !same_suit) {
-        return false;
+      // Track if all cards are same suit
+      if (pile[i+1].card.suit != first_suit) {
+        all_same_suit = false;
       }
     }
     
-    return true;
+    // In Spider, when dragging multiple cards, they must be in consecutive
+    // descending rank AND the same suit
+    return all_same_suit;
   }
 
   return false;
@@ -366,69 +380,57 @@ std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
 }
 
 std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
-                                                       int card_index) {
+                                                      int card_index) {
   std::vector<cardlib::Card> result;
   
   // Only handle tableau piles for Spider Solitaire
   if (pile_index >= 6 && pile_index <= 15) {
-    // Handle tableau piles
     const auto &tableau_pile = tableau_[pile_index - 6];
     if (card_index >= 0 &&
         static_cast<size_t>(card_index) < tableau_pile.size() &&
         tableau_pile[card_index].face_up) {
-        
-      // In Spider, we need to determine if the cards form a valid draggable sequence
-      // Valid sequences are:
-      // 1. Descending rank (regardless of suit)
-      // 2. Same suit (can be dragged as a block)
       
-      // First, check if all the cards above the starting card are the same suit
-      bool all_same_suit = true;
-      cardlib::Suit first_suit = tableau_pile[card_index].card.suit;
+      // For Spider, we can drag:
+      // 1. A single card
+      // 2. A sequence of descending cards of the same suit
       
-      for (size_t i = card_index; i < tableau_pile.size(); i++) {
-        if (tableau_pile[i].card.suit != first_suit) {
-          all_same_suit = false;
-          break;
-        }
-      }
+      // Start with the selected card
+      result.push_back(tableau_pile[card_index].card);
       
-      // If all cards are the same suit, we can drag them all regardless of sequence
-      if (all_same_suit) {
-        for (size_t i = card_index; i < tableau_pile.size(); i++) {
-          result.push_back(tableau_pile[i].card);
-        }
+      // If it's a single card, we're done
+      if (card_index == static_cast<int>(tableau_pile.size()) - 1) {
         return result;
       }
       
-      // Otherwise, we need to check for a valid descending sequence
-      size_t end_index = card_index;
+      // For multiple cards, check if they form a valid same-suit sequence
+      cardlib::Suit first_suit = tableau_pile[card_index].card.suit;
       cardlib::Rank current_rank = tableau_pile[card_index].card.rank;
+      bool valid_sequence = true;
       
-      // Find the longest valid sequence from card_index
+      // Check each card after the selected one
       for (size_t i = card_index + 1; i < tableau_pile.size(); i++) {
-        cardlib::Rank next_rank = tableau_pile[i].card.rank;
+        const cardlib::Card &next_card = tableau_pile[i].card;
         
-        // Check if the next card is one rank lower
-        if (static_cast<int>(next_rank) == static_cast<int>(current_rank) - 1) {
-          end_index = i;
-          current_rank = next_rank;
-        } else {
-          // Sequence broken
+        // Must be consecutive descending rank AND same suit
+        if (static_cast<int>(next_card.rank) != static_cast<int>(current_rank) - 1 ||
+            next_card.suit != first_suit) {
+          valid_sequence = false;
           break;
         }
+        
+        result.push_back(next_card);
+        current_rank = next_card.rank;
       }
       
-      // Add all cards in the valid sequence to the result
-      for (size_t i = card_index; i <= end_index; i++) {
-        result.push_back(tableau_pile[i].card);
+      // If not a valid sequence, just return the single selected card
+      if (!valid_sequence) {
+        result.clear();
+        result.push_back(tableau_pile[card_index].card);
       }
     }
-    return result;
-  } 
+  }
   
-  // For non-tableau piles (not used in Spider)
-  return std::vector<cardlib::Card>();
+  return result;
 }
 
 gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
@@ -689,13 +691,12 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
 bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                                   const std::vector<cardlib::Card> &target,
                                   bool is_foundation) const {
-
   if (cards.empty())
     return false;
 
   const auto &moving_card = cards[0]; // First card in the sequence being moved
   
-  // Foundation pile rules remain the same for compatibility
+  // Foundation pile rules (keep for compatibility)
   if (is_foundation) {
     // Only single cards can go to foundation
     if (cards.size() != 1) {
@@ -722,10 +723,10 @@ bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
 
   const auto &target_card = target.back();
 
-  // In Spider, cards must just be one rank lower (suit doesn't matter)
-  // For example, you can place any Queen on any King
+  // In Spider, any card can be placed on another card one rank higher
+  // (regardless of suit)
   bool lower_rank = static_cast<int>(moving_card.rank) ==
-                    static_cast<int>(target_card.rank) - 1;
+                   static_cast<int>(target_card.rank) - 1;
 
   return lower_rank;
 }
