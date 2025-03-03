@@ -1,4 +1,5 @@
 #include "solitaire.h"
+#include "spiderdeck.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -241,41 +242,42 @@ void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
 }
 
 void SolitaireGame::deal() {
-  // Clear all piles first
+  // Determine number of decks based on difficulty
+  int num_suits = 1;  // Default to single suit (difficult)
+  
+  // Clear all piles
   stock_.clear();
-  waste_.clear();
-  foundation_.clear();
   tableau_.clear();
+  foundation_.clear(); 
 
-  // Reset foundation and tableau
-  foundation_.resize(4);
-  tableau_.resize(7);
+  // Create the appropriate Spider Deck
+  SpiderDeck spider_deck(num_suits);
+  
+  // Shuffle the decks
+  spider_deck.shuffle();
 
-  // Deal to tableau - i represents the pile number (0-6)
-  for (int i = 0; i < 7; i++) {
-    // For each pile i, deal i cards face down
-    for (int j = 0; j < i; j++) {
-      if (auto card = deck_.drawCard()) {
-        tableau_[i].emplace_back(*card, false); // face down
+  // Resize tableau to 10 piles
+  tableau_.resize(10);
+
+  // Deal initial tableau
+  // First 6 piles get 6 cards each
+  // Last 4 piles get 5 cards each
+  for (int i = 0; i < 10; i++) {
+    int cards_to_deal = (i < 6) ? 6 : 5;
+    
+    for (int j = 0; j < cards_to_deal; j++) {
+      if (auto card = spider_deck.drawCard()) {
+        // First card in each pile is face up, rest are face down
+        tableau_[i].emplace_back(*card, j == cards_to_deal - 1);
         playSound(GameSoundEvent::CardFlip);
       }
     }
-    // Deal one card face up at the end
-    if (auto card = deck_.drawCard()) {
-      tableau_[i].emplace_back(*card, true); // face up
-      playSound(GameSoundEvent::CardFlip);
-    }
   }
 
-  // Move remaining cards to stock (face down)
-  while (auto card = deck_.drawCard()) {
+  // Remaining cards go to stock
+  while (auto card = spider_deck.drawCard()) {
     stock_.push_back(*card);
   }
-
-#ifdef DEBUG
-  std::cout << "Starting deal animation from deal()"
-            << std::endl; // Debug output
-#endif
 
   // Start the deal animation
   startDealAnimation();
