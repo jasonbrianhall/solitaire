@@ -251,7 +251,7 @@ void SolitaireGame::deal() {
   foundation_.clear(); 
 
   // Create the appropriate Spider Deck
-  SpiderDeck spider_deck(num_suits);
+  cardlib::SpiderDeck spider_deck(num_suits);
   
   // Shuffle the decks
   spider_deck.shuffle();
