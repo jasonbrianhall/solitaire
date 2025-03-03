@@ -1877,84 +1877,68 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
 }
 
 bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
-  if (tableau_index < 0 || tableau_index >= tableau_.size()) {
-    return false;
-  }
-  
-  const auto& pile = tableau_[tableau_index];
-  
-  // Need at least 13 cards for a complete sequence
-  if (pile.size() < 13) {
-    return false;
-  }
-  
-  // In Spider, we need to find a King-to-Ace sequence of the same suit
-  // Start looking from the end of the pile
-  size_t start_pos = pile.size() - 1;
-  
-  // Check all possible starting positions for a King
-  while (start_pos >= 12) { // Need at least 13 cards for a K-A sequence
-    // Must start with a King
-    if (pile[start_pos].card.rank == cardlib::Rank::KING) {
-      // Found a King, check for a sequence
-      cardlib::Suit suit = pile[start_pos].card.suit;
-      bool complete_sequence = true;
-      
-      // Check for the descending sequence: K, Q, J, 10, 9, 8, 7, 6, 5, 4, 3, 2, A
-      for (int i = 0; i < 13; i++) {
-        size_t pos = start_pos - i;
-        int expected_rank = static_cast<int>(cardlib::Rank::KING) - i;
-        
-        // Check if the card matches the expected rank and suit
-        if (static_cast<int>(pile[pos].card.rank) != expected_rank ||
-            pile[pos].card.suit != suit ||
-            !pile[pos].face_up) {
-          complete_sequence = false;
-          break;
-        }
-      }
-      
-      if (complete_sequence) {
-        // We found a complete sequence!
-        
-        // Save the King card for display in the foundation
-        cardlib::Card kingCard = pile[start_pos].card;
-        
-        // Remove the 13 cards from the tableau pile
-        tableau_[tableau_index].erase(
-          tableau_[tableau_index].begin() + (start_pos - 12),
-          tableau_[tableau_index].begin() + start_pos + 1
-        );
-        
-        // If there are still cards in the pile, make sure the top one is face up
-        if (!tableau_[tableau_index].empty() && !tableau_[tableau_index].back().face_up) {
-          tableau_[tableau_index].back().face_up = true;
-          playSound(GameSoundEvent::CardFlip);
-        }
-        
-        // Add to foundation count (we just track completed sequences by adding to pile 0)
-        // Use the King to represent the completed sequence
-        foundation_[0].push_back(kingCard);
-        
-        // Play the completion sound
-        playSound(GameSoundEvent::WinGame);
-        
-        // Check if this was the last sequence - if we have 8 completed sequences, the game is won
-        if (foundation_[0].size() >= 8) {
-            // Start win animation
-            startWinAnimation();
-        } else {
-            // Just refresh the display for a normal sequence completion
-            refreshDisplay();
-        }
-        
-        return true;
-      }
+    if (tableau_index < 0 || tableau_index >= tableau_.size()) {
+        return false;
     }
     
-    // Move up the pile to continue checking
-    start_pos--;
-  }
-  
-  return false;
+    auto& pile = tableau_[tableau_index];
+    
+    // Need at least 13 cards for a complete sequence
+    if (pile.size() < 13) {
+        return false;
+    }
+    
+    // Start from the end of the pile (the top-most card visible to player)
+    int top_position = pile.size() - 1;
+    
+    // We need to find Ace at the top position
+    if (pile[top_position].card.rank != cardlib::Rank::ACE) {
+        return false;
+    }
+    
+    // Check if we have 13 cards in descending sequence of the same suit
+    cardlib::Suit suit = pile[top_position].card.suit;
+    
+    for (int i = 0; i < 13; i++) {
+        int pos = top_position - i;
+        if (pos < 0) return false; // Not enough cards
+        
+        // Check current card
+        if (!pile[pos].face_up || 
+            pile[pos].card.suit != suit || 
+            static_cast<int>(pile[pos].card.rank) != (1 + i)) { // ACE=1, 2=2, ... KING=13
+            return false;
+        }
+    }
+    
+    // Found a valid sequence!
+    // Save the King for display
+    cardlib::Card kingCard = pile[top_position - 12].card; // King is 12 positions behind Ace
+    
+    // Remove the 13 cards
+    tableau_[tableau_index].erase(
+        tableau_[tableau_index].end() - 13,
+        tableau_[tableau_index].end()
+    );
+    
+    // Flip new top card if needed
+    if (!tableau_[tableau_index].empty() && !tableau_[tableau_index].back().face_up) {
+        tableau_[tableau_index].back().face_up = true;
+        playSound(GameSoundEvent::CardFlip);
+    }
+    
+    // Add to the foundation pile
+    foundation_[0].push_back(kingCard);
+    
+    // Play sound
+    playSound(GameSoundEvent::WinGame);
+    
+    // Check for win condition
+    if (foundation_[0].size() >= 8) {
+        startWinAnimation();
+    } else {
+        refreshDisplay();
+    }
+    
+    return true;
 }
