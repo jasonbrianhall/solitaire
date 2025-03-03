@@ -97,24 +97,49 @@ bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
   if (pile_index < 0)
     return false;
 
-  // Can drag from waste pile only top card
+  // Stock pile - not draggable
+  if (pile_index == 0) {
+    return false;
+  }
+  
+  // Waste pile - not used in Spider Solitaire
   if (pile_index == 1) {
-    return !waste_.empty() &&
-           static_cast<size_t>(card_index) == waste_.size() - 1;
+    return false;
   }
 
-  // Can drag from foundation only top card
+  // Foundation pile - not draggable in Spider
   if (pile_index >= 2 && pile_index <= 5) {
-    const auto &pile = foundation_[pile_index - 2];
-    return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
+    return false;
   }
 
-  // Can drag from tableau if cards are face up
-  if (pile_index >= 6 && pile_index <= 12) {
+  // Tableau piles (6-15 for Spider with 10 piles)
+  if (pile_index >= 6 && pile_index <= 15) {
     const auto &pile = tableau_[pile_index - 6];
-    return !pile.empty() && card_index >= 0 &&
-           static_cast<size_t>(card_index) < pile.size() &&
-           pile[card_index].face_up; // Make sure card is face up
+    
+    // Must be a valid index and the card must be face up
+    if (pile.empty() || card_index < 0 || static_cast<size_t>(card_index) >= pile.size() || !pile[card_index].face_up) {
+      return false;
+    }
+    
+    // Check if this card and all cards above it form a valid sequence to drag
+    // In Spider, you can drag any sequence of cards, but they must be in descending order
+    // If they're all the same suit, you can drag them as a block regardless of sequence
+    for (size_t i = card_index; i < pile.size() - 1; i++) {
+      // Check if current card and next card have consecutive ranks
+      bool consecutive_rank = static_cast<int>(pile[i].card.rank) == 
+                             static_cast<int>(pile[i+1].card.rank) + 1;
+      
+      // Check if they are the same suit
+      bool same_suit = pile[i].card.suit == pile[i+1].card.suit;
+      
+      // In Spider, you can drag cards of any suit, but they must be in descending sequence
+      // If they're not in a valid sequence, you can only drag if they're the same suit
+      if (!consecutive_rank && !same_suit) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   return false;
@@ -338,22 +363,67 @@ std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
 
 std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
                                                        int card_index) {
-  if (pile_index >= 6 && pile_index <= 12) {
+  std::vector<cardlib::Card> result;
+  
+  // Only handle tableau piles for Spider Solitaire
+  if (pile_index >= 6 && pile_index <= 15) {
     // Handle tableau piles
     const auto &tableau_pile = tableau_[pile_index - 6];
     if (card_index >= 0 &&
         static_cast<size_t>(card_index) < tableau_pile.size() &&
         tableau_pile[card_index].face_up) {
-      return getTableauCardsAsCards(tableau_pile, card_index);
+        
+      // In Spider, we need to determine if the cards form a valid draggable sequence
+      // Valid sequences are:
+      // 1. Descending rank (regardless of suit)
+      // 2. Same suit (can be dragged as a block)
+      
+      // First, check if all the cards above the starting card are the same suit
+      bool all_same_suit = true;
+      cardlib::Suit first_suit = tableau_pile[card_index].card.suit;
+      
+      for (size_t i = card_index; i < tableau_pile.size(); i++) {
+        if (tableau_pile[i].card.suit != first_suit) {
+          all_same_suit = false;
+          break;
+        }
+      }
+      
+      // If all cards are the same suit, we can drag them all regardless of sequence
+      if (all_same_suit) {
+        for (size_t i = card_index; i < tableau_pile.size(); i++) {
+          result.push_back(tableau_pile[i].card);
+        }
+        return result;
+      }
+      
+      // Otherwise, we need to check for a valid descending sequence
+      size_t end_index = card_index;
+      cardlib::Rank current_rank = tableau_pile[card_index].card.rank;
+      
+      // Find the longest valid sequence from card_index
+      for (size_t i = card_index + 1; i < tableau_pile.size(); i++) {
+        cardlib::Rank next_rank = tableau_pile[i].card.rank;
+        
+        // Check if the next card is one rank lower
+        if (static_cast<int>(next_rank) == static_cast<int>(current_rank) - 1) {
+          end_index = i;
+          current_rank = next_rank;
+        } else {
+          // Sequence broken
+          break;
+        }
+      }
+      
+      // Add all cards in the valid sequence to the result
+      for (size_t i = card_index; i <= end_index; i++) {
+        result.push_back(tableau_pile[i].card);
+      }
     }
-    return std::vector<cardlib::Card>();
-  }
-
-  // Handle other piles using getPileReference
-  auto &pile = getPileReference(pile_index);
-  if (card_index >= 0 && static_cast<size_t>(card_index) < pile.size()) {
-    return std::vector<cardlib::Card>(pile.begin() + card_index, pile.end());
-  }
+    return result;
+  } 
+  
+  // For non-tableau piles (not used in Spider)
   return std::vector<cardlib::Card>();
 }
 
@@ -500,87 +570,39 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
   if (event->button == 1 && game->dragging_) {
     auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
 
-    if (target_pile >= 0) {
-      bool move_successful = false;
-
-      // Handle dropping on foundation piles (index 2-5)
-      if (target_pile >= 2 && target_pile <= 5) {
-        auto &foundation_pile = game->foundation_[target_pile - 2];
-        if (game->canMoveToPile(game->drag_cards_, foundation_pile, true)) {
-          // Remove card from source
-          if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-            auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
-            source_tableau.pop_back();
-
-            // Flip over the new top card if there is one
-            if (!source_tableau.empty() && !source_tableau.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
-              source_tableau.back().face_up = true;
-            }
-          } else {
-            auto &source = game->getPileReference(game->drag_source_pile_);
-            source.pop_back();
-          }
-
-          // Add to foundation
-          foundation_pile.push_back(game->drag_cards_[0]);
-          move_successful = true;
-        }
-      }
-      // Handle dropping on tableau piles (index 6-12)
-      else if (target_pile >= 6 && target_pile <= 12) {
-        auto &tableau_pile = game->tableau_[target_pile - 6];
-        std::vector<cardlib::Card> target_cards;
-        if (!tableau_pile.empty()) {
-          target_cards = {tableau_pile.back().card};
-        }
-
-        if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
-          // Remove cards from source
-          if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-            auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
-            source_tableau.erase(source_tableau.end() -
-                                     game->drag_cards_.size(),
-                                 source_tableau.end());
-
-            // Flip over the new top card if there is one
-            if (!source_tableau.empty() && !source_tableau.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
-              source_tableau.back().face_up = true;
-            }
-          } else {
-            auto &source = game->getPileReference(game->drag_source_pile_);
-            source.erase(source.end() - game->drag_cards_.size(), source.end());
-          }
-
-          // Add cards to target tableau
-          for (const auto &card : game->drag_cards_) {
-            tableau_pile.emplace_back(card, true);
-          }
-          move_successful = true;
-          game->playSound(GameSoundEvent::CardPlace);
-        }
+    if (target_pile >= 6 && target_pile <= 15) { // Tableau piles
+      auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
+      auto &target_tableau = game->tableau_[target_pile - 6];
+      
+      std::vector<cardlib::Card> target_cards;
+      if (!target_tableau.empty()) {
+        target_cards = {target_tableau.back().card};
       }
 
-      if (move_successful) {
-        /*if (game->checkWinCondition()) {
-          GtkWidget *dialog = gtk_message_dialog_new(
-              GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-              GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-          gtk_dialog_run(GTK_DIALOG(dialog));
-          gtk_widget_destroy(dialog);
+      if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
+        // Remove cards from source pile
+        source_tableau.erase(source_tableau.end() - game->drag_cards_.size(), source_tableau.end());
 
-          game->initializeGame();
+        // Flip over the new top card in source pile if necessary
+        if (!source_tableau.empty() && !source_tableau.back().face_up) {
+          source_tableau.back().face_up = true;
+          game->playSound(GameSoundEvent::CardFlip);
         }
-        gtk_widget_queue_draw(game->game_area_);
-      }*/
+
+        // Add cards to target tableau
+        for (const auto &card : game->drag_cards_) {
+          target_tableau.emplace_back(card, true);
+        }
+        
+        game->playSound(GameSoundEvent::CardPlace);
+        
+        // Check if the move created a completed sequence
+        game->checkForCompletedSequence(target_pile - 6);
+        
+        // Check if the player has won
         if (game->checkWinCondition()) {
-          game->startWinAnimation(); // Start animation instead of showing
-                                     // dialog
+          game->startWinAnimation();
         }
-        gtk_widget_queue_draw(game->game_area_);
       }
     }
 
@@ -677,15 +699,8 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
     return {0, stock_.empty() ? -1 : 0};
   }
 
-  // Check waste pile
-  if (x >= 2 * current_card_spacing_ + current_card_width_ &&
-      x <= 2 * current_card_spacing_ + 2 * current_card_width_ &&
-      y >= current_card_spacing_ &&
-      y <= current_card_spacing_ + current_card_height_) {
-    return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
-  }
-
-  // Check foundation piles
+  // Foundation piles are not used in the same way in Spider
+  // We'll just keep one pile for counting completed sequences
   int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
   for (int i = 0; i < 4; i++) {
     if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
@@ -699,11 +714,19 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
   }
 
   // Check tableau piles - check from top card down
+  // Spider has 10 tableau piles
   int tableau_y =
       current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  for (int i = 0; i < 7; i++) {
-    int pile_x = current_card_spacing_ +
-                 i * (current_card_width_ + current_card_spacing_);
+  
+  // Calculate the width available for tableau piles
+  int available_width = current_card_width_ * tableau_.size() + 
+                       current_card_spacing_ * (tableau_.size() + 1);
+  
+  // Calculate starting x position to center the tableau piles
+  int start_x = current_card_spacing_;
+  
+  for (int i = 0; i < tableau_.size(); i++) {
+    int pile_x = start_x + i * (current_card_width_ + current_card_spacing_);
     if (x >= pile_x && x <= pile_x + current_card_width_) {
       const auto &pile = tableau_[i];
       if (pile.empty() && y >= tableau_y &&
@@ -726,6 +749,7 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
 
   return {-1, -1};
 }
+
 bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                                   const std::vector<cardlib::Card> &target,
                                   bool is_foundation) const {
@@ -733,9 +757,9 @@ bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
   if (cards.empty())
     return false;
 
-  const auto &moving_card = cards[0];
-
-  // Foundation pile rules
+  const auto &moving_card = cards[0]; // First card in the sequence being moved
+  
+  // Foundation pile rules remain the same for compatibility
   if (is_foundation) {
     // Only single cards can go to foundation
     if (cards.size() != 1) {
@@ -754,25 +778,20 @@ bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                static_cast<int>(target_card.rank) + 1;
   }
 
-  // Tableau pile rules
+  // Tableau pile rules for Spider Solitaire
   if (target.empty()) {
-    // Only kings can go to empty tableau spots
-    return static_cast<int>(moving_card.rank) ==
-           static_cast<int>(cardlib::Rank::KING);
+    // Any card can go to an empty tableau pile in Spider
+    return true;
   }
 
   const auto &target_card = target.back();
 
-  // Must be opposite color and one rank lower
-  bool opposite_color = ((target_card.suit == cardlib::Suit::HEARTS ||
-                          target_card.suit == cardlib::Suit::DIAMONDS) !=
-                         (moving_card.suit == cardlib::Suit::HEARTS ||
-                          moving_card.suit == cardlib::Suit::DIAMONDS));
-
+  // In Spider, cards must just be one rank lower (suit doesn't matter)
+  // For example, you can place any Queen on any King
   bool lower_rank = static_cast<int>(moving_card.rank) ==
                     static_cast<int>(target_card.rank) - 1;
 
-  return opposite_color && lower_rank;
+  return lower_rank;
 }
 
 bool SolitaireGame::canMoveToFoundation(const cardlib::Card &card,
@@ -1884,4 +1903,75 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_stroke(cr);
   
   cairo_restore(cr);
+}
+
+bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
+  if (tableau_index < 0 || tableau_index >= tableau_.size()) {
+    return false;
+  }
+  
+  const auto& pile = tableau_[tableau_index];
+  
+  // Need at least 13 cards for a complete sequence
+  if (pile.size() < 13) {
+    return false;
+  }
+  
+  // In Spider, we need to find a King-to-Ace sequence of the same suit
+  // Look for a sequence starting with a King at the top
+  size_t start_pos = pile.size() - 1;
+  
+  // Start looking from the end of the pile
+  while (start_pos >= 12) { // Need at least 13 cards for a K-A sequence
+    // Must start with a King
+    if (pile[start_pos].card.rank == cardlib::Rank::KING) {
+      // Found a King, check for a sequence
+      cardlib::Suit suit = pile[start_pos].card.suit;
+      bool complete_sequence = true;
+      
+      // Check for the descending sequence: K, Q, J, 10, 9, 8, 7, 6, 5, 4, 3, 2, A
+      for (int i = 0; i < 13; i++) {
+        size_t pos = start_pos - i;
+        int expected_rank = static_cast<int>(cardlib::Rank::KING) - i;
+        
+        // Check if the card matches the expected rank and suit
+        if (static_cast<int>(pile[pos].card.rank) != expected_rank ||
+            pile[pos].card.suit != suit ||
+            !pile[pos].face_up) {
+          complete_sequence = false;
+          break;
+        }
+      }
+      
+      if (complete_sequence) {
+        // We found a complete sequence!
+        // Remove the 13 cards from the tableau pile
+        tableau_[tableau_index].erase(
+          tableau_[tableau_index].begin() + (start_pos - 12),
+          tableau_[tableau_index].begin() + start_pos + 1
+        );
+        
+        // If there are still cards in the pile, make sure the top one is face up
+        if (!tableau_[tableau_index].empty() && !tableau_[tableau_index].back().face_up) {
+          tableau_[tableau_index].back().face_up = true;
+          playSound(GameSoundEvent::CardFlip);
+        }
+        
+        // Add to foundation count (we just track completed sequences by adding to pile 0)
+        foundation_[0].push_back(cardlib::Card(suit, cardlib::Rank::KING));
+        
+        // Play the completion sound
+        playSound(GameSoundEvent::WinGame);
+        
+        refreshDisplay();
+        
+        return true;
+      }
+    }
+    
+    // Move up the pile to continue checking
+    start_pos--;
+  }
+  
+  return false;
 }
