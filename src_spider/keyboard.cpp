@@ -389,12 +389,18 @@ void SolitaireGame::activateSelected() {
 
     if (!tableau_pile.empty() && selected_card_idx_ >= 0 &&
         tableau_pile[selected_card_idx_].face_up) {
-      // Activate selection for this card
-      keyboard_selection_active_ = true;
-      source_pile_ = selected_pile_;
-      source_card_idx_ = selected_card_idx_;
-      // Force a refresh immediately to show the blue highlight
-      refreshDisplay();
+          // Use existing isValidDragSource function to check if this is a valid selection
+      if (isValidDragSource(selected_pile_, selected_card_idx_)) {
+        // Activate selection for this card
+        keyboard_selection_active_ = true;
+        source_pile_ = selected_pile_;
+        source_card_idx_ = selected_card_idx_;
+        // Force a refresh immediately to show the blue highlight
+        refreshDisplay();
+      } else {
+        // Provide feedback that this selection isn't valid
+        playSound(GameSoundEvent::CardPlace); // Or another appropriate sound
+      }
     }
   }
 }
