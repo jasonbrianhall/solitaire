@@ -2284,7 +2284,7 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
     // Start the sequence animation - this will handle removing cards and updating the foundation
     startSequenceAnimation(tableau_index);
     
-    // The animation has started - don't remove cards here anymore
+    // The animation has started - don't remove cards here
     return true;
 }
 

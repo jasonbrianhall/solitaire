@@ -1578,6 +1578,7 @@ void SolitaireGame::updateSequenceAnimation() {
     refreshDisplay();
 }
 
+
 void SolitaireGame::completeSequenceAnimation() {
     sequence_animation_active_ = false;
     next_card_index_ = 0; // Reset the counter
@@ -1597,6 +1598,58 @@ void SolitaireGame::completeSequenceAnimation() {
         // Fallback - use the suit from the King but set rank to Ace
         cardlib::Card aceCard(sequence_king_card_.suit, cardlib::Rank::ACE);
         foundation_[0].push_back(aceCard);
+    }
+    
+    // VERIFICATION: Debug check to ensure all 13 cards were removed
+    if (sequence_tableau_index_ >= 0 && sequence_tableau_index_ < static_cast<int>(tableau_.size())) {
+        // If for some reason there are still cards that should have been removed,
+        // we'll double-check the tableau pile to ensure they've all been removed
+        auto& pile = tableau_[sequence_tableau_index_];
+        
+        // Verify that all cards were correctly removed
+        if (!sequence_cards_.empty()) {
+            cardlib::Suit target_suit = sequence_cards_.back().card.suit;
+            
+            // Scan through the pile to check for any leftover sequence cards
+            bool found_leftover = false;
+            size_t i = 0;
+            while (i < pile.size()) {
+                // Check if this card matches any in our sequence that should have been removed
+                bool should_be_removed = false;
+                
+                // For Spider, we look for any card of the sequence's suit with ranks 1-13
+                if (pile[i].card.suit == target_suit && 
+                    static_cast<int>(pile[i].card.rank) >= 1 && 
+                    static_cast<int>(pile[i].card.rank) <= 13) {
+                    
+                    // Look through all the sequence cards to see if we have a match
+                    for (const auto& seq_card : sequence_cards_) {
+                        if (seq_card.card.suit == pile[i].card.suit && 
+                            seq_card.card.rank == pile[i].card.rank) {
+                            should_be_removed = true;
+                            found_leftover = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (should_be_removed) {
+                    // Remove leftover card
+                    pile.erase(pile.begin() + i);
+                    // Don't increment i since we've removed an element
+                } else {
+                    // Move to next card
+                    i++;
+                }
+            }
+            
+            // If we found and removed leftovers, make a debug note
+            #ifdef DEBUG
+            if (found_leftover) {
+                std::cout << "Found and removed leftover sequence cards!" << std::endl;
+            }
+            #endif
+        }
     }
     
     // Flip the new top card in the source tableau if needed
