@@ -468,7 +468,9 @@ void SolitaireGame::drawStockPile(cairo_t *cr) {
   int y = current_card_spacing_;
   
   // Add debug output to verify stock pile state
+#ifdef DEBUG
   std::cout << "Stock pile size: " << stock_.size() << std::endl;
+#endif
   
   if (stock_.empty()) {
     // Make this condition more explicit and ensure it draws an empty pile
@@ -661,24 +663,6 @@ void SolitaireGame::drawDraggedCards(cairo_t *cr) {
                drag_y + i * current_vert_spacing_,
                &drag_cards_[i], true);
     }
-  }
-}
-
-// Draw all animations
-void SolitaireGame::drawAnimations(cairo_t *cr) {
-  // Draw win animation
-  if (win_animation_active_) {
-    drawWinAnimation(cr);
-  }
-
-  // Draw foundation move animation
-  if (foundation_move_animation_active_) {
-    drawAnimatedCard(cr, foundation_move_card_);
-  }
-
-  // Draw deal animation
-  if (deal_animation_active_) {
-    drawDealAnimation(cr);
   }
 }
 
@@ -1312,4 +1296,236 @@ void SolitaireGame::completeStockToWasteAnimation() {
 
   pending_waste_cards_.clear();
   refreshDisplay();
+}
+
+void SolitaireGame::startSequenceAnimation(int tableau_index) {
+    if (sequence_animation_active_)
+        return;
+    
+    sequence_animation_active_ = true;
+    sequence_animation_timer_ = 0;
+    next_card_index_ = 0; // Reset counter when starting a new animation
+    sequence_cards_.clear();
+    
+    auto& pile = tableau_[tableau_index];
+    
+    // We need at least 13 cards for a complete sequence
+    if (pile.size() < 13) {
+        sequence_animation_active_ = false;
+        return;
+    }
+    
+    // Start from the end of the pile (the top-most card visible to player)
+    int top_position = pile.size() - 1;
+    
+    // We need to find Ace at the top position
+    if (pile[top_position].card.rank != cardlib::Rank::ACE) {
+        sequence_animation_active_ = false;
+        return;
+    }
+    
+    // Check if we have 13 cards in descending sequence of the same suit
+    cardlib::Suit suit = pile[top_position].card.suit;
+    
+    // Save the King card for later addition to the foundation
+    sequence_king_card_ = pile[top_position - 12].card; // King is 12 positions behind Ace
+    
+    // Collect the cards for animation
+    for (int i = 0; i < 13; i++) {
+        int pos = top_position - i;
+        if (pos < 0) {
+            sequence_animation_active_ = false;
+            return; // Not enough cards
+        }
+        
+        // Check current card
+        if (!pile[pos].face_up || 
+            pile[pos].card.suit != suit || 
+            static_cast<int>(pile[pos].card.rank) != (1 + i)) { // ACE=1, 2=2, ... KING=13
+            sequence_animation_active_ = false;
+            return;
+        }
+        
+        // Add card to animation sequence
+        AnimatedCard anim_card;
+        anim_card.card = pile[pos].card;
+        
+        // Calculate start position in tableau
+        int card_x = current_card_spacing_ + 
+                    tableau_index * (current_card_width_ + current_card_spacing_);
+        int card_y = (current_card_spacing_ + current_card_height_ + 
+                    current_vert_spacing_) + pos * current_vert_spacing_;
+        
+        anim_card.x = card_x;
+        anim_card.y = card_y;
+        
+        // Calculate target position in foundation area
+        // For Spider, foundation cards should go to positions after the stock pile
+        // We need to ensure this goes to the correct foundation pile position
+        
+        // The first foundation pile position is 2 card spaces from the left (after stock pile)
+        int foundation_x_start = 2 * current_card_spacing_ + current_card_width_;
+        
+        // The number of completed sequences so far determines the target pile
+        int foundation_pile = foundation_[0].size(); // Current number of completed sequences
+        
+        // Calculate the target X position for this sequence
+        anim_card.target_x = foundation_x_start + 
+                           foundation_pile * (current_card_width_ + current_card_spacing_);
+        anim_card.target_y = current_card_spacing_; // Top of the screen
+        
+        anim_card.active = false; // Start inactive
+        anim_card.face_up = true;
+        anim_card.rotation = 0;
+        anim_card.rotation_velocity = (rand() % 40 - 20) / 100.0; // Slight random rotation
+        anim_card.exploded = false;
+        
+        // Add to animation sequence
+        sequence_cards_.push_back(anim_card);
+    }
+    
+    // Play sound
+    playSound(GameSoundEvent::WinGame);
+    
+    // Make the first card (Ace) active to start the animation
+    if (!sequence_cards_.empty()) {
+        sequence_cards_[0].active = true;
+        next_card_index_ = 1; // Next card to activate will be index 1
+    }
+    
+    // Set up animation timer
+    if (animation_timer_id_ > 0) {
+        g_source_remove(animation_timer_id_);
+        animation_timer_id_ = 0;
+    }
+    
+    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onSequenceAnimationTick, this);
+    
+    // Force a redraw
+    refreshDisplay();
+}
+
+gboolean SolitaireGame::onSequenceAnimationTick(gpointer data) {
+    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+    game->updateSequenceAnimation();
+    return game->sequence_animation_active_ ? TRUE : FALSE;
+}
+
+void SolitaireGame::drawAnimations(cairo_t *cr) {
+    // Draw win animation
+    if (win_animation_active_) {
+        drawWinAnimation(cr);
+    }
+
+    // Draw foundation move animation
+    if (foundation_move_animation_active_) {
+        drawAnimatedCard(cr, foundation_move_card_);
+    }
+    
+    // Draw sequence completion animation
+    if (sequence_animation_active_) {
+        for (const auto& card : sequence_cards_) {
+            if (card.active) {
+                drawAnimatedCard(cr, card);
+            }
+        }
+    }
+
+    // Draw deal animation
+    if (deal_animation_active_) {
+        drawDealAnimation(cr);
+    }
+}
+
+void SolitaireGame::updateSequenceAnimation() {
+    if (!sequence_animation_active_)
+        return;
+    
+    // Check if all cards have reached their destination
+    bool all_cards_arrived = true;
+    
+    for (auto& card : sequence_cards_) {
+        if (!card.active)
+            continue;
+            
+        // Calculate distance to target
+        double dx = card.target_x - card.x;
+        double dy = card.target_y - card.y;
+        double distance = sqrt(dx * dx + dy * dy);
+        
+        if (distance < 5.0) {
+            // Card has arrived
+            card.x = card.target_x;
+            card.y = card.target_y;
+            card.active = false;
+            playSound(GameSoundEvent::CardPlace);
+        } else {
+            // Use a slower speed for the sequence animation
+            // Original: double speed = distance * SEQUENCE_ANIMATION_SPEED;
+            double speed = distance * 0.1; // Reduced to make animation slower
+            double move_x = dx * speed / distance;
+            double move_y = dy * speed / distance;
+            
+            // Add a slight arc to the motion
+            double progress = 1.0 - (distance / sqrt(dx * dx + dy * dy));
+            double arc_height = 40.0; // Maximum height of the arc in pixels
+            double arc_offset = sin(progress * G_PI) * arc_height;
+            
+            card.x += move_x;
+            card.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
+            
+            // Update rotation for visual interest
+            card.rotation += card.rotation_velocity;
+            
+            all_cards_arrived = false;
+        }
+    }
+    
+    // Also increase the delay between launching cards
+    sequence_animation_timer_ += ANIMATION_INTERVAL;
+    
+    // Original: if (sequence_animation_timer_ >= 100) {
+    if (sequence_animation_timer_ >= 200) { // Increase to 200ms for slower card launching
+        sequence_animation_timer_ = 0;
+        
+        if (next_card_index_ < sequence_cards_.size()) {
+            sequence_cards_[next_card_index_].active = true;
+            next_card_index_++;
+        }
+    }
+    
+    // Check if animation is complete
+    if (all_cards_arrived && next_card_index_ >= sequence_cards_.size()) {
+        completeSequenceAnimation();
+    }
+    
+    refreshDisplay();
+}
+
+void SolitaireGame::completeSequenceAnimation() {
+    sequence_animation_active_ = false;
+    next_card_index_ = 0; // Reset the counter
+    
+    if (animation_timer_id_ > 0) {
+        g_source_remove(animation_timer_id_);
+        animation_timer_id_ = 0;
+    }
+    
+    // Now add the King to the foundation
+    // We need to extract the King (the last card in the animation sequence)
+    if (!sequence_cards_.empty()) {
+        cardlib::Card kingCard = sequence_cards_.back().card;
+        foundation_[0].push_back(kingCard);
+    }
+    
+    // Clean up
+    sequence_cards_.clear();
+    
+    // Check for win condition
+    if (foundation_[0].size() >= 8) {
+        startWinAnimation();
+    }
+    
+    // Force a redraw
+    refreshDisplay();
 }

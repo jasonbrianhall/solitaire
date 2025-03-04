@@ -11,6 +11,10 @@ if (game->win_animation_active_) {
   return TRUE;
 }
 
+if (game->sequence_animation_active_)  {
+  return TRUE;
+}
+
   // Block keyboard input if auto-finish is active, except for Escape to cancel
   if (game->auto_finish_active_) {
     if (event->keyval == GDK_KEY_Escape) {

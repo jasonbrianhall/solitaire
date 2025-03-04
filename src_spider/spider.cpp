@@ -437,7 +437,7 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
                                       gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
-  if (game->auto_finish_active_) {
+  if (game->auto_finish_active_ || game->sequence_animation_active_) {
       return TRUE;
   }
 
@@ -2247,6 +2247,9 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
         return false;
     }
     
+    if (sequence_animation_active_) {
+        return false;  // Don't process this sequence yet
+    }
     auto& pile = tableau_[tableau_index];
     
     // Need at least 13 cards for a complete sequence
@@ -2278,10 +2281,13 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
     }
     
     // Found a valid sequence!
-    // Save the King for display
+    // Save the King for display in the foundation
     cardlib::Card kingCard = pile[top_position - 12].card; // King is 12 positions behind Ace
     
-    // Remove the 13 cards
+    // Start the sequence animation
+    startSequenceAnimation(tableau_index);
+    
+    // Remove the 13 cards from the tableau pile
     tableau_[tableau_index].erase(
         tableau_[tableau_index].end() - 13,
         tableau_[tableau_index].end()
@@ -2293,18 +2299,8 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
         playSound(GameSoundEvent::CardFlip);
     }
     
-    // Add to the foundation pile
-    foundation_[0].push_back(kingCard);
-    
-    // Play sound
-    playSound(GameSoundEvent::WinGame);
-    
-    // Check for win condition
-    if (foundation_[0].size() >= 8) {
-        startWinAnimation();
-    } else {
-        refreshDisplay();
-    }
+    // DO NOT add to the foundation pile here - we'll do it when animation completes
+    // foundation_[0].push_back(kingCard);
     
     return true;
 }

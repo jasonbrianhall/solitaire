@@ -315,7 +315,17 @@ private:
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
                           std::vector<uint8_t> &fileData);
-                          
+
+    bool sequence_animation_active_ = false;
+    AnimatedCard sequence_animation_card_;
+    std::vector<AnimatedCard> sequence_cards_;
+    int sequence_animation_timer_ = 0;
+    static constexpr double SEQUENCE_ANIMATION_SPEED = 0.3;
+    static gboolean onSequenceAnimationTick(gpointer data);
+    void startSequenceAnimation(int tableau_index);
+    void updateSequenceAnimation();
+    void completeSequenceAnimation();
+  cardlib::Card sequence_king_card_;                        
 void drawBackground(cairo_t *cr);
 void drawStockPile(cairo_t *cr);
 void drawFoundationPiles(cairo_t *cr);
@@ -330,6 +340,8 @@ void drawKeyboardNavigation(cairo_t *cr);
 void initBufferSurface(GtkAllocation &allocation);
 void executeMove(size_t source_pile_idx, int source_card_idx, 
                                size_t target_pile_idx, const std::vector<cardlib::Card>& cards_to_drag);
+                               
+int next_card_index_ = 0;
 };
 
 #endif // SOLITAIRE_H
