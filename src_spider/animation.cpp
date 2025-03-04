@@ -104,6 +104,15 @@ void SolitaireGame::startWinAnimation() {
   if (win_animation_active_)
     return;
 
+  if (auto_finish_active_) {
+    auto_finish_active_ = false;
+    if (auto_finish_timer_id_ > 0) {
+      g_source_remove(auto_finish_timer_id_);
+      auto_finish_timer_id_ = 0;
+    }
+  }
+
+
   resetKeyboardNavigation();
 
   playSound(GameSoundEvent::WinGame);
