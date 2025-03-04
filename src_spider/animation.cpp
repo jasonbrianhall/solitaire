@@ -21,7 +21,7 @@ void SolitaireGame::updateWinAnimation() {
             launchNextCard();
             
             // Check if we've reached the limit - break if needed
-            if (cards_launched_ >= 52) 
+            if (cards_launched_ >= 104) // 8 sequences x 13 cards = 104 for Spider
                 break;
         }
     } else {    
@@ -83,18 +83,18 @@ void SolitaireGame::updateWinAnimation() {
     }
   }
 
-  // Stop animation if all cards are done and we've launched them all
-  /*if (all_cards_finished && cards_launched_ >= 52) {
-    stopWinAnimation();
-  } */
-  
+  // If all cards are finished and we've launched them all or reached a restart point,
+  // reset to start launching from beginning
   if (all_cards_finished) {
-  // Reset tracking for animated cards to allow reusing the piles
-  for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
-    std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
-  }
-  // Reset cards_launched_ counter to allow showing which cards we've used
-  cards_launched_ = 0;
+    // Check if we've launched all 104 cards
+    if (cards_launched_ >= 104) {
+      // Reset tracking for animated cards to allow reusing the piles
+      for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
+        std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
+      }
+      // Reset cards_launched_ counter to allow showing which cards we've used
+      cards_launched_ = 0;
+    }
   }
 
   refreshDisplay();
@@ -104,6 +104,7 @@ void SolitaireGame::startWinAnimation() {
   if (win_animation_active_)
     return;
 
+  // Disable auto-finish mode if it's active
   if (auto_finish_active_) {
     auto_finish_active_ = false;
     if (auto_finish_timer_id_ > 0) {
@@ -111,7 +112,6 @@ void SolitaireGame::startWinAnimation() {
       auto_finish_timer_id_ = 0;
     }
   }
-
 
   resetKeyboardNavigation();
 
@@ -150,8 +150,8 @@ gtk_widget_destroy(dialog);
 
   // Initialize tracking for animated cards
   animated_foundation_cards_.clear();
-  animated_foundation_cards_.resize(4); // 4 foundation piles
-  for (size_t i = 0; i < 4; i++) {
+  animated_foundation_cards_.resize(8); // 8 foundation piles for Spider
+  for (size_t i = 0; i < 8; i++) {
     animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
   }
 
@@ -204,81 +204,71 @@ gboolean SolitaireGame::onAnimationTick(gpointer data) {
 
 void SolitaireGame::launchNextCard() {
   // Early exit if all cards have been launched
-  if (cards_launched_ >= 52)
+  if (cards_launched_ >= 104)  // 8 suits x 13 cards = 104 for Spider
     return;
 
   // Create a vector to store valid foundation piles that still have cards
   std::vector<int> valid_piles;
   
-  // Check each foundation pile
-  for (size_t pile_index = 0; pile_index < foundation_.size(); pile_index++) {
-    // Skip empty piles
-    if (foundation_[pile_index].empty())
-      continue;
-      
-    // Find the highest card in this pile that hasn't been animated yet
-    for (int card_index = static_cast<int>(foundation_[pile_index].size()) - 1; card_index >= 0; card_index--) {
-      // Check if this card has already been animated
-      if (card_index < static_cast<int>(animated_foundation_cards_[pile_index].size()) && 
-          !animated_foundation_cards_[pile_index][card_index]) {
-        // This card is available for animation
-        valid_piles.push_back(pile_index);
-        break;
-      }
-    }
+  // For Spider, we use an array to track which cards have been animated from which sequence
+  // We need to show all 8 sequences with cards K through A
+  
+  // Calculate which sequence and which card in the sequence we should launch next
+  int sequence_index = cards_launched_ % 8;  // Which of the 8 sequences
+  int card_rank = 13 - (cards_launched_ / 8) % 13;  // Rank within sequence (13=K, 12=Q, etc.)
+  
+  if (card_rank <= 0) {
+    // We've gone through all ranks, start over with Kings
+    card_rank = 13;
   }
   
-  // If no valid piles found, return
-  if (valid_piles.empty())
-    return;
-    
-  // Select a random pile from the valid piles
-  int random_pile_index = valid_piles[rand() % valid_piles.size()];
+  // Convert rank to corresponding card rank enum value
+  cardlib::Rank rank = static_cast<cardlib::Rank>(card_rank);
   
-  // Find the highest card in this pile that hasn't been animated yet
-  int card_index = -1;
-  for (int i = static_cast<int>(foundation_[random_pile_index].size()) - 1; i >= 0; i--) {
-    if (i < static_cast<int>(animated_foundation_cards_[random_pile_index].size()) && 
-        !animated_foundation_cards_[random_pile_index][i]) {
-      card_index = i;
+  // Choose the suit based on the sequence
+  // For Spider single-suit, we'd use the same suit, but to make it visually interesting,
+  // let's use different suits for different sequences
+  cardlib::Suit suit;
+  
+  // Determine suit based on sequence number
+  // For 4-suit spider, we might do HEARTS, DIAMONDS, CLUBS, SPADES, repeat
+  switch (sequence_index % 4) {
+    case 0:
+      suit = cardlib::Suit::HEARTS;
       break;
-    }
+    case 1:
+      suit = cardlib::Suit::DIAMONDS;
+      break;
+    case 2:
+      suit = cardlib::Suit::CLUBS;
+      break;
+    case 3:
+      suit = cardlib::Suit::SPADES;
+      break;
   }
   
-  // If no valid card found, return
-  if (card_index == -1)
-    return;
-
-  // Mark this specific card as animated in the tracking structure
-  animated_foundation_cards_[random_pile_index][card_index] = true;
+  // Mark this card as animated in our tracking
+  animated_foundation_cards_[sequence_index % animated_foundation_cards_.size()][13 - card_rank] = true;
 
   // Calculate the starting X position based on the pile
+  // Use sequence_index to distribute cards from different foundation piles
   double start_x =
       current_card_spacing_ +
-      (3 + random_pile_index) * (current_card_width_ + current_card_spacing_);
+      (sequence_index % 8) * (current_card_width_ + current_card_spacing_);
   double start_y = current_card_spacing_;
 
-  // Randomly choose a launch trajectory (left or right)
-  double angle;
-/*  if (rand() % 2 == 0) {
-    // Left trajectory
-    angle = G_PI * 3 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
-  } else {
-    // Right trajectory
-    angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
-  }*/
-  
-// Randomly choose a launch trajectory (left, right, straight up, or high arc)
+  // Randomly choose a launch trajectory (left, right, straight up, or high arc)
   int trajectory_choice = rand() % 100;  // Random number between 0-99
   
   // Randomize launch speed slightly
-  int direction=rand() %2;
+  int direction = rand() % 2;
   
   double speed = (15 + (rand() % 5));
-  if (direction==1) {
-      speed*=-1;
+  if (direction == 1) {
+      speed *= -1;
   }
 
+  double angle;
   if (trajectory_choice < 5) {
     // 5% chance to go straight up (with slight random variation)
     angle = G_PI / 2 + (rand() % 200 - 100) / 1000.0 * G_PI / 8;
@@ -300,10 +290,12 @@ void SolitaireGame::launchNextCard() {
     angle = G_PI * 1 / 4 + (rand() % 1000) / 1000.0 * G_PI / 4;
   }
   
+  // Create a card for the animation
+  cardlib::Card card(suit, rank);
 
   // Create an animated card instance
   AnimatedCard anim_card;
-  anim_card.card = foundation_[random_pile_index][card_index];
+  anim_card.card = card;
   anim_card.x = start_x;
   anim_card.y = start_y;
 
@@ -485,27 +477,79 @@ void SolitaireGame::drawStockPile(cairo_t *cr) {
 
 // Draw the foundation piles
 void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
-  // Calculate the exact X position for the second tableau pile
-  int foundation_x = current_card_spacing_ + 
-                    (current_card_width_ + current_card_spacing_);
+  // Calculate the starting X position for foundation piles
+  int foundation_x = current_card_spacing_;
   int foundation_y = current_card_spacing_;
 
   // Track how many completed sequences we have
   int completed_sequences = foundation_[0].size();
 
-  // Draw spaces for up to 8 completed sequences (the maximum in Spider)
-  for (int i = 0; i < 8; i++) {
-    if (i < completed_sequences) {
-      // For each completed sequence, show a King of the suit that was completed
-      const cardlib::Card &king = foundation_[0][i];
-      drawCard(cr, foundation_x, foundation_y, &king, true);
-    } else {
-      // Empty foundation slot
-      drawEmptyPile(cr, foundation_x, foundation_y);
+  // For Spider Solitaire, during normal gameplay we show completed sequences as Kings 
+  // in the foundation area
+  
+  // Special handling for win animation: display all 8 piles with proper cards
+  if (win_animation_active_) {
+    // During win animation, display 8 piles with appropriate cards for visual feedback
+    for (int pile = 0; pile < 8; pile++) {
+      // Calculate card to show based on animation progress
+      cardlib::Suit suit;
+      
+      // Determine suit based on pile number
+      switch (pile % 4) {
+        case 0:
+          suit = cardlib::Suit::HEARTS;
+          break;
+        case 1:
+          suit = cardlib::Suit::DIAMONDS;
+          break;
+        case 2:
+          suit = cardlib::Suit::CLUBS;
+          break;
+        case 3:
+          suit = cardlib::Suit::SPADES;
+          break;
+      }
+      
+      // Determine which card to show in this foundation pile
+      // Find the highest card that hasn't been animated yet
+      cardlib::Rank rank = cardlib::Rank::KING; // Default to King
+      
+      // Look through the animation tracking to find the next unannotated card
+      for (int i = 0; i < 13; i++) {
+        if (pile < static_cast<int>(animated_foundation_cards_.size()) && 
+            i < static_cast<int>(animated_foundation_cards_[pile].size()) &&
+            !animated_foundation_cards_[pile][i]) {
+          // This card hasn't been animated yet
+          rank = static_cast<cardlib::Rank>(13 - i); // Convert index to rank (13=King, 12=Queen, etc.)
+          break;
+        }
+      }
+      
+      // Create a card with the appropriate suit and rank
+      cardlib::Card card(suit, rank);
+      
+      // Draw the card
+      drawCard(cr, foundation_x, foundation_y, &card, true);
+      
+      // Move to next position
+      foundation_x += current_card_width_ + current_card_spacing_;
     }
-    
-    // Move to next position
-    foundation_x += current_card_width_ + current_card_spacing_;
+  } else {
+    // Normal display during gameplay: show Kings for completed sequences
+    for (int i = 0; i < 8; i++) {
+      if (i < completed_sequences) {
+        // For each completed sequence, show a King of the suit that was completed
+        // In Spider, foundation_[0] stores the Kings from completed sequences
+        const cardlib::Card &king = foundation_[0][i];
+        drawCard(cr, foundation_x, foundation_y, &king, true);
+      } else {
+        // Empty foundation slot
+        drawEmptyPile(cr, foundation_x, foundation_y);
+      }
+      
+      // Move to next position
+      foundation_x += current_card_width_ + current_card_spacing_;
+    }
   }
 }
 
