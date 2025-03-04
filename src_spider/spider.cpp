@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <sys/stat.h>
+#include <array>
 #ifdef _WIN32
 #include <direct.h>
 #endif
@@ -1250,7 +1251,7 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
 
   // Create custom dialog instead of about dialog for more control
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "About Solitaire", GTK_WINDOW(game->window_),
+      "About Spider Solitaire", GTK_WINDOW(game->window_),
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
                                   GTK_DIALOG_DESTROY_WITH_PARENT),
       "OK", GTK_RESPONSE_OK, NULL);
@@ -1266,7 +1267,7 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   // Add program name with larger font
   GtkWidget *name_label = gtk_label_new(NULL);
   const char *name_markup =
-      "<span size='x-large' weight='bold'>Solitaire</span>";
+      "<span size='x-large' weight='bold'>Spider Solitaire</span>";
   gtk_label_set_markup(GTK_LABEL(name_label), name_markup);
   gtk_container_add(GTK_CONTAINER(content_area), name_label);
 
@@ -1286,38 +1287,37 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   GtkTextBuffer *buffer =
       gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
   const char *instructions =
-      "How to Play Solitaire:\n\n"
+      "How to Play Spider Solitaire:\n\n"
       "Objective:\n"
-      "Build four ordered card piles at the top of the screen, one for each "
-      "suit (♣,♦,♥,♠), "
-      "starting with Aces and ending with Kings.\n\n"
+      "Create 8 complete sequences of cards from King down to Ace, all of the same suit. "
+      "When a sequence is complete, it is automatically removed from the table.\n\n"
       "Game Setup:\n"
-      "- Seven columns of cards are dealt from left to right\n"
-      "- Each column contains one more card than the column to its left\n"
-      "- The top card of each column is face up\n"
-      "- Remaining cards form the draw pile in the upper left\n\n"
+      "- The game is played with 104 cards (2 decks)\n"
+      "- Cards are dealt into 10 tableau columns\n"
+      "- First 4 columns receive 6 cards each, last 6 columns receive 5 cards each\n"
+      "- Only the top card of each column is face up initially\n"
+      "- Remaining cards form the stock pile at the bottom of the screen\n\n"
       "Rules:\n"
-      "1. In the main playing area, stack cards in descending order (King to "
-      "Ace) with alternating colors\n"
-      "2. Move single cards or stacks of cards between columns\n"
-      "3. When you move a card that was covering a face-down card, the "
-      "face-down card is flipped over\n"
-      "4. Click the draw pile to reveal new cards when you need them\n"
-      "5. Build the four suit piles at the top in ascending order, starting "
-      "with Aces\n"
-      "6. Empty spaces in the main playing area can only be filled with "
-      "Kings\n\n"
+      "1. You can move cards from one tableau column to another if they follow a descending sequence "
+      "(regardless of suit)\n"
+      "2. To move a group of cards together, they must be in descending sequence AND of the same suit\n"
+      "3. Empty tableau spaces can be filled with any card or valid sequence\n"
+      "4. You can deal a new row of cards (one to each tableau column) by clicking the stock pile\n"
+      "5. You can only deal from the stock pile when all tableau columns have at least one card\n"
+      "6. When a sequence from King to Ace of the same suit is formed, it is automatically removed\n"
+      "7. The game is won when all 8 same-suit sequences have been completed\n\n"
+      "Difficulty Levels:\n"
+      "- Easy: 1 suit (all Spades)\n"
+      "- Medium: 2 suits (Spades and Hearts)\n"
+      "- Hard: 4 suits (standard deck)\n\n"
       "Controls:\n"
       "- Left-click and drag to move cards\n"
-      "- Rigit-click to automatically move cards to the suit piles at the "
-      "top\n\n"
+      "- Click on the stock pile to deal more cards\n\n"
       "Keyboard Controls:\n"
       "- Arrow keys (←, →, ↑, ↓) to navigate between piles and cards\n"
       "- Enter to select a card or perform a move\n"
       "- Escape to cancel a selection\n"
-      "- Space to draw cards from the stock pile\n"
-      "- F to automatically move all possible cards to the foundation piles\n"
-      "- 1 or 3 to toggle between Draw One and Draw Three modes\n"
+      "- F to auto-finish any valid moves (automatically finds best moves)\n"
       "- F11 to toggle fullscreen mode\n"
       "- Ctrl+N for a new game\n"
       "- Ctrl+Q to quit\n"
@@ -1372,54 +1372,73 @@ void SolitaireGame::dealTestLayout() {
   foundation_.resize(1);
   tableau_.resize(10);
 
-  // Create a test layout that's almost solved
-  // For Spider Solitaire, we want to create several near-complete sequences
-  
-  // Use single-suit Spider (all spades) for simplicity
-  cardlib::Suit testSuit = cardlib::Suit::SPADES;
+  // Create a test layout that's almost solved with all four suits
+  std::array<cardlib::Suit, 4> suits = {
+    cardlib::Suit::SPADES,
+    cardlib::Suit::HEARTS,
+    cardlib::Suit::DIAMONDS,
+    cardlib::Suit::CLUBS
+  };
   
   // Create 7 nearly completed sequences (K-2) that just need to be connected to Aces
+  // We'll distribute these among the 4 suits (2 sequences per suit, except 1 for one suit)
+  int suitIndex = 0;
   for (int i = 0; i < 7; i++) {
+    cardlib::Suit currentSuit = suits[suitIndex];
+    
     // Put a sequence from King down to 2 in tableau piles 0-6
     for (int rank = static_cast<int>(cardlib::Rank::KING); 
          rank >= static_cast<int>(cardlib::Rank::TWO); rank--) {
       // Create a Card object first, then use it to create a TableauCard
-      cardlib::Card card(testSuit, static_cast<cardlib::Rank>(rank));
+      cardlib::Card card(currentSuit, static_cast<cardlib::Rank>(rank));
       tableau_[i].emplace_back(card, true); // Set face-up to true
     }
+    
+    // Cycle through suits
+    suitIndex = (suitIndex + 1) % 4;
   }
 
-  // Put the Aces on piles 7-9 
-  // This makes it trivial to solve by just moving the Aces to complete sequences
-  cardlib::Card ace(testSuit, cardlib::Rank::ACE);
+  // Put the Aces in convenient locations to complete the sequences
+  // We'll distribute 8 aces among remaining piles 7-9
   
-  tableau_[7].emplace_back(ace, true);
-  tableau_[7].emplace_back(ace, true);
+  // Calculate how many of each suit we need based on the sequences we created
+  std::array<int, 4> acesNeeded = {0, 0, 0, 0};
+  suitIndex = 0;
+  for (int i = 0; i < 7; i++) {
+    acesNeeded[suitIndex]++;
+    suitIndex = (suitIndex + 1) % 4;
+  }
   
-  tableau_[8].emplace_back(ace, true);
-  tableau_[8].emplace_back(ace, true);
+  // Add final needed ace for the 8th sequence
+  acesNeeded[0]++;
   
-  tableau_[9].emplace_back(ace, true);
-  tableau_[9].emplace_back(ace, true);
-  tableau_[9].emplace_back(ace, true);
+  // Place aces on piles 7-9
+  // Two aces in pile 7, three in pile 8, three in pile 9
+  for (int suit = 0; suit < 4; suit++) {
+    for (int i = 0; i < acesNeeded[suit]; i++) {
+      cardlib::Card ace(suits[suit], cardlib::Rank::ACE);
+      
+      // Distribute aces across piles 7-9
+      if (tableau_[7].size() < 2) {
+        tableau_[7].emplace_back(ace, true);
+      } else if (tableau_[8].size() < 3) {
+        tableau_[8].emplace_back(ace, true);
+      } else {
+        tableau_[9].emplace_back(ace, true);
+      }
+    }
+  }
   
-  // For the 8th sequence, put a complete set from K-2 in the first pile,
-  // and the Ace in the second pile, so player just needs one move
+  // For the 8th sequence, add a complete K-2 sequence of the first suit to pile 0
+  // (We already added its matching ace above)
   for (int rank = static_cast<int>(cardlib::Rank::KING); 
        rank >= static_cast<int>(cardlib::Rank::TWO); rank--) {
-    cardlib::Card card(testSuit, static_cast<cardlib::Rank>(rank));
+    cardlib::Card card(suits[0], static_cast<cardlib::Rank>(rank));
     tableau_[0].emplace_back(card, true);
   }
   
-  // Add the final ace to complete the 8 sequences needed to win
-  tableau_[1].emplace_back(ace, true);
-  
-  // You could easily win this layout by:
-  // 1. Moving each Ace to the end of a K-2 sequence
-  // 2. Each completed K-A sequence will automatically move to the foundation
-  // 3. After 8 sequences are completed, you win
-
-  // This is a trivially solvable layout for testing
+  // This is a trivially solvable layout - just move each Ace to the end of the corresponding
+  // K-2 sequence with the same suit, and each completed sequence will move to the foundation
   playSound(GameSoundEvent::CardFlip);
 }
 
