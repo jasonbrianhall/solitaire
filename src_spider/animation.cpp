@@ -1507,12 +1507,9 @@ void SolitaireGame::updateSequenceAnimation() {
             card.y = card.target_y;
             card.active = false;
             playSound(GameSoundEvent::CardPlace);
-            
-            // Immediately request a redraw to show the card on the foundation
-            refreshDisplay();
         } else {
-            // Use a slower speed for the sequence animation
-            double speed = distance * 0.1; // Reduced to make animation slower
+            // Use a faster speed for the sequence animation
+            double speed = distance * 0.25; // Increased speed
             double move_x = dx * speed / distance;
             double move_y = dy * speed / distance;
             
@@ -1534,13 +1531,23 @@ void SolitaireGame::updateSequenceAnimation() {
     // Increase the delay between launching cards to be more visible
     sequence_animation_timer_ += ANIMATION_INTERVAL;
     
-    // Use 250ms delay between cards for clearer visualization
-    if (sequence_animation_timer_ >= 250) {
+    // Use 80ms delay between cards for faster animation
+    if (sequence_animation_timer_ >= 80) {
         sequence_animation_timer_ = 0;
         
         if (next_card_index_ < sequence_cards_.size()) {
-            // IMPORTANT FIX: Instead of removing cards as we go, just mark which ones 
-            // have been removed and handle all removals at the end to avoid index problems
+            // Delete the top card of the tableau pile
+            if (sequence_tableau_index_ >= 0 && 
+                sequence_tableau_index_ < static_cast<int>(tableau_.size())) {
+                
+                auto& pile = tableau_[sequence_tableau_index_];
+                
+                // Make sure we're not trying to remove from an empty pile
+                if (!pile.empty()) {
+                    // Always remove the last card (top of the pile)
+                    pile.pop_back();
+                }
+            }
             
             // Activate the next card for animation
             sequence_cards_[next_card_index_].active = true;
@@ -1550,29 +1557,30 @@ void SolitaireGame::updateSequenceAnimation() {
     
     // Check if animation is complete
     if (all_cards_arrived && next_card_index_ >= sequence_cards_.size()) {
-        // Now that all animations are complete, remove the cards from the tableau
+        // Make absolutely sure all 13 cards have been removed
         if (sequence_tableau_index_ >= 0 && 
             sequence_tableau_index_ < static_cast<int>(tableau_.size())) {
             
             auto& pile = tableau_[sequence_tableau_index_];
             
-            // Remove all cards in the sequence (from highest position to lowest)
-            // By sorting positions in descending order, we avoid index shifts
-            std::vector<int> positions_to_remove = sequence_card_positions_;
-            std::sort(positions_to_remove.begin(), positions_to_remove.end(), 
-                     [](int a, int b) { return a > b; });
-                     
-            for (int pos : positions_to_remove) {
-                if (pos >= 0 && pos < static_cast<int>(pile.size())) {
-                    pile.erase(pile.begin() + pos);
-                }
-            }
+            // Calculate how many cards should have been removed
+            int top_position = sequence_card_positions_[0]; // Position of the Ace (top card)
+            int expected_pile_size = top_position - 12; // Size after removing all 13 cards
             
-            // Flip the new top card if needed
-            if (!pile.empty() && !pile.back().face_up) {
-                pile.back().face_up = true;
-                playSound(GameSoundEvent::CardFlip);
+            // Force the pile to the expected size
+            while (pile.size() > expected_pile_size) {
+                pile.pop_back();
             }
+        }
+        
+        // Flip the new top card if needed
+        if (sequence_tableau_index_ >= 0 && 
+            sequence_tableau_index_ < static_cast<int>(tableau_.size()) &&
+            !tableau_[sequence_tableau_index_].empty() && 
+            !tableau_[sequence_tableau_index_].back().face_up) {
+            
+            tableau_[sequence_tableau_index_].back().face_up = true;
+            playSound(GameSoundEvent::CardFlip);
         }
         
         completeSequenceAnimation();
