@@ -311,7 +311,8 @@ void SolitaireGame::selectCardUp() {
   // Try to navigate up within the tableau pile
   if (selected_card_idx_ > 0) {
     for (int i = selected_card_idx_ - 1; i >= 0; i--) {
-      if (tableau_[tableau_idx][i].face_up) {
+      // Only select face up cards that are ALSO valid drag sources
+      if (tableau_[tableau_idx][i].face_up && isValidDragSource(selected_pile_, i)) {
         selected_card_idx_ = i;
         refreshDisplay();
         return;
