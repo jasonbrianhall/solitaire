@@ -311,6 +311,19 @@ private:
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
                           std::vector<uint8_t> &fileData);
+                          
+void drawBackground(cairo_t *cr);
+void drawStockPile(cairo_t *cr);
+void drawFoundationPiles(cairo_t *cr);
+void drawTableauPiles(cairo_t *cr);
+void drawTableauPileDuringAnimation(cairo_t *cr, size_t pile_index, int x, int tableau_base_y);
+void drawNormalTableauPile(cairo_t *cr, size_t pile_index, int x, int tableau_base_y);
+void drawDraggedCards(cairo_t *cr);
+void drawAnimations(cairo_t *cr);
+void drawWinAnimation(cairo_t *cr);
+void drawDealAnimation(cairo_t *cr);
+void drawKeyboardNavigation(cairo_t *cr);
+void initBufferSurface(GtkAllocation &allocation);
 };
 
 #endif // SOLITAIRE_H
