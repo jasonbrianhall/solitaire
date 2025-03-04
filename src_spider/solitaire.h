@@ -38,7 +38,7 @@ struct AnimatedCard {
   double velocity_y;
   double rotation;
   double rotation_velocity;
-  bool active;
+  int active;
   bool exploded;
   std::vector<CardFragment> fragments;
 

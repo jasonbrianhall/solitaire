@@ -604,12 +604,33 @@ void SolitaireGame::drawTableauPileDuringAnimation(cairo_t *cr, size_t pile_inde
   
   for (int j = 0; j < cards_to_draw; j++) {
     // Skip drawing the card if it's currently animating
+    // We need a more precise way to identify cards in the animation
     bool is_animating = false;
+    
+    // Instead of just checking suit and rank, check the position in the deal sequence
     for (const auto &anim_card : deal_cards_) {
-      if (anim_card.active && anim_card.card.suit == pile[j].card.suit &&
-          anim_card.card.rank == pile[j].card.rank) {
-        is_animating = true;
-        break;
+      if (anim_card.active) {
+        // Calculate which pile and card position this animation is for
+        int anim_pile_index = 0;
+        int anim_card_index = 0;
+        int cards_so_far = 0;
+        
+        // Determine which tableau pile and card index this animated card belongs to
+        for (int i = 0; i < 10; i++) {
+          int pile_size = (i < 6) ? 6 : 5;
+          if (cards_so_far + pile_size > cards_dealt_ - anim_card.active) {
+            anim_pile_index = i;
+            anim_card_index = cards_dealt_ - anim_card.active - cards_so_far;
+            break;
+          }
+          cards_so_far += pile_size;
+        }
+        
+        // If this animation is for the current card we're trying to draw, skip it
+        if (anim_pile_index == pile_index && anim_card_index == j) {
+          is_animating = true;
+          break;
+        }
       }
     }
     
@@ -889,7 +910,7 @@ void SolitaireGame::updateDealAnimation() {
       // Card has arrived at destination
       card.x = card.target_x;
       card.y = card.target_y;
-      card.active = false;
+      card.active = false; // Set to false when the card arrives
 #ifdef DEBUG
       std::cout << "Card arrived at destination" << std::endl; // Debug output
 #endif
@@ -927,6 +948,7 @@ void SolitaireGame::updateDealAnimation() {
 
   refreshDisplay();
 }
+
 void SolitaireGame::dealNextCard() {
   if (cards_dealt_ >= 54) // 54 = total cards in initial Spider tableau (6 piles * 6 cards + 4 piles * 5 cards)
     return;
@@ -977,7 +999,7 @@ void SolitaireGame::dealNextCard() {
   anim_card.velocity_y = 0;
   anim_card.rotation = (rand() % 628) / 100.0 - 3.14; // Random initial rotation
   anim_card.rotation_velocity = 0;
-  anim_card.active = true;
+  anim_card.active = cards_dealt_ + 1; // Store which card in the sequence this is (not just a boolean)
   anim_card.exploded = false;
   anim_card.face_up = tableau_[pile_index][card_index].face_up;
 
