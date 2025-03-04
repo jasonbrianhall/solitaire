@@ -472,7 +472,7 @@ void SolitaireGame::drawStockPile(cairo_t *cr) {
   
   if (stock_.empty()) {
     // Make this condition more explicit and ensure it draws an empty pile
-    drawEmptyPile(cr, x, y);
+    drawEmptyPile(cr, x, y, true);
   } else {
     // Only draw a card back when there are actually cards left
     drawCard(cr, x, y, nullptr, false);
@@ -549,7 +549,7 @@ void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
         drawCard(cr, foundation_x, foundation_y, &king, true);
       } else {
         // Empty foundation slot
-        drawEmptyPile(cr, foundation_x, foundation_y);
+        drawEmptyPile(cr, foundation_x, foundation_y, false);
       }
       
       // Move to next position
@@ -571,7 +571,7 @@ void SolitaireGame::drawTableauPiles(cairo_t *cr) {
 
     // Draw empty pile outline
     if (pile.empty()) {
-      drawEmptyPile(cr, x, tableau_base_y);
+      drawEmptyPile(cr, x, tableau_base_y, false);
     }
 
     // Handle drawing the tableau cards

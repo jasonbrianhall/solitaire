@@ -304,7 +304,7 @@ private:
   void cleanupAudio();
 
   unsigned int current_seed_;
-  void drawEmptyPile(cairo_t *cr, int x, int y);
+  void drawEmptyPile(cairo_t *cr, int x, int y, bool isStockPile);
 
   bool checkForCompletedSequence(int tableau_index);
 

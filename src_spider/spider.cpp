@@ -2205,9 +2205,8 @@ void SolitaireGame::promptForSeed() {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
-  // Draw a placeholder for an empty pile (cell or foundation) with lighter green color
-  // to match the Freecell style
+void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y, bool isStockPile = false) {
+  // Draw a placeholder for an empty pile with a different color for stock pile
   cairo_save(cr);
   
   // Draw a rounded rectangle with a thin border
@@ -2221,13 +2220,23 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_arc(cr, x + radius, y + radius, radius, 180 * degrees, 270 * degrees);
   cairo_close_path(cr);
   
-  // Set a lighter green background color to match Freecell style
-  cairo_set_source_rgb(cr, 0.5, 0.8, 0.5); // Light green like in Freecell
-  cairo_fill_preserve(cr);
+  if (isStockPile) {
+    // Use a different color for stock pile (e.g., light blue)
+    cairo_set_source_rgb(cr, 0.4, 0.6, 0.8); // Light blue background
+    cairo_fill_preserve(cr);
+    
+    // Darker blue border
+    cairo_set_source_rgb(cr, 0.2, 0.4, 0.7);
+  } else {
+    // Green for foundation and tableau piles
+    cairo_set_source_rgb(cr, 0.5, 0.8, 0.5); // Light green background
+    cairo_fill_preserve(cr);
+    
+    // Slightly darker green border
+    cairo_set_source_rgb(cr, 0.4, 0.7, 0.4);
+  }
   
-  // Set a slightly darker green border
-  cairo_set_source_rgb(cr, 0.4, 0.7, 0.4); // Slightly darker border but still light
-  cairo_set_line_width(cr, 1.5); // Moderate line width
+  cairo_set_line_width(cr, 1.5);
   cairo_stroke(cr);
   
   cairo_restore(cr);
