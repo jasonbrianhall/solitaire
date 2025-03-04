@@ -1401,12 +1401,10 @@ bool SolitaireGame::loadSettings() {
     return false;
   }
 
-  bool settings_loaded = false;
   std::string line;
   while (std::getline(file, line)) {
     if (line.substr(0, 10) == "card_back=") {
       custom_back_path_ = line.substr(10);
-      settings_loaded = true;
       std::cerr << "Loaded custom back path: " << custom_back_path_ << std::endl;
     }
   }
