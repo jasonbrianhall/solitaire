@@ -1784,12 +1784,18 @@ void SolitaireGame::processNextAutoFinishMove() {
 
   // If any animation is currently running, wait for it to complete
   if (foundation_move_animation_active_ || deal_animation_active_ || 
-      win_animation_active_ || stock_to_waste_animation_active_ || dragging_) {
-    // Set up a timer to check again after a short delay
+      win_animation_active_ || stock_to_waste_animation_active_ || 
+      sequence_animation_active_ || dragging_) {
+    
+    // Critical: added sequence_animation_active_ to the check
+    // Set up a timer to check again after a longer delay if sequence animation is running
     if (auto_finish_timer_id_ > 0) {
       g_source_remove(auto_finish_timer_id_);
     }
-    auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
+    
+    // Use a longer delay if sequence animation is running (500ms instead of 50ms)
+    int delay = sequence_animation_active_ ? 500 : 50;
+    auto_finish_timer_id_ = g_timeout_add(delay, onAutoFinishTick, this);
     return;
   }
 
@@ -1832,6 +1838,15 @@ void SolitaireGame::processNextAutoFinishMove() {
       found_move = true;
       // Reset seen states when we make progress
       seen_states.clear();
+      
+      // IMPORTANT: If we found a sequence to complete, schedule the next move with
+      // a longer delay to allow the entire sequence animation to finish
+      if (auto_finish_timer_id_ > 0) {
+        g_source_remove(auto_finish_timer_id_);
+      }
+      // Use a longer delay (1000ms) after finding a sequence
+      auto_finish_timer_id_ = g_timeout_add(1000, onAutoFinishTick, this);
+      return; // Return immediately to let the sequence animation run
     }
   }
   
@@ -2034,30 +2049,7 @@ void SolitaireGame::processNextAutoFinishMove() {
   }
 
   // STEP 4: Try to draw cards from stock if no other moves are available and all columns have cards
-  // For Spider Solitaire, we want to be very conservative about dealing more cards
-  // Only deal as a last resort when there are absolutely no other moves
-  if (!found_move && !stock_.empty()) {
-    // Don't auto-deal in Spider - let the player decide when to deal more cards
-    // This prevents the auto-finish from dealing cards too aggressively
-    
-    // Uncomment the code below if you want to re-enable auto-dealing
-    /*
-    bool can_deal = true;
-    for (const auto& pile : tableau_) {
-      if (pile.empty()) {
-        can_deal = false;
-        break;
-      }
-    }
-    
-    if (can_deal) {
-      // Deal cards from stock
-      handleStockPileClick();
-      found_move = true;
-      seen_states.clear(); // Reset seen states after dealing
-    }
-    */
-  }
+  // Not implemented in this version as the original code commented it out
 
   if (found_move) {
     // Set up a timer to check for the next move after a short delay
@@ -2147,8 +2139,15 @@ void SolitaireGame::executeMove(size_t source_pile_idx, int source_card_idx,
 
 gboolean SolitaireGame::onAutoFinishTick(gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  
+  // Reset the timer ID before processing the next move
+  game->auto_finish_timer_id_ = 0;
+  
+  // Process the next move
   game->processNextAutoFinishMove();
-  return FALSE; // Don't repeat the timer
+  
+  // Always return FALSE to ensure this timer doesn't repeat on its own
+  return FALSE;
 }
 
 void SolitaireGame::promptForSeed() {
@@ -2250,6 +2249,7 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
     if (sequence_animation_active_) {
         return false;  // Don't process this sequence yet
     }
+    
     auto& pile = tableau_[tableau_index];
     
     // Need at least 13 cards for a complete sequence
@@ -2281,29 +2281,13 @@ bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
     }
     
     // Found a valid sequence!
-    // Save the King for display in the foundation
-    cardlib::Card kingCard = pile[top_position - 12].card; // King is 12 positions behind Ace
-    
-    // Start the sequence animation
+    // Start the sequence animation - this will handle removing cards and updating the foundation
     startSequenceAnimation(tableau_index);
     
-    // Remove the 13 cards from the tableau pile
-    tableau_[tableau_index].erase(
-        tableau_[tableau_index].end() - 13,
-        tableau_[tableau_index].end()
-    );
-    
-    // Flip new top card if needed
-    if (!tableau_[tableau_index].empty() && !tableau_[tableau_index].back().face_up) {
-        tableau_[tableau_index].back().face_up = true;
-        playSound(GameSoundEvent::CardFlip);
-    }
-    
-    // DO NOT add to the foundation pile here - we'll do it when animation completes
-    // foundation_[0].push_back(kingCard);
-    
+    // The animation has started - don't remove cards here anymore
     return true;
 }
+
 
 void SolitaireGame::promptForNewGame(const std::string& difficulty) {
   // Ask if the user wants to start a new game with the new difficulty

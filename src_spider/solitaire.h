@@ -340,6 +340,9 @@ void drawKeyboardNavigation(cairo_t *cr);
 void initBufferSurface(GtkAllocation &allocation);
 void executeMove(size_t source_pile_idx, int source_card_idx, 
                                size_t target_pile_idx, const std::vector<cardlib::Card>& cards_to_drag);
+  
+int sequence_tableau_index_ = -1;  // Which tableau pile we're animating from
+std::vector<int> sequence_card_positions_; // Positions of cards in the tableau
                                
 int next_card_index_ = 0;
 };

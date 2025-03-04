@@ -650,20 +650,43 @@ void SolitaireGame::drawTableauPileDuringAnimation(cairo_t *cr, size_t pile_inde
 
 // Helper method to draw normal tableau pile
 void SolitaireGame::drawNormalTableauPile(cairo_t *cr, size_t pile_index, int x, int tableau_base_y) {
-  const auto &pile = tableau_[pile_index];
-  
-  for (size_t j = 0; j < pile.size(); j++) {
-    // Skip drawing cards that are being dragged
-    if (dragging_ && drag_source_pile_ >= 6 &&
-        drag_source_pile_ - 6 == static_cast<int>(pile_index) &&
-        j >= static_cast<size_t>(pile.size() - drag_cards_.size())) {
-      continue;
-    }
+    const auto &pile = tableau_[pile_index];
     
-    int current_y = tableau_base_y + j * current_vert_spacing_;
-    const auto &tableau_card = pile[j];
-    drawCard(cr, x, current_y, &tableau_card.card, tableau_card.face_up);
-  }
+    for (size_t j = 0; j < pile.size(); j++) {
+        // Skip drawing cards that are being dragged
+        if (dragging_ && drag_source_pile_ >= 6 &&
+            drag_source_pile_ - 6 == static_cast<int>(pile_index) &&
+            j >= static_cast<size_t>(pile.size() - drag_cards_.size())) {
+            continue;
+        }
+        
+        // Skip drawing cards that are being animated in a sequence
+        bool skip_for_animation = false;
+        if (sequence_animation_active_ && sequence_tableau_index_ == static_cast<int>(pile_index)) {
+            // Check if this card is currently being animated
+            for (size_t anim_idx = 0; anim_idx < sequence_cards_.size(); anim_idx++) {
+                if (sequence_cards_[anim_idx].active) {
+                    // Check if this is one of the positions that should be skipped
+                    for (size_t pos_idx = 0; pos_idx < anim_idx; pos_idx++) {
+                        int position = sequence_card_positions_[pos_idx] - pos_idx;
+                        if (j == static_cast<size_t>(position)) {
+                            skip_for_animation = true;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        
+        if (skip_for_animation) {
+            continue;
+        }
+        
+        int current_y = tableau_base_y + j * current_vert_spacing_;
+        const auto &tableau_card = pile[j];
+        drawCard(cr, x, current_y, &tableau_card.card, tableau_card.face_up);
+    }
 }
 
 // Draw dragged cards
@@ -1326,12 +1349,17 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
     sequence_animation_timer_ = 0;
     next_card_index_ = 0; // Reset counter when starting a new animation
     sequence_cards_.clear();
+    sequence_card_positions_.clear();
+    
+    // Store which tableau pile we're animating from
+    sequence_tableau_index_ = tableau_index;
     
     auto& pile = tableau_[tableau_index];
     
     // We need at least 13 cards for a complete sequence
     if (pile.size() < 13) {
         sequence_animation_active_ = false;
+        sequence_tableau_index_ = -1;
         return;
     }
     
@@ -1341,6 +1369,7 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
     // We need to find Ace at the top position
     if (pile[top_position].card.rank != cardlib::Rank::ACE) {
         sequence_animation_active_ = false;
+        sequence_tableau_index_ = -1;
         return;
     }
     
@@ -1356,6 +1385,7 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
         int pos = top_position - i;
         if (pos < 0) {
             sequence_animation_active_ = false;
+            sequence_tableau_index_ = -1;
             return; // Not enough cards
         }
         
@@ -1364,8 +1394,12 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
             pile[pos].card.suit != suit || 
             static_cast<int>(pile[pos].card.rank) != (1 + i)) { // ACE=1, 2=2, ... KING=13
             sequence_animation_active_ = false;
+            sequence_tableau_index_ = -1;
             return;
         }
+        
+        // Store the position in the tableau for removal later
+        sequence_card_positions_.push_back(pos);
         
         // Add card to animation sequence
         AnimatedCard anim_card;
@@ -1479,7 +1513,7 @@ void SolitaireGame::updateSequenceAnimation() {
             refreshDisplay();
         } else {
             // Use a slower speed for the sequence animation
-            double speed = distance * 0.3; // Reduced to make animation slower
+            double speed = distance * 0.1; // Reduced to make animation slower
             double move_x = dx * speed / distance;
             double move_y = dy * speed / distance;
             
@@ -1506,6 +1540,31 @@ void SolitaireGame::updateSequenceAnimation() {
         sequence_animation_timer_ = 0;
         
         if (next_card_index_ < sequence_cards_.size()) {
+            // Remove the card from the tableau as we start animating it
+            int card_index = next_card_index_;
+            
+            // Check if the tableau pile is valid and we have a valid position to remove
+            if (sequence_tableau_index_ >= 0 && 
+                sequence_tableau_index_ < static_cast<int>(tableau_.size()) &&
+                card_index < sequence_card_positions_.size()) {
+                
+                // Get the position to remove (adjust for already removed cards)
+                int position_to_remove = sequence_card_positions_[card_index];
+                
+                // Adjust for already removed cards - each card removal shifts positions
+                position_to_remove -= card_index;
+                
+                // Make sure the position is valid
+                if (position_to_remove >= 0 && 
+                    position_to_remove < static_cast<int>(tableau_[sequence_tableau_index_].size())) {
+                    
+                    // Remove the card from tableau
+                    tableau_[sequence_tableau_index_].erase(
+                        tableau_[sequence_tableau_index_].begin() + position_to_remove);
+                }
+            }
+            
+            // Activate the next card
             sequence_cards_[next_card_index_].active = true;
             next_card_index_++;
         }
@@ -1540,7 +1599,19 @@ void SolitaireGame::completeSequenceAnimation() {
         foundation_[0].push_back(aceCard);
     }
     
-    // Clean up
+    // Flip the new top card in the source tableau if needed
+    if (sequence_tableau_index_ >= 0 && 
+        sequence_tableau_index_ < static_cast<int>(tableau_.size()) &&
+        !tableau_[sequence_tableau_index_].empty() && 
+        !tableau_[sequence_tableau_index_].back().face_up) {
+        
+        tableau_[sequence_tableau_index_].back().face_up = true;
+        playSound(GameSoundEvent::CardFlip);
+    }
+    
+    // Reset tracking variables
+    sequence_tableau_index_ = -1;
+    sequence_card_positions_.clear();
     sequence_cards_.clear();
     
     // Check for win condition (8 completed sequences for Spider)
