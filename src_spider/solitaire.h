@@ -38,7 +38,7 @@ struct AnimatedCard {
   double velocity_y;
   double rotation;
   double rotation_velocity;
-  int active;
+  bool active;
   bool exploded;
   std::vector<CardFragment> fragments;
 
@@ -46,6 +46,10 @@ struct AnimatedCard {
   double target_x;
   double target_y;
   bool face_up;
+  
+  // Add these new fields to track exact position
+  int target_pile_index;  // Which pile this card is heading to
+  int target_card_index;  // Which position in the pile
 };
 
 struct TableauCard {
