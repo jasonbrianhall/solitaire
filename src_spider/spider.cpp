@@ -584,27 +584,32 @@ void SolitaireGame::handleStockPileClick() {
     return;
   }
 
-  // Deal one card to each tableau pile (10 cards total for Spider)
-  if (stock_.size() >= tableau_.size()) {
-    // Start animation instead of immediately moving cards
-    if (!stock_to_waste_animation_active_) {
-      // Deal 10 cards - one to each tableau pile
-      for (int i = 0; i < tableau_.size(); i++) {
-        if (!stock_.empty()) {
-          // Get a card from stock
-          cardlib::Card card = stock_.back();
-          stock_.pop_back();
-          
-          // Add to tableau pile face up
-          tableau_[i].emplace_back(card, true);
-          
-          // Play card dealing sound
-          playSound(GameSoundEvent::DealCard);
-        }
+  // Deal remaining cards, up to one per tableau pile
+  if (!stock_to_waste_animation_active_) {
+    // Calculate how many piles we can deal to
+    int piles_to_deal = std::min(static_cast<int>(tableau_.size()), static_cast<int>(stock_.size()));
+    
+    // Deal one card to each tableau pile, up to the number of cards left
+    for (int i = 0; i < piles_to_deal; i++) {
+      if (!stock_.empty()) {
+        // Get a card from stock
+        cardlib::Card card = stock_.back();
+        stock_.pop_back();
+        
+        // Add to tableau pile face up
+        tableau_[i].emplace_back(card, true);
+        
+        // Play card dealing sound
+        playSound(GameSoundEvent::DealCard);
       }
-      
-      refreshDisplay();
     }
+    
+    // Debug output to verify stock pile is empty when expected
+    #ifdef DEBUG
+    std::cout << "After dealing, stock pile size: " << stock_.size() << std::endl;
+    #endif
+    
+    refreshDisplay();
   }
 }
 
