@@ -1363,7 +1363,7 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
         return;
     }
     
-    // Start from the end of the pile (the top-most card visible to player)
+    // Start from the end of the pile (the top-most card visible to player, which is the Ace)
     int top_position = pile.size() - 1;
     
     // We need to find Ace at the top position
@@ -1376,12 +1376,8 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
     // Check if we have 13 cards in descending sequence of the same suit
     cardlib::Suit suit = pile[top_position].card.suit;
     
-    // Save the King card for later addition to the foundation
-    sequence_king_card_ = pile[top_position - 12].card; // King is 12 positions behind Ace
-    
-    // Collect cards in reverse sequence, starting with King
-    // We collect King (i=12), Queen (i=11), ... 2 (i=1), Ace (i=0)
-    for (int i = 12; i >= 0; i--) {
+    // We'll collect cards from Ace (i=0), 2 (i=1), ... King (i=12)
+    for (int i = 0; i < 13; i++) {
         int pos = top_position - i;
         if (pos < 0) {
             sequence_animation_active_ = false;
@@ -1429,17 +1425,20 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
         anim_card.rotation_velocity = (rand() % 40 - 20) / 100.0; // Slight random rotation
         anim_card.exploded = false;
         
-        // Add to animation sequence (cards will be in order: King, Queen, ..., 2, Ace)
+        // Add to animation sequence (cards will be in order: Ace, 2, 3, ..., King)
         sequence_cards_.push_back(anim_card);
     }
+    
+    // Save the King card for reference
+    sequence_king_card_ = pile[top_position - 12].card; // King is 12 positions behind Ace
     
     // Play sound
     playSound(GameSoundEvent::WinGame);
     
-    // Make the first card (King) active to start the animation
+    // Make the first card (Ace) active to start the animation
     if (!sequence_cards_.empty()) {
         sequence_cards_[0].active = true;
-        next_card_index_ = 1; // Next card to activate will be index 1 (Queen)
+        next_card_index_ = 1; // Next card to activate will be index 1 (2)
     }
     
     // Set up animation timer
@@ -1540,31 +1539,10 @@ void SolitaireGame::updateSequenceAnimation() {
         sequence_animation_timer_ = 0;
         
         if (next_card_index_ < sequence_cards_.size()) {
-            // Remove the card from the tableau as we start animating it
-            int card_index = next_card_index_;
+            // IMPORTANT FIX: Instead of removing cards as we go, just mark which ones 
+            // have been removed and handle all removals at the end to avoid index problems
             
-            // Check if the tableau pile is valid and we have a valid position to remove
-            if (sequence_tableau_index_ >= 0 && 
-                sequence_tableau_index_ < static_cast<int>(tableau_.size()) &&
-                card_index < sequence_card_positions_.size()) {
-                
-                // Get the position to remove (adjust for already removed cards)
-                int position_to_remove = sequence_card_positions_[card_index];
-                
-                // Adjust for already removed cards - each card removal shifts positions
-                position_to_remove -= card_index;
-                
-                // Make sure the position is valid
-                if (position_to_remove >= 0 && 
-                    position_to_remove < static_cast<int>(tableau_[sequence_tableau_index_].size())) {
-                    
-                    // Remove the card from tableau
-                    tableau_[sequence_tableau_index_].erase(
-                        tableau_[sequence_tableau_index_].begin() + position_to_remove);
-                }
-            }
-            
-            // Activate the next card
+            // Activate the next card for animation
             sequence_cards_[next_card_index_].active = true;
             next_card_index_++;
         }
@@ -1572,12 +1550,36 @@ void SolitaireGame::updateSequenceAnimation() {
     
     // Check if animation is complete
     if (all_cards_arrived && next_card_index_ >= sequence_cards_.size()) {
+        // Now that all animations are complete, remove the cards from the tableau
+        if (sequence_tableau_index_ >= 0 && 
+            sequence_tableau_index_ < static_cast<int>(tableau_.size())) {
+            
+            auto& pile = tableau_[sequence_tableau_index_];
+            
+            // Remove all cards in the sequence (from highest position to lowest)
+            // By sorting positions in descending order, we avoid index shifts
+            std::vector<int> positions_to_remove = sequence_card_positions_;
+            std::sort(positions_to_remove.begin(), positions_to_remove.end(), 
+                     [](int a, int b) { return a > b; });
+                     
+            for (int pos : positions_to_remove) {
+                if (pos >= 0 && pos < static_cast<int>(pile.size())) {
+                    pile.erase(pile.begin() + pos);
+                }
+            }
+            
+            // Flip the new top card if needed
+            if (!pile.empty() && !pile.back().face_up) {
+                pile.back().face_up = true;
+                playSound(GameSoundEvent::CardFlip);
+            }
+        }
+        
         completeSequenceAnimation();
     }
     
     refreshDisplay();
 }
-
 
 void SolitaireGame::completeSequenceAnimation() {
     sequence_animation_active_ = false;
@@ -1600,57 +1602,9 @@ void SolitaireGame::completeSequenceAnimation() {
         foundation_[0].push_back(aceCard);
     }
     
-    // VERIFICATION: Debug check to ensure all 13 cards were removed
-    if (sequence_tableau_index_ >= 0 && sequence_tableau_index_ < static_cast<int>(tableau_.size())) {
-        // If for some reason there are still cards that should have been removed,
-        // we'll double-check the tableau pile to ensure they've all been removed
-        auto& pile = tableau_[sequence_tableau_index_];
-        
-        // Verify that all cards were correctly removed
-        if (!sequence_cards_.empty()) {
-            cardlib::Suit target_suit = sequence_cards_.back().card.suit;
-            
-            // Scan through the pile to check for any leftover sequence cards
-            bool found_leftover = false;
-            size_t i = 0;
-            while (i < pile.size()) {
-                // Check if this card matches any in our sequence that should have been removed
-                bool should_be_removed = false;
-                
-                // For Spider, we look for any card of the sequence's suit with ranks 1-13
-                if (pile[i].card.suit == target_suit && 
-                    static_cast<int>(pile[i].card.rank) >= 1 && 
-                    static_cast<int>(pile[i].card.rank) <= 13) {
-                    
-                    // Look through all the sequence cards to see if we have a match
-                    for (const auto& seq_card : sequence_cards_) {
-                        if (seq_card.card.suit == pile[i].card.suit && 
-                            seq_card.card.rank == pile[i].card.rank) {
-                            should_be_removed = true;
-                            found_leftover = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (should_be_removed) {
-                    // Remove leftover card
-                    pile.erase(pile.begin() + i);
-                    // Don't increment i since we've removed an element
-                } else {
-                    // Move to next card
-                    i++;
-                }
-            }
-            
-            // If we found and removed leftovers, make a debug note
-            #ifdef DEBUG
-            if (found_leftover) {
-                std::cout << "Found and removed leftover sequence cards!" << std::endl;
-            }
-            #endif
-        }
-    }
+    // The cards have already been removed from the tableau pile during
+    // the animation process in updateSequenceAnimation(), so we don't need
+    // to remove them again here.
     
     // Flip the new top card in the source tableau if needed
     if (sequence_tableau_index_ >= 0 && 
