@@ -11,6 +11,22 @@ if (game->win_animation_active_) {
   return TRUE;
 }
 
+  // Block keyboard input if auto-finish is active, except for Escape to cancel
+  if (game->auto_finish_active_) {
+    if (event->keyval == GDK_KEY_Escape) {
+      // Allow Escape to cancel auto-finish
+      game->auto_finish_active_ = false;
+      if (game->auto_finish_timer_id_ > 0) {
+        g_source_remove(game->auto_finish_timer_id_);
+        game->auto_finish_timer_id_ = 0;
+      }
+      game->resetKeyboardNavigation();
+      game->refreshDisplay();
+      return TRUE;
+    }
+    return FALSE; // Block all other keyboard input during auto-finish
+  }
+
   // Check for control key modifier
   bool ctrl_pressed = (event->state & GDK_CONTROL_MASK);
 
