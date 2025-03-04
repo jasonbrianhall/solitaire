@@ -1364,24 +1364,58 @@ void SolitaireGame::dealTestLayout() {
   tableau_.clear();
 
   // Reset foundation and tableau
-  foundation_.resize(4);
-  tableau_.resize(7);
+  foundation_.resize(1);
+  tableau_.resize(10);
 
-  // Set up each suit in order in the tableau
-  for (int suit = 0; suit < 4; suit++) {
-    // Add 13 cards of this suit to a vector in reverse order (King to Ace)
-    std::vector<cardlib::Card> suit_cards;
-    for (int rank = static_cast<int>(cardlib::Rank::KING);
-         rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
-      suit_cards.emplace_back(static_cast<cardlib::Suit>(suit),
-                              static_cast<cardlib::Rank>(rank));
-    }
-
-    // Distribute the cards to tableau
-    for (size_t i = 0; i < suit_cards.size(); i++) {
-      tableau_[i % 7].emplace_back(suit_cards[i], true); // All cards face up
+  // Create a test layout that's almost solved
+  // For Spider Solitaire, we want to create several near-complete sequences
+  
+  // Use single-suit Spider (all spades) for simplicity
+  cardlib::Suit testSuit = cardlib::Suit::SPADES;
+  
+  // Create 7 nearly completed sequences (K-2) that just need to be connected to Aces
+  for (int i = 0; i < 7; i++) {
+    // Put a sequence from King down to 2 in tableau piles 0-6
+    for (int rank = static_cast<int>(cardlib::Rank::KING); 
+         rank >= static_cast<int>(cardlib::Rank::TWO); rank--) {
+      // Create a Card object first, then use it to create a TableauCard
+      cardlib::Card card(testSuit, static_cast<cardlib::Rank>(rank));
+      tableau_[i].emplace_back(card, true); // Set face-up to true
     }
   }
+
+  // Put the Aces on piles 7-9 
+  // This makes it trivial to solve by just moving the Aces to complete sequences
+  cardlib::Card ace(testSuit, cardlib::Rank::ACE);
+  
+  tableau_[7].emplace_back(ace, true);
+  tableau_[7].emplace_back(ace, true);
+  
+  tableau_[8].emplace_back(ace, true);
+  tableau_[8].emplace_back(ace, true);
+  
+  tableau_[9].emplace_back(ace, true);
+  tableau_[9].emplace_back(ace, true);
+  tableau_[9].emplace_back(ace, true);
+  
+  // For the 8th sequence, put a complete set from K-2 in the first pile,
+  // and the Ace in the second pile, so player just needs one move
+  for (int rank = static_cast<int>(cardlib::Rank::KING); 
+       rank >= static_cast<int>(cardlib::Rank::TWO); rank--) {
+    cardlib::Card card(testSuit, static_cast<cardlib::Rank>(rank));
+    tableau_[0].emplace_back(card, true);
+  }
+  
+  // Add the final ace to complete the 8 sequences needed to win
+  tableau_[1].emplace_back(ace, true);
+  
+  // You could easily win this layout by:
+  // 1. Moving each Ace to the end of a K-2 sequence
+  // 2. Each completed K-A sequence will automatically move to the foundation
+  // 3. After 8 sequences are completed, you win
+
+  // This is a trivially solvable layout for testing
+  playSound(GameSoundEvent::CardFlip);
 }
 
 void SolitaireGame::initializeSettingsDir() {
