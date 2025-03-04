@@ -222,27 +222,24 @@ void SolitaireGame::selectNextPile() {
     selected_pile_ = 0;
     selected_card_idx_ = stock_.empty() ? -1 : 0;
   } else {
-    // Move to the next pile
-    selected_pile_++;
-
-    // Wrap around if we're past the last tableau pile (index 12)
-    if (selected_pile_ > 12) {
+    // Move to the next pile, with special handling for Spider
+    if (selected_pile_ == 0) {
+      // From stock, jump to first tableau pile
+      selected_pile_ = 6;
+    } else if (selected_pile_ >= 6 && selected_pile_ < 15) {
+      // Navigate through tableau piles
+      selected_pile_++;
+    } else if (selected_pile_ == 15) {
+      // Wrap around to stock
       selected_pile_ = 0;
     }
 
     // Set card index based on the selected pile
     if (selected_pile_ == 0) {
       selected_card_idx_ = stock_.empty() ? -1 : 0;
-    } else if (selected_pile_ == 1) {
-      selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
-    } else if (selected_pile_ >= 2 && selected_pile_ <= 5) {
-      int foundation_idx = selected_pile_ - 2;
-      selected_card_idx_ = foundation_[foundation_idx].empty()
-                               ? -1
-                               : foundation_[foundation_idx].size() - 1;
-    } else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
+    } else if (selected_pile_ >= 6 && selected_pile_ <= 15) {
       int tableau_idx = selected_pile_ - 6;
-      selected_card_idx_ =
+      selected_card_idx_ = 
           tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
     }
   }
@@ -253,31 +250,29 @@ void SolitaireGame::selectNextPile() {
 // Select the previous (left) pile
 void SolitaireGame::selectPreviousPile() {
   if (selected_pile_ == -1) {
-    // Start with the last tableau pile (index 12)
-    selected_pile_ = 12;
-    selected_card_idx_ = tableau_[6].empty() ? -1 : tableau_[6].size() - 1;
+    // Start with the last tableau pile
+    selected_pile_ = 15;
+    selected_card_idx_ = 
+        tableau_[9].empty() ? -1 : tableau_[9].size() - 1;
   } else {
-    // Move to the previous pile
-    selected_pile_--;
-
-    // Wrap around if we're before the stock pile (index 0)
-    if (selected_pile_ < 0) {
-      selected_pile_ = 12;
+    // Move to the previous pile with special Spider handling
+    if (selected_pile_ == 0) {
+      // From stock, wrap to last tableau pile
+      selected_pile_ = 15;
+    } else if (selected_pile_ > 6 && selected_pile_ <= 15) {
+      // Navigate backward through tableau
+      selected_pile_--;
+    } else if (selected_pile_ == 6) {
+      // From first tableau to stock
+      selected_pile_ = 0;
     }
 
     // Set card index based on the selected pile
     if (selected_pile_ == 0) {
       selected_card_idx_ = stock_.empty() ? -1 : 0;
-    } else if (selected_pile_ == 1) {
-      selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
-    } else if (selected_pile_ >= 2 && selected_pile_ <= 5) {
-      int foundation_idx = selected_pile_ - 2;
-      selected_card_idx_ = foundation_[foundation_idx].empty()
-                               ? -1
-                               : foundation_[foundation_idx].size() - 1;
-    } else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
+    } else if (selected_pile_ >= 6 && selected_pile_ <= 15) {
       int tableau_idx = selected_pile_ - 6;
-      selected_card_idx_ =
+      selected_card_idx_ = 
           tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
     }
   }

@@ -485,54 +485,55 @@ for (int i = 0; i < 8; i++) {
     }
 
     // During animation, we need to know which cards have been dealt already
-    if (game->deal_animation_active_) {
-      // Figure out how many cards should be visible in this pile
-      int cards_in_this_pile = i + 1; // Each pile has (index + 1) cards
-      int total_cards_before_this_pile = 0;
-
-      for (int p = 0; p < i; p++) {
-        total_cards_before_this_pile += (p + 1);
-      }
-
-      // Only draw cards that have already been dealt and are not currently
-      // animating
-      int cards_to_draw = std::min(
-          static_cast<int>(pile.size()),
-          std::max(0, game->cards_dealt_ - total_cards_before_this_pile));
-
-      for (int j = 0; j < cards_to_draw; j++) {
-        // Skip drawing the card if it's currently animating
-        bool is_animating = false;
-        for (const auto &anim_card : game->deal_cards_) {
-          if (anim_card.active && anim_card.card.suit == pile[j].card.suit &&
-              anim_card.card.rank == pile[j].card.rank) {
-            is_animating = true;
-            break;
-          }
-        }
-
-        if (!is_animating) {
-          int current_y = tableau_base_y + j * game->current_vert_spacing_;
-          game->drawCard(game->buffer_cr_, x, current_y, &pile[j].card,
-                         pile[j].face_up);
-        }
-      }
-    } else {
-      // Normal drawing (not during animation)
-      for (size_t j = 0; j < pile.size(); j++) {
-        if (game->dragging_ && game->drag_source_pile_ >= 6 &&
-            game->drag_source_pile_ - 6 == static_cast<int>(i) &&
-            j >= static_cast<size_t>(game->tableau_[i].size() -
-                                     game->drag_cards_.size())) {
-          continue;
-        }
-
-        int current_y = tableau_base_y + j * game->current_vert_spacing_;
-        const auto &tableau_card = pile[j];
-        game->drawCard(game->buffer_cr_, x, current_y, &tableau_card.card,
-                       tableau_card.face_up);
+ if (game->deal_animation_active_) {
+  // Use Spider-specific distribution logic:
+  // First 6 piles get 6 cards, last 4 piles get 5 cards
+  int cards_in_this_pile = (i < 6) ? 6 : 5;
+  
+  // Calculate how many cards should be in piles before this one
+  int total_cards_before_this_pile = 0;
+  for (int p = 0; p < i; p++) {
+    total_cards_before_this_pile += (p < 6) ? 6 : 5;
+  }
+  
+  // Only draw cards that have already been dealt and are not currently animating
+  int cards_to_draw = std::min(
+      static_cast<int>(pile.size()),
+      std::max(0, game->cards_dealt_ - total_cards_before_this_pile));
+  
+  for (int j = 0; j < cards_to_draw; j++) {
+    // Skip drawing the card if it's currently animating
+    bool is_animating = false;
+    for (const auto &anim_card : game->deal_cards_) {
+      if (anim_card.active && anim_card.card.suit == pile[j].card.suit &&
+          anim_card.card.rank == pile[j].card.rank) {
+        is_animating = true;
+        break;
       }
     }
+    
+    if (!is_animating) {
+      int current_y = tableau_base_y + j * game->current_vert_spacing_;
+      game->drawCard(game->buffer_cr_, x, current_y, &pile[j].card,
+                     pile[j].face_up);
+    }
+  }
+} else {
+  // Normal drawing (not during animation)
+  for (size_t j = 0; j < pile.size(); j++) {
+    if (game->dragging_ && game->drag_source_pile_ >= 6 &&
+        game->drag_source_pile_ - 6 == static_cast<int>(i) &&
+        j >= static_cast<size_t>(game->tableau_[i].size() -
+                               game->drag_cards_.size())) {
+      continue;
+    }
+    
+    int current_y = tableau_base_y + j * game->current_vert_spacing_;
+    const auto &tableau_card = pile[j];
+    game->drawCard(game->buffer_cr_, x, current_y, &tableau_card.card,
+                 tableau_card.face_up);
+  }
+}
   }
 
   // Draw dragged cards
@@ -743,7 +744,7 @@ void SolitaireGame::startDealAnimation() {
   dealNextCard();
 
   // Force a redraw to ensure we don't see the cards already in place
-  refreshDisplay();
+  //refreshDisplay();
 }
 
 gboolean SolitaireGame::onDealAnimationTick(gpointer data) {
