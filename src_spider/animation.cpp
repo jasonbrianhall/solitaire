@@ -482,6 +482,7 @@ void SolitaireGame::drawStockPile(cairo_t *cr) {
 }
 
 // Draw the foundation piles
+// Modify the drawFoundationPiles function to show currently animating cards
 void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
   // Calculate the starting X position for foundation piles
   // Start after the stock pile, move to the right
@@ -491,9 +492,6 @@ void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
   // Track how many completed sequences we have
   int completed_sequences = foundation_[0].size();
 
-  // For Spider Solitaire, during normal gameplay we show completed sequences as Kings 
-  // in the foundation area
-  
   // Special handling for win animation: display all 8 piles with proper cards
   if (win_animation_active_) {
     // During win animation, display 8 piles with appropriate cards for visual feedback
@@ -542,13 +540,35 @@ void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
       foundation_x += current_card_width_ + current_card_spacing_;
     }
   } else {
-    // Normal display during gameplay: show Kings for completed sequences
+    // Normal gameplay display
     for (int i = 0; i < 8; i++) {
-      if (i < completed_sequences) {
-        // For each completed sequence, show a King of the suit that was completed
-        // In Spider, foundation_[0] stores the Kings from completed sequences
-        const cardlib::Card &king = foundation_[0][i];
-        drawCard(cr, foundation_x, foundation_y, &king, true);
+      // Special case: if we're doing a sequence animation, show the current card being animated
+      if (sequence_animation_active_ && i == completed_sequences) {
+        // Find the most recently activated card that has arrived at the foundation
+        bool foundation_card_found = false;
+        for (int j = sequence_cards_.size() - 1; j >= 0; j--) {
+          // Check if this card is active or has been active and reached its destination
+          if (!sequence_cards_[j].active && 
+              sequence_cards_[j].x == sequence_cards_[j].target_x && 
+              sequence_cards_[j].y == sequence_cards_[j].target_y) {
+            // This card has completed its animation to the foundation
+            const cardlib::Card &card = sequence_cards_[j].card;
+            drawCard(cr, foundation_x, foundation_y, &card, true);
+            foundation_card_found = true;
+            break;
+          }
+        }
+        
+        // If no card has arrived yet, draw an empty pile
+        if (!foundation_card_found) {
+          drawEmptyPile(cr, foundation_x, foundation_y, false);
+        }
+      }
+      // Check if we have a completed sequence for this pile
+      else if (i < completed_sequences) {
+        // For each completed sequence, draw its card
+        const cardlib::Card &card = foundation_[0][i];
+        drawCard(cr, foundation_x, foundation_y, &card, true);
       } else {
         // Empty foundation slot
         drawEmptyPile(cr, foundation_x, foundation_y, false);
@@ -1330,15 +1350,16 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
     // Save the King card for later addition to the foundation
     sequence_king_card_ = pile[top_position - 12].card; // King is 12 positions behind Ace
     
-    // Collect the cards for animation
-    for (int i = 0; i < 13; i++) {
+    // Collect cards in reverse sequence, starting with King
+    // We collect King (i=12), Queen (i=11), ... 2 (i=1), Ace (i=0)
+    for (int i = 12; i >= 0; i--) {
         int pos = top_position - i;
         if (pos < 0) {
             sequence_animation_active_ = false;
             return; // Not enough cards
         }
         
-        // Check current card
+        // Check card validity
         if (!pile[pos].face_up || 
             pile[pos].card.suit != suit || 
             static_cast<int>(pile[pos].card.rank) != (1 + i)) { // ACE=1, 2=2, ... KING=13
@@ -1360,16 +1381,10 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
         anim_card.y = card_y;
         
         // Calculate target position in foundation area
-        // For Spider, foundation cards should go to positions after the stock pile
-        // We need to ensure this goes to the correct foundation pile position
-        
-        // The first foundation pile position is 2 card spaces from the left (after stock pile)
         int foundation_x_start = 2 * current_card_spacing_ + current_card_width_;
-        
-        // The number of completed sequences so far determines the target pile
         int foundation_pile = foundation_[0].size(); // Current number of completed sequences
         
-        // Calculate the target X position for this sequence
+        // All cards in the sequence target the same foundation pile slot
         anim_card.target_x = foundation_x_start + 
                            foundation_pile * (current_card_width_ + current_card_spacing_);
         anim_card.target_y = current_card_spacing_; // Top of the screen
@@ -1380,17 +1395,17 @@ void SolitaireGame::startSequenceAnimation(int tableau_index) {
         anim_card.rotation_velocity = (rand() % 40 - 20) / 100.0; // Slight random rotation
         anim_card.exploded = false;
         
-        // Add to animation sequence
+        // Add to animation sequence (cards will be in order: King, Queen, ..., 2, Ace)
         sequence_cards_.push_back(anim_card);
     }
     
     // Play sound
     playSound(GameSoundEvent::WinGame);
     
-    // Make the first card (Ace) active to start the animation
+    // Make the first card (King) active to start the animation
     if (!sequence_cards_.empty()) {
         sequence_cards_[0].active = true;
-        next_card_index_ = 1; // Next card to activate will be index 1
+        next_card_index_ = 1; // Next card to activate will be index 1 (Queen)
     }
     
     // Set up animation timer
@@ -1459,10 +1474,12 @@ void SolitaireGame::updateSequenceAnimation() {
             card.y = card.target_y;
             card.active = false;
             playSound(GameSoundEvent::CardPlace);
+            
+            // Immediately request a redraw to show the card on the foundation
+            refreshDisplay();
         } else {
             // Use a slower speed for the sequence animation
-            // Original: double speed = distance * SEQUENCE_ANIMATION_SPEED;
-            double speed = distance * 0.1; // Reduced to make animation slower
+            double speed = distance * 0.3; // Reduced to make animation slower
             double move_x = dx * speed / distance;
             double move_y = dy * speed / distance;
             
@@ -1481,11 +1498,11 @@ void SolitaireGame::updateSequenceAnimation() {
         }
     }
     
-    // Also increase the delay between launching cards
+    // Increase the delay between launching cards to be more visible
     sequence_animation_timer_ += ANIMATION_INTERVAL;
     
-    // Original: if (sequence_animation_timer_ >= 100) {
-    if (sequence_animation_timer_ >= 200) { // Increase to 200ms for slower card launching
+    // Use 250ms delay between cards for clearer visualization
+    if (sequence_animation_timer_ >= 250) {
         sequence_animation_timer_ = 0;
         
         if (next_card_index_ < sequence_cards_.size()) {
@@ -1511,17 +1528,22 @@ void SolitaireGame::completeSequenceAnimation() {
         animation_timer_id_ = 0;
     }
     
-    // Now add the King to the foundation
-    // We need to extract the King (the last card in the animation sequence)
+    // In Spider, the Ace is added to represent the completed sequence
+    // Get the card from the sequence that will be displayed in the foundation
     if (!sequence_cards_.empty()) {
-        cardlib::Card kingCard = sequence_cards_.back().card;
-        foundation_[0].push_back(kingCard);
+        // Get the last card in our sequence (which should be the Ace)
+        cardlib::Card aceCard = sequence_cards_.back().card;
+        foundation_[0].push_back(aceCard);
+    } else {
+        // Fallback - use the suit from the King but set rank to Ace
+        cardlib::Card aceCard(sequence_king_card_.suit, cardlib::Rank::ACE);
+        foundation_[0].push_back(aceCard);
     }
     
     // Clean up
     sequence_cards_.clear();
     
-    // Check for win condition
+    // Check for win condition (8 completed sequences for Spider)
     if (foundation_[0].size() >= 8) {
         startWinAnimation();
     }
