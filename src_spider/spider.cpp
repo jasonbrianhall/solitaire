@@ -2201,7 +2201,8 @@ void SolitaireGame::promptForSeed() {
 }
 
 void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
-  // Draw a placeholder for an empty pile (cell or foundation)
+  // Draw a placeholder for an empty pile (cell or foundation) with lighter green color
+  // to match the Freecell style
   cairo_save(cr);
   
   // Draw a rounded rectangle with a thin border
@@ -2215,13 +2216,13 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_arc(cr, x + radius, y + radius, radius, 180 * degrees, 270 * degrees);
   cairo_close_path(cr);
   
-  // Set a light gray fill with semi-transparency
-  cairo_set_source_rgba(cr, 0.85, 0.85, 0.85, 0.5);
+  // Set a lighter green background color to match Freecell style
+  cairo_set_source_rgb(cr, 0.5, 0.8, 0.5); // Light green like in Freecell
   cairo_fill_preserve(cr);
   
-  // Set a darker gray border
-  cairo_set_source_rgb(cr, 0.5, 0.5, 0.5);
-  cairo_set_line_width(cr, 1.0);
+  // Set a slightly darker green border
+  cairo_set_source_rgb(cr, 0.4, 0.7, 0.4); // Slightly darker border but still light
+  cairo_set_line_width(cr, 1.5); // Moderate line width
   cairo_stroke(cr);
   
   cairo_restore(cr);
