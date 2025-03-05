@@ -1272,46 +1272,46 @@ bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, 
     return false;
   }
   
-  // Empty tableau can accept any valid sequence
-  if (tableau_[tableau_idx].empty()) {
+  // If destination tableau isn't empty, check if we can place the bottom card
+  if (!tableau_[tableau_idx].empty()) {
+    const cardlib::Card& bottom_card = cards[0];
+    const cardlib::Card& top_card = tableau_[tableau_idx].back();
+    
+    // Bottom card must be of different color and one rank lower than tableau's top card
+    bool different_colors = isCardRed(bottom_card) != isCardRed(top_card);
+    bool descending_rank = static_cast<int>(bottom_card.rank) + 1 == static_cast<int>(top_card.rank);
+    
+    if (!different_colors || !descending_rank) {
+      return false;
+    }
+  }
+  
+  // If we're only moving one card, we can always do that
+  if (cards.size() == 1) {
     return true;
   }
   
-  // Non-empty tableau - check if the bottom card can be placed on the tableau's top card
-  const cardlib::Card& bottom_card = cards[0];
-  const cardlib::Card& top_card = tableau_[tableau_idx].back();
+  // For multiple cards, we need to check the Freecell formula
   
-  // Bottom card must be of different color and one rank lower than tableau's top card
-  bool different_colors = isCardRed(bottom_card) != isCardRed(top_card);
-  bool descending_rank = static_cast<int>(bottom_card.rank) + 1 == static_cast<int>(top_card.rank);
-  
-  // If the above checks pass, now check the empty free cell and tableau rules
-  if (different_colors && descending_rank) {
-    // Count empty free cells
-    int empty_freecells = 0;
-    for (const auto& cell : freecells_) {
-      if (!cell.has_value()) {
-        empty_freecells++;
-      }
+  // Count empty free cells
+  int empty_freecells = 0;
+  for (const auto& cell : freecells_) {
+    if (!cell.has_value()) {
+      empty_freecells++;
     }
-    
-    // Count empty tableau columns
-    int empty_tableau_columns = 0;
-    for (const auto& pile : tableau_) {
-      if (pile.empty()) {
-        empty_tableau_columns++;
-      }
-    }
-    
-    // Number of cards being moved
-    int move_size = cards.size();
-    
-    // Calculate max movable cards based on empty free cells and empty columns
-    // The formula is: (empty_freecells + 1) * 2^(empty_tableau_columns)
-    int max_movable_cards = (empty_freecells + 1) * (1 << empty_tableau_columns);
-    
-    return move_size <= max_movable_cards;
   }
   
-  return false;
+  // Count empty tableau columns (excluding the destination)
+  int empty_tableau_columns = 0;
+  for (int i = 0; i < tableau_.size(); i++) {
+    if (i != tableau_idx && tableau_[i].empty()) {
+      empty_tableau_columns++;
+    }
+  }
+  
+  // Calculate max movable cards based on empty free cells and empty columns
+  // The formula is: (empty_freecells + 1) * 2^(empty_tableau_columns)
+  int max_movable_cards = (empty_freecells + 1) * (1 << empty_tableau_columns);
+  
+  return cards.size() <= max_movable_cards;
 }
