@@ -68,6 +68,8 @@ public:
   void run(int argc, char **argv);
 
 private:
+  bool relaxed_rules_mode_;
+
   // Game state
   static constexpr int BASE_WINDOW_WIDTH = 1024;
   static constexpr int BASE_WINDOW_HEIGHT = 768;
