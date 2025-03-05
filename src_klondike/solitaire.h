@@ -303,9 +303,14 @@ private:
   unsigned int current_seed_;
   void drawEmptyPile(cairo_t *cr, int x, int y);
 
+void showHowToPlay();
+void showKeyboardShortcuts();
+
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
                           std::vector<uint8_t> &fileData);
 };
+
+
 
 #endif // SOLITAIRE_H
