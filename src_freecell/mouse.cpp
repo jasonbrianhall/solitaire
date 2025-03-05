@@ -407,8 +407,6 @@ bool FreecellGame::isValidDragSource(int pile_index, int card_index) const {
     return isValidTableauSequence(std::vector<cardlib::Card>(
       pile.begin() + card_index, pile.end()));
   }
-  
-  return false;
 }
 
 bool FreecellGame::checkWinCondition() const {

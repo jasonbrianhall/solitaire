@@ -86,8 +86,6 @@ public:
 #endif
           // If this is the 'fmt ' chunk, parse audio format
           if (strcmp(chunkId, "fmt ") == 0) {
-            uint16_t audioFormat =
-                *reinterpret_cast<const uint16_t *>(&data[i + 8]);
             ss.channels = *reinterpret_cast<const uint16_t *>(&data[i + 10]);
             ss.rate = *reinterpret_cast<const uint32_t *>(&data[i + 12]);
             uint16_t bitsPerSample =
@@ -105,6 +103,9 @@ public:
             }
 
 #ifdef DEBUG
+            uint16_t audioFormat =
+                *reinterpret_cast<const uint16_t *>(&data[i + 8]);
+
             std::cout << "Audio format: " << audioFormat
                       << ", Channels: " << ss.channels
                       << ", Sample rate: " << ss.rate
