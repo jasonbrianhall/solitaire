@@ -1,8 +1,13 @@
 # 🃏 The Most Over-Engineered Card Games You'll Ever Love
 
-Welcome to what might be the most meticulously crafted Solitaire and Freecell implementation this side of the digital realm! Written in C++ with more love than your grandmother puts into her secret cookie recipe, this isn't just another card game – it's a labor of love with enough features to make Windows card games blush.
+Welcome to what might be the most meticulously crafted Solitaire implementation this side of the digital realm! Written in C++ with more love than your grandmother puts into her secret cookie recipe, this isn't just another card game – it's a labor of love with enough features to make Windows card games blush.
 
 ## ✨ Features
+
+Currently includes three games
+- ** Klondike ** aka class solitaire
+- ** Freecell **
+- ** Spider Solitaire **
 
 ### Common Features
 - **Custom Card Backs**: For when the default just isn't fancy enough for your taste
@@ -21,6 +26,12 @@ Welcome to what might be the most meticulously crafted Solitaire and Freecell im
 - **Smart Card Movement**: Automatic calculation of how many cards can be moved based on available free cells
 - **Auto-Finish**: Let the computer complete the game when the path to victory is clear
 
+### Spider Solitaire
+- **Sequences**: Build up sequences to remove cards
+- **Smart Card Movement**: Automatic calculation of how many cards can be moved based on suit
+- **Auto-Finish**: Let the computer complete the game when the path to victory is clear
+- **Difficulty**: Three levels of difficulty (Easy, Medium, and Hard)
+
 ## 🛠️ Building
 
 ### Prerequisites
@@ -37,18 +48,15 @@ Welcome to what might be the most meticulously crafted Solitaire and Freecell im
 The project includes a versatile Makefile with numerous build targets:
 
 ```bash
-make                  # Build both games for Linux (default)
-make linux            # Build both games for Linux
-make windows          # Build both games for Windows
-make solitaire        # Build Solitaire for Linux
-make freecell         # Build FreeCell for Linux
-make all-solitaire    # Build Solitaire for Linux and Windows
-make all-freecell     # Build FreeCell for Linux and Windows
-make all-linux        # Build both games for Linux
-make all-windows      # Build both games for Windows
-make solitaire-linux-debug  # Build Solitaire for Linux with debug symbols
-make freecell-linux-debug   # Build FreeCell for Linux with debug symbols
-make all-debug        # Build both games for both platforms with debug symbols
+make                  # Build all games for Linux (default)
+make linux            # Build all games for Linux
+make windows          # Build all games for Windows
+make nameofgame       # Build (spider, freecell, solitaire) for Linux
+make all-game         # Build game for both Windows and Linux
+make all-linux        # Build all games for Linux
+make all-windows      # Build alll games for Windows
+make game-linux-debug # Build Game with debug Symbols and some debugging output
+make all-debug        # Build all games with debug
 make clean            # Clean up build files
 make help             # Show available make targets
 ```
@@ -135,6 +143,33 @@ make freecell-linux-debug
 4. Only move as many cards at once as free cells and empty columns allow
 5. Empty tableau spaces can be filled with any card
 6. Get all cards to the foundation piles to win
+
+#### SPIDER
+
+Objective:
+1. Create 8 complete sequences of cards from King down to Ace, all of the same suit.
+2. When a sequence is complete, it is automatically removed from the table.
+
+Game Setup:
+1. - The game is played with 104 cards (2 decks)
+2. - Cards are dealt into 10 tableau columns
+3. - First 4 columns receive 6 cards each, last 6 columns receive 5 cards each
+4. - Only the top card of each column is face up initially
+5. - Remaining cards form the stock pile at the bottom of the screen
+
+Rules:
+1. You can move cards from one tableau column to another if they follow a descending sequence (regardless of suit)
+2. To move a group of cards together, they must be in descending sequence AND of the same suit
+3. Empty tableau spaces can be filled with any card or valid sequence
+4. You can deal a new row of cards (one to each tableau column) by clicking the stock pile
+5. You can only deal from the stock pile when all tableau columns have at least one card
+6. When a sequence from King to Ace of the same suit is formed, it is automatically removed
+7. The game is won when all 8 same-suit sequences have been completed
+
+Difficulty Levels:
+1. - Easy: 1 suit (all Spades)
+2. - Medium: 2 suits (Spades and Hearts)
+3. - Hard: 4 suits (standard deck)
 
 ## 🎨 Customization
 
