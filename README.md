@@ -167,9 +167,9 @@ Rules:
 7. The game is won when all 8 same-suit sequences have been completed
 
 Difficulty Levels:
-1. - Easy: 1 suit (all Spades)
-2. - Medium: 2 suits (Spades and Hearts)
-3. - Hard: 4 suits (standard deck)
+1. Easy: 1 suit (all Spades)
+2. Medium: 2 suits (Spades and Hearts)
+3. Hard: 4 suits (standard deck)
 
 ## 🎨 Customization
 
