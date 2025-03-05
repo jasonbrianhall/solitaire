@@ -472,12 +472,14 @@ void FreecellGame::setupMenuBar() {
   GtkWidget *menubar = gtk_menu_bar_new();
   gtk_box_pack_start(GTK_BOX(vbox_), menubar, FALSE, FALSE, 0);
 
-  // Game menu
+  //=======================================================
+  // GAME MENU - Core game functions
+  //=======================================================
   GtkWidget *gameMenu = gtk_menu_new();
   GtkWidget *gameMenuItem = gtk_menu_item_new_with_mnemonic("_Game");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameMenuItem), gameMenu);
 
-  // New Game
+  // Game control section
   GtkWidget *newGameItem = gtk_menu_item_new_with_mnemonic("_New Game (CTRL+N)");
   g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
@@ -490,6 +492,19 @@ void FreecellGame::setupMenuBar() {
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), restartGameItem);
 
+  // Separator
+  GtkWidget *sep1 = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep1);
+
+  // Auto-finish option
+  GtkWidget *autoFinishItem = gtk_menu_item_new_with_mnemonic("Auto-_Finish Game (F)");
+  g_signal_connect(G_OBJECT(autoFinishItem), "activate",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    static_cast<FreecellGame *>(data)->autoFinishGame();
+                  }),
+                  this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
+
   // Enter Seed option
   GtkWidget *seedItem = gtk_menu_item_new_with_label("Enter Seed...");
   g_signal_connect(G_OBJECT(seedItem), "activate", 
@@ -499,6 +514,26 @@ void FreecellGame::setupMenuBar() {
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
 
+  // Separator before quit
+  GtkWidget *sep3 = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep3);
+
+  // Quit
+  GtkWidget *quitItem = gtk_menu_item_new_with_mnemonic("_Quit (CTRL+Q)");
+  g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
+
+  // Add Game menu to menubar
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
+
+  //=======================================================
+  // OPTIONS MENU - Visual and appearance options
+  //=======================================================
+  GtkWidget *optionsMenu = gtk_menu_new();
+  GtkWidget *optionsMenuItem = gtk_menu_item_new_with_mnemonic("_Options");
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(optionsMenuItem), optionsMenu);
+
+  // Load custom deck
   GtkWidget *loadDeckItem = gtk_menu_item_new_with_mnemonic("_Load Deck (CTRL+L)");
   g_signal_connect(
       G_OBJECT(loadDeckItem), "activate",
@@ -555,18 +590,19 @@ void FreecellGame::setupMenuBar() {
         gtk_widget_destroy(dialog);
       }),
       this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), loadDeckItem);
-
-  // Fullscreen option
-  GtkWidget *fullscreenItem = gtk_menu_item_new_with_mnemonic("Toggle _Fullscreen (F11)");
-  g_signal_connect(G_OBJECT(fullscreenItem), "activate", G_CALLBACK(onToggleFullscreen), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), fullscreenItem);
+  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), loadDeckItem);
 
   // Separator
-  GtkWidget *sep = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
+  GtkWidget *sepOptions = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), sepOptions);
+  
+  // Visual options
+  GtkWidget *fullscreenItem = gtk_menu_item_new_with_mnemonic("Toggle _Fullscreen (F11)");
+  g_signal_connect(G_OBJECT(fullscreenItem), "activate", G_CALLBACK(onToggleFullscreen), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), fullscreenItem);
 
-  GtkWidget *soundItem = gtk_check_menu_item_new_with_mnemonic("_Sound");
+  // Sound toggle
+  GtkWidget *soundItem = gtk_check_menu_item_new_with_mnemonic("Enable _Sound");
   gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(soundItem), sound_enabled_);
   g_signal_connect(G_OBJECT(soundItem), "toggled",
                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -575,30 +611,131 @@ void FreecellGame::setupMenuBar() {
                        GTK_CHECK_MENU_ITEM(widget));
                  }),
                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), soundItem);
+  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), soundItem);
 
-  // Add a separator before Quit item
-  GtkWidget *sep2 = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep2);
+  // Add Options menu to menubar
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), optionsMenuItem);
 
-  // Quit
-  GtkWidget *quitItem = gtk_menu_item_new_with_mnemonic("_Quit (CTRL+Q)");
-  g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
-
-  // Help menu
+  //=======================================================
+  // HELP MENU
+  //=======================================================
   GtkWidget *helpMenu = gtk_menu_new();
   GtkWidget *helpMenuItem = gtk_menu_item_new_with_mnemonic("_Help");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(helpMenuItem), helpMenu);
 
-  // About
+ GtkWidget *howtoplayItem = gtk_menu_item_new_with_mnemonic("_How to play");
+  g_signal_connect(G_OBJECT(howtoplayItem), "activate",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    FreecellGame *game = static_cast<FreecellGame *>(data);
+                    
+                    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+                        "How to Play", GTK_WINDOW(game->window_),
+                        static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                                   GTK_DIALOG_DESTROY_WITH_PARENT),
+                        "OK", GTK_RESPONSE_OK, NULL);
+                    
+                    GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+                    gtk_container_set_border_width(GTK_CONTAINER(content_area), 15);
+                    
+                    GtkWidget *label = gtk_label_new(NULL);
+                    const char *markup =
+                        "How to Play Freecell:\n\n"
+                        "OBJECTIVE:\n"
+                        "Move all 52 cards to the four foundation piles, building up by suit from Ace to King.\n\n"
+                        "GAME SETUP:\n"
+                        "- All 52 cards are dealt face-up across 8 tableau columns\n"
+                        "- 4 free cells are available for temporary storage\n"
+                        "- 4 foundation piles need to be built up by suit from Ace to King\n\n"
+                        "RULES:\n"
+                        "1. Moving Cards in the Tableau:\n"
+                        "   - Cards in the tableau can be moved one at a time\n"
+                        "   - Cards must be placed in descending order with alternating colors\n"
+                        "   - You can move multiple cards if you have enough free cells and empty columns\n"
+                        "   - The number of cards you can move at once = (empty free cells + 1) × 2^(empty columns)\n\n"
+                        "2. Free Cells:\n"
+                        "   - Each free cell can hold only one card\n"
+                        "   - Cards in free cells can be moved to tableau or foundation piles\n\n"
+                        "3. Foundation Piles:\n"
+                        "   - Each foundation must be built by suit starting with Ace\n"
+                        "   - Cards must be added in ascending order: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K\n"
+                        "   - Once a card is placed in a foundation, it can be moved back, but this is rarely useful\n\n"
+                        "4. Empty Tableau Columns:\n"
+                        "   - Any card can be placed in an empty tableau column\n"
+                        "   - Empty columns are valuable for moving sequences of cards\n\n"
+                        "CONTROLS:\n"
+                        "- Left-click and drag to move individual cards\n"
+                        "- Right-click or press Spacebar to automatically move cards to foundation piles\n"
+                        "- Use the keyboard arrow keys to navigate between piles\n"
+                        "- Use Enter to select and place cards when using keyboard navigation\n"
+                        "- Press F to auto-finish the game (automatically finds best moves)\n\n"
+                        "STRATEGY TIPS:\n"
+                        "1. Focus on creating empty columns early in the game\n"
+                        "2. Move Aces and Twos to the foundation as soon as it's safe\n"
+                        "3. Try not to block higher cards with lower cards of the same color\n"
+                        "4. Use free cells as a last resort since they limit your moves\n"
+                        "5. Plan ahead - sometimes it's better to temporarily avoid moving a card to the foundation\n\n"
+                        "WINNING THE GAME:\n"
+                        "You win when all 52 cards are moved to the foundation piles.";
+                    
+                    gtk_label_set_markup(GTK_LABEL(label), markup);
+                    gtk_container_add(GTK_CONTAINER(content_area), label);
+                    gtk_widget_show_all(dialog);
+                    
+                    gtk_dialog_run(GTK_DIALOG(dialog));
+                    gtk_widget_destroy(dialog);
+                  }),
+                  this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), howtoplayItem);
+
+  // Keyboard shortcuts item
+  GtkWidget *shortcutsItem = gtk_menu_item_new_with_mnemonic("_Keyboard Shortcuts");
+  g_signal_connect(G_OBJECT(shortcutsItem), "activate",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    FreecellGame *game = static_cast<FreecellGame *>(data);
+                    
+                    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+                        "Keyboard Shortcuts", GTK_WINDOW(game->window_),
+                        static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
+                                                   GTK_DIALOG_DESTROY_WITH_PARENT),
+                        "OK", GTK_RESPONSE_OK, NULL);
+                    
+                    GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+                    gtk_container_set_border_width(GTK_CONTAINER(content_area), 15);
+                    
+                    GtkWidget *label = gtk_label_new(NULL);
+                    const char *markup = 
+                        "<span size='large' weight='bold'>Keyboard Shortcuts</span>\n\n"
+                        "<b>F11</b> - Toggle Fullscreen\n"
+                        "<b>Ctrl+N</b> - New Game\n"
+                        "<b>Ctrl+R</b> - Restart Game\n"
+                        "<b>Ctrl+L</b> - Load Custom Deck\n"
+                        "<b>Ctrl+Q</b> - Quit\n"
+                        "<b>Ctrl+H</b> - Help\n"
+                        "<b>Arrow Keys</b> - Navigate piles\n"
+                        "<b>Enter</b> - Select or place cards\n"
+                        "<b>Esc</b> - Cancel selection\n"
+                        "<b>F</b> - Auto-Finish (find best moves)";
+                    
+                    gtk_label_set_markup(GTK_LABEL(label), markup);
+                    gtk_container_add(GTK_CONTAINER(content_area), label);
+                    gtk_widget_show_all(dialog);
+                    
+                    gtk_dialog_run(GTK_DIALOG(dialog));
+                    gtk_widget_destroy(dialog);
+                  }),
+                  this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), shortcutsItem);
+
+  // About item
   GtkWidget *aboutItem = gtk_menu_item_new_with_mnemonic("_About (CTRL+H)");
   g_signal_connect(G_OBJECT(aboutItem), "activate", G_CALLBACK(onAbout), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), aboutItem);
 
+  // Add Help menu to menubar
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), helpMenuItem);
+
+  // Show all menu items
+  gtk_widget_show_all(menubar);
 }
 
 void FreecellGame::onNewGame(GtkWidget *widget, gpointer data) {
@@ -746,7 +883,11 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
       "Strategy:\n"
       "- Try to empty columns when possible to create more space for maneuvering\n"
       "- Plan ahead to uncover cards in a specific order\n"
-      "- Use free cells wisely as a temporary storage\n\n";
+      "- Use free cells wisely as a temporary storage\n\n"
+      "Written by Jason Hall\n"
+      "Licensed under the MIT License\n"
+      "https://github.com/jasonbrianhall/solitaire";
+
 
   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
   gtk_text_buffer_set_text(buffer, instructions, -1);
