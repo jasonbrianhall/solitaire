@@ -8,7 +8,7 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 DEBUG_FLAGS = -g -DDEBUG
 
 # Source files for Klondike Solitaire
-SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp
+SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp src_klondike/mouse.cpp
 SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp
 SRCS_WIN_KLONDIKE = src_klondike/windowsaudioplayer.cpp
 
