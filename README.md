@@ -205,6 +205,7 @@ For the brave souls who dare to venture into the code:
 - The victory animation is intentionally chaotic with cards flying off the screen
 - Cards occasionally show off their athletic abilities with smooth animations
 - The auto-complete feature is actually quite smart (it's just shy)
+- Minor animation bug I can't find on the deal for Double freecell (blink and you'll miss it)
 
 ## 🤝 Contributing
 
