@@ -214,7 +214,7 @@ void FreecellGame::updateDealAnimation() {
       double arc_offset = sin(progress * G_PI) * arc_height;
 
       card.x += move_x;
-      card.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
+      card.y += move_y - arc_offset * 0.4; // Apply a small amount of arc
 
       // Update rotation (gradually reduce to zero)
       card.rotation *= 0.95;
@@ -224,7 +224,10 @@ void FreecellGame::updateDealAnimation() {
   }
 
   // Check if we're done dealing and all cards have arrived
-  if (all_cards_arrived && cards_dealt_ >= 52) { // 52 cards in Freecell
+  // Use the total number of cards based on game mode
+  int total_cards = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 52 : 104;
+  
+  if (all_cards_arrived && cards_dealt_ >= total_cards) {
     completeDeal();
   }
 
@@ -310,7 +313,7 @@ void FreecellGame::completeDeal() {
   deal_cards_.clear();
   cards_dealt_ = 0;
 
-  refreshDisplay();
+  //refreshDisplay();
 }
 
 void FreecellGame::drawCard(cairo_t *cr, int x, int y, const cardlib::Card *card) {
@@ -601,13 +604,6 @@ void FreecellGame::setupMenuBar() {
   GtkWidget *sep_mode = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep_mode);
 
-
-
-
-  // Separator before quit
-  GtkWidget *sep3 = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep3);
-
   // Quit
   GtkWidget *quitItem = gtk_menu_item_new_with_mnemonic("_Quit (CTRL+Q)");
   g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
@@ -728,44 +724,57 @@ void FreecellGame::setupMenuBar() {
                     gtk_container_set_border_width(GTK_CONTAINER(content_area), 15);
                     
                     GtkWidget *label = gtk_label_new(NULL);
-                    const char *markup =
-                        "How to Play Freecell:\n\n"
-                        "OBJECTIVE:\n"
-                        "Move all 52 cards to the four foundation piles, building up by suit from Ace to King.\n\n"
-                        "GAME SETUP:\n"
-                        "- All 52 cards are dealt face-up across 8 tableau columns\n"
-                        "- 4 free cells are available for temporary storage\n"
-                        "- 4 foundation piles need to be built up by suit from Ace to King\n\n"
-                        "RULES:\n"
-                        "1. Moving Cards in the Tableau:\n"
-                        "   - Cards in the tableau can be moved one at a time\n"
-                        "   - Cards must be placed in descending order with alternating colors\n"
-                        "   - You can move multiple cards if you have enough free cells and empty columns\n"
-                        "   - The number of cards you can move at once = (empty free cells + 1) × 2^(empty columns)\n\n"
-                        "2. Free Cells:\n"
-                        "   - Each free cell can hold only one card\n"
-                        "   - Cards in free cells can be moved to tableau or foundation piles\n\n"
-                        "3. Foundation Piles:\n"
-                        "   - Each foundation must be built by suit starting with Ace\n"
-                        "   - Cards must be added in ascending order: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K\n"
-                        "   - Once a card is placed in a foundation, it can be moved back, but this is rarely useful\n\n"
-                        "4. Empty Tableau Columns:\n"
-                        "   - Any card can be placed in an empty tableau column\n"
-                        "   - Empty columns are valuable for moving sequences of cards\n\n"
-                        "CONTROLS:\n"
-                        "- Left-click and drag to move individual cards\n"
-                        "- Right-click or press Spacebar to automatically move cards to foundation piles\n"
-                        "- Use the keyboard arrow keys to navigate between piles\n"
-                        "- Use Enter to select and place cards when using keyboard navigation\n"
-                        "- Press F to auto-finish the game (automatically finds best moves)\n\n"
-                        "STRATEGY TIPS:\n"
-                        "1. Focus on creating empty columns early in the game\n"
-                        "2. Move Aces and Twos to the foundation as soon as it's safe\n"
-                        "3. Try not to block higher cards with lower cards of the same color\n"
-                        "4. Use free cells as a last resort since they limit your moves\n"
-                        "5. Plan ahead - sometimes it's better to temporarily avoid moving a card to the foundation\n\n"
-                        "WINNING THE GAME:\n"
-                        "You win when all 52 cards are moved to the foundation piles.";
+const char *markup =
+    "How to Play FreeCell Solitaire\n\n"
+    "GAME MODES:\n"
+    "- Classic FreeCell: Play with one 52-card deck\n"
+    "- Double FreeCell: Play with two 52-card decks (104 cards total)\n\n"
+    "OBJECTIVE:\n"
+    "Move all cards to the foundation piles, building up by suit from Ace to King.\n\n"
+    "GAME SETUP:\n"
+    "Classic FreeCell:\n"
+    "- 52 cards dealt face-up across 8 tableau columns\n"
+    "- 4 free cells for temporary storage\n"
+    "- 4 foundation piles\n\n"
+    "Double FreeCell:\n"
+    "- 104 cards dealt face-up across 10 tableau columns\n"
+    "- 6 free cells for temporary storage\n"
+    "- 4 foundation piles (each holds 26 cards)\n\n"
+    "RULES:\n"
+    "1. Moving Cards in the Tableau:\n"
+    "   - Cards can be moved one at a time or in valid sequences\n"
+    "   - Cards must be placed in descending order with alternating colors\n"
+    "   - Move multiple cards based on available free cells and empty columns\n"
+    "   - Maximum movable cards = (empty free cells + 1) × 2^(empty columns)\n\n"
+    "2. Free Cells:\n"
+    "   - Classic FreeCell: 4 free cells\n"
+    "   - Double FreeCell: 6 free cells\n"
+    "   - Each cell can hold only one card\n"
+    "   - Use free cells to temporarily store cards\n\n"
+    "3. Foundation Piles:\n"
+    "   - 4 foundation piles, one for each suit\n"
+    "   - Build from Ace to King in ascending order\n"
+    "   - Classic FreeCell: Each pile holds 13 cards\n"
+    "   - Double FreeCell: Each pile holds 26 cards (two complete sequences)\n"
+    "   - Once a card is placed in a foundation, it can be moved back (rarely useful)\n\n"
+    "4. Empty Tableau Columns:\n"
+    "   - Any card or valid card sequence can be placed in an empty column\n"
+    "   - Empty columns are crucial for strategic card movement\n\n"
+    "CONTROLS:\n"
+    "- Left-click and drag to move cards\n"
+    "- Right-click or Spacebar to auto-move cards to foundations\n"
+    "- Arrow keys to navigate between piles\n"
+    "- Enter to select/place cards\n"
+    "- 'F' to auto-finish the game\n\n"
+    "STRATEGY TIPS:\n"
+    "1. Create empty columns early in the game\n"
+    "2. Move Aces and low cards to foundations when safe\n"
+    "3. Avoid blocking higher cards with same-color cards\n"
+    "4. Use free cells sparingly\n"
+    "5. Plan moves carefully - sometimes delay moving to foundations\n\n"
+    "WINNING THE GAME:\n"
+    "- Classic FreeCell: Move all 52 cards to foundations\n"
+    "- Double FreeCell: Move all 104 cards to foundations";
                     
                     gtk_label_set_markup(GTK_LABEL(label), markup);
                     gtk_container_add(GTK_CONTAINER(content_area), label);
@@ -938,7 +947,7 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   gtk_container_add(GTK_CONTAINER(content_area), version_label);
   gtk_widget_set_margin_bottom(version_label, 12);
 
-  // Add game instructions in a scrolled window
+  // Add program information in a scrolled window
   GtkWidget *instructions_text = gtk_text_view_new();
   gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(instructions_text), GTK_WRAP_WORD);
   gtk_text_view_set_editable(GTK_TEXT_VIEW(instructions_text), FALSE);
@@ -946,41 +955,30 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   gtk_text_view_set_left_margin(GTK_TEXT_VIEW(instructions_text), 12);
   gtk_text_view_set_right_margin(GTK_TEXT_VIEW(instructions_text), 12);
 
-  const char *instructions =
-      "How to Play Freecell:\n\n"
-      "Objective:\n"
-      "Build four foundation piles in ascending order by suit (A-K).\n\n"
-      "Game Setup:\n"
-      "- 52 cards are dealt face up to eight tableau columns\n"
-      "- Four free cells are available for temporary card storage\n"
-      "- Four foundation piles need to be built in ascending order by suit\n\n"
-      "Rules:\n"
-      "1. Only one card can be moved at a time unless empty columns are available\n"
-      "2. In the tableau, cards must be placed in descending order with alternating colors\n"
-      "3. Free cells can hold only one card each\n"
-      "4. Foundation piles are built up by suit from Ace to King\n"
-      "5. Empty tableau columns can be filled with any card\n\n"
-      "Controls:\n"
-      "- Left-click and drag to move cards\n"
-      "- Right-click to automatically move cards to foundation piles when possible\n\n"
-      "Keyboard Controls:\n"
-      "- Arrow keys (←, →, ↑, ↓) to navigate between piles and cards\n"
-      "- Enter to select a card or perform a move\n"
-      "- F11 to toggle fullscreen mode\n"
-      "- Ctrl+N for a new game\n"
-      "- Ctrl+Q to quit\n"
-      "- Ctrl+H for help\n\n"
-      "Strategy:\n"
-      "- Try to empty columns when possible to create more space for maneuvering\n"
-      "- Plan ahead to uncover cards in a specific order\n"
-      "- Use free cells wisely as a temporary storage\n\n"
-      "Written by Jason Hall\n"
+  const char *about_text =
+      "Freecell Solitaire\n\n"
+      "A classic card game that combines strategy, patience, and skill. "
+      "This implementation provides both Classic and Double FreeCell modes, "
+      "offering players a challenging and engaging solitaire experience.\n\n"
+      "Features:\n"
+      "- Classic and Double FreeCell game modes\n"
+      "- Customizable card decks\n"
+      "- Smooth, animated card movements\n"
+      "- Keyboard and mouse support\n"
+      "- Sound effects\n\n"
+      "Developed as an open-source project to provide an enjoyable "
+      "and accessible solitaire gaming experience.\n\n"
+      "Software Design:\n"
+      "- C++ Programming\n"
+      "- GTK+ GUI Framework\n"
+      "- Cairo Graphics Library\n\n"
+      "Created with passion for game development and software craftsmanship.\n\n"
       "Licensed under the MIT License\n"
+      "Copyright © 2025 Jason Hall\n"
       "https://github.com/jasonbrianhall/solitaire";
 
-
   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
-  gtk_text_buffer_set_text(buffer, instructions, -1);
+  gtk_text_buffer_set_text(buffer, about_text, -1);
 
   GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
