@@ -1198,81 +1198,221 @@ void FreecellGame::setupEasyGame() {
   foundation_.clear();
   tableau_.clear();
 
-  // Initialize freecells (4 empty cells)
-  freecells_.resize(4);
+  // Determine the number of freecells and tableau columns based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int num_tableau = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+
+  // Initialize freecells (4 or 6 empty cells depending on mode)
+  freecells_.resize(num_freecells);
   
   // Initialize foundation piles (4 empty piles for aces)
   foundation_.resize(4);
 
-  // Initialize tableau (8 piles for Freecell)
-  tableau_.resize(8);
+  // Initialize tableau (8 or 10 piles depending on mode)
+  tableau_.resize(num_tableau);
 
-  // Create a pre-arranged deck that's easy to solve
-  // Distribute cards across all 8 columns, arranging by suit and rank
-  
-  // Hearts (K to A) in columns 0 and 1
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN});
-  
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE});
-  
-  // Diamonds (K to A) in columns 2 and 3
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN});
-  
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE});
-  
-  // Clubs (K to A) in columns 4 and 5
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN});
-  
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE});
-  
-  // Spades (K to A) in columns 6 and 7
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN});
-  
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE});
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // ==================== CLASSIC FREECELL MODE ====================
+    // Create a pre-arranged deck that's easy to solve
+    // Distribute cards across all 8 columns, arranging by suit and rank
+    
+    // Hearts (K to A) in columns 0 and 1
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN});
+    
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE});
+    
+    // Diamonds (K to A) in columns 2 and 3
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN});
+    
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE});
+    
+    // Clubs (K to A) in columns 4 and 5
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN});
+    
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE});
+    
+    // Spades (K to A) in columns 6 and 7
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN});
+    
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE});
+  }
+  else {
+    // ==================== DOUBLE FREECELL MODE ====================
+    // In Double FreeCell, we need to arrange 104 cards (2 complete decks)
+    // Each foundation pile will need to contain 26 cards (2 complete sequences)
+    
+    // Create the cards with "alternate art" flag to distinguish the second deck
+    bool first_deck = false;  // First deck uses regular art
+    bool second_deck = true;  // Second deck uses alternate art
+    
+    // First Deck
+    // Hearts (K to A) in column 0
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE, first_deck});
+    
+    // Diamonds (K to A) in column 1
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE, first_deck});
+    
+    // Clubs (K to A) in column 2
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE, first_deck});
+    
+    // Spades (K to A) in column 3
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE, first_deck});
+    
+    // Second Deck
+    // Hearts (K to A) in column 4
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE, second_deck});
+    
+    // Diamonds (K to A) in column 5
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE, second_deck});
+    
+    // Clubs (K to A) in column 6
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE, second_deck});
+    
+    // Spades (K to A) in column 7
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE, second_deck});
+    
+    // We'll leave the 6 freecells empty for this easy game
+  }
   
   // Refresh the display
   refreshDisplay();
