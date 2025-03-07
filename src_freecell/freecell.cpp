@@ -54,8 +54,16 @@ void FreecellGame::initializeGame() {
     bool loaded = false;
     for (const auto &path : paths) {
       try {
-        deck_ = cardlib::Deck(path);
-        deck_.removeJokers();
+        if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+          // Initialize a single deck for Classic FreeCell
+          deck_ = cardlib::Deck(path);
+          deck_.removeJokers();
+        } else {
+          // Initialize a MultiDeck with 2 decks for Double FreeCell
+          multi_deck_ = cardlib::MultiDeck(2, path);
+          multi_deck_.includeJokersInAllDecks(false);
+          has_multi_deck_ = true;
+        }
         loaded = true;
         break;
       } catch (const std::exception &e) {
@@ -68,27 +76,25 @@ void FreecellGame::initializeGame() {
       throw std::runtime_error("Could not find cards.zip in any search path");
     }
 
-    deck_.shuffle(current_seed_);
+    // Shuffle with current seed
+    if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+      deck_.shuffle(current_seed_);
+    } else {
+      multi_deck_.shuffle(current_seed_);
+    }
 
-    // Clear all piles
-    freecells_.clear();
-    foundation_.clear();
-    tableau_.clear();
-
-    // Initialize freecells (4 empty cells)
-    freecells_.resize(4);
-    
-    // Initialize foundation piles (4 empty piles for aces)
-    foundation_.resize(4);
-
-    // Initialize tableau (8 piles for Freecell)
-    tableau_.resize(8);
+    // Update layout based on game mode
+    updateLayoutForGameMode();
     
     // Initialize the foundation cards tracking vector
     animated_foundation_cards_.clear();
     animated_foundation_cards_.resize(4);
     for (auto& pile : animated_foundation_cards_) {
-      pile.resize(13, false);  // Each foundation can have at most 13 cards (A to K)
+      if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+        pile.resize(13, false);  // 13 cards per foundation in classic mode
+      } else {
+        pile.resize(26, false);  // 26 cards per foundation in double mode (2 full sequences)
+      }
     }
 
     // Deal cards
@@ -107,19 +113,30 @@ void FreecellGame::deal() {
   foundation_.clear();
   tableau_.clear();
 
-  // Reset freecells and foundation
-  freecells_.resize(4);
-  foundation_.resize(4);
-  tableau_.resize(8);
+  // Reset freecells and foundation based on game mode
+  updateLayoutForGameMode();
 
-  // Deal to tableau columns (all face up)
-  // In Freecell, all 52 cards are dealt across 8 columns
-  int currentColumn = 0;
-  
-  // Deal all cards to the tableau columns
-  while (auto card = deck_.drawCard()) {
-    tableau_[currentColumn].push_back(*card);
-    currentColumn = (currentColumn + 1) % 8;  // Move to next column in round-robin fashion
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Deal to 8 tableau columns for Classic FreeCell (52 cards)
+    int currentColumn = 0;
+    
+    // Deal all cards to the tableau columns
+    while (auto card = deck_.drawCard()) {
+      tableau_[currentColumn].push_back(*card);
+      currentColumn = (currentColumn + 1) % 8;  // Cycle through 8 columns
+    }
+  } else {
+    // Deal to 10 tableau columns for Double FreeCell (104 cards)
+    // First four columns get 11 cards, remaining six get 10 cards
+    for (int i = 0; i < 104; i++) {
+      auto card = multi_deck_.drawCard();
+      if (!card.has_value()) {
+        break;  // No more cards
+      }
+      
+      int column = i % 10;  // Determine which of the 10 columns
+      tableau_[column].push_back(*card);
+    }
   }
 
   // Start the deal animation
@@ -197,7 +214,7 @@ void FreecellGame::updateDealAnimation() {
       double arc_offset = sin(progress * G_PI) * arc_height;
 
       card.x += move_x;
-      card.y += move_y - arc_offset * 0.1; // Apply a small amount of arc
+      card.y += move_y - arc_offset * 0.4; // Apply a small amount of arc
 
       // Update rotation (gradually reduce to zero)
       card.rotation *= 0.95;
@@ -207,7 +224,10 @@ void FreecellGame::updateDealAnimation() {
   }
 
   // Check if we're done dealing and all cards have arrived
-  if (all_cards_arrived && cards_dealt_ >= 52) { // 52 cards in Freecell
+  // Use the total number of cards based on game mode
+  int total_cards = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 52 : 104;
+  
+  if (all_cards_arrived && cards_dealt_ >= total_cards) {
     completeDeal();
   }
 
@@ -215,12 +235,30 @@ void FreecellGame::updateDealAnimation() {
 }
 
 void FreecellGame::dealNextCard() {
-  if (cards_dealt_ >= 52) // All cards are dealt in Freecell
+  int total_cards = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 52 : 104;
+  int num_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  if (cards_dealt_ >= total_cards)
     return;
 
   // Calculate which tableau column and position this card belongs to
-  int column_index = cards_dealt_ % 8;
-  int card_index = cards_dealt_ / 8;
+  int column_index = cards_dealt_ % num_columns;
+  int card_index = cards_dealt_ / num_columns;
+  
+  // For Double FreeCell, apply special distribution (first 4 columns get 11 cards, rest get 10)
+  if (current_game_mode_ == GameMode::DOUBLE_FREECELL) {
+    // We need to adjust the card_index calculation for Double FreeCell's distribution
+    if (cards_dealt_ >= num_columns * 10) {
+      // We're dealing the extra cards to the first 4 columns
+      column_index = cards_dealt_ - (num_columns * 10);
+      if (column_index >= 4) {
+        // We've dealt all 104 cards
+        cards_dealt_++;
+        return;
+      }
+      card_index = 10; // These are the 11th cards in those columns
+    }
+  }
 
   // Make sure the tableau column exists and has enough cards
   if (column_index >= tableau_.size() || card_index >= tableau_[column_index].size()) {
@@ -244,6 +282,11 @@ void FreecellGame::dealNextCard() {
   anim_card.y = start_y;
   anim_card.target_x = target_x;
   anim_card.target_y = target_y;
+  
+  // Add a unique identifier to help distinguish duplicate cards
+  anim_card.source_pile = column_index;  // Store the column index
+  anim_card.face_up = (card_index == card_index);  // Just a hack to store card_index (always true)
+  
   anim_card.velocity_x = 0;
   anim_card.velocity_y = 0;
   anim_card.rotation = (rand() % 628) / 100.0 - 3.14; // Random initial rotation
@@ -270,7 +313,7 @@ void FreecellGame::completeDeal() {
   deal_cards_.clear();
   cards_dealt_ = 0;
 
-  refreshDisplay();
+  //refreshDisplay();
 }
 
 void FreecellGame::drawCard(cairo_t *cr, int x, int y, const cardlib::Card *card) {
@@ -514,9 +557,52 @@ void FreecellGame::setupMenuBar() {
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
 
-  // Separator before quit
-  GtkWidget *sep3 = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep3);
+
+  GtkWidget *modeMenuItem = gtk_menu_item_new_with_mnemonic("Game _Mode");
+  GtkWidget *modeMenu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(modeMenuItem), modeMenu);
+  
+  // Create radio items for game modes
+  GSList *mode_group = NULL;
+  classic_mode_item_ = gtk_radio_menu_item_new_with_label(mode_group, "Classic FreeCell");
+  mode_group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(classic_mode_item_));
+  double_mode_item_ = gtk_radio_menu_item_new_with_label(mode_group, "Double FreeCell");
+  
+  // Set initial state
+  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(classic_mode_item_), 
+      current_game_mode_ == GameMode::CLASSIC_FREECELL);
+  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(double_mode_item_), 
+      current_game_mode_ == GameMode::DOUBLE_FREECELL);
+  
+  // Connect signals
+  g_signal_connect(G_OBJECT(classic_mode_item_), "toggled",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    FreecellGame *game = static_cast<FreecellGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      game->setGameMode(GameMode::CLASSIC_FREECELL);
+                    }
+                  }),
+                  this);
+  
+  g_signal_connect(G_OBJECT(double_mode_item_), "toggled",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    FreecellGame *game = static_cast<FreecellGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      game->setGameMode(GameMode::DOUBLE_FREECELL);
+                    }
+                  }),
+                  this);
+  
+  // Add radio items to the mode menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(modeMenu), classic_mode_item_);
+  gtk_menu_shell_append(GTK_MENU_SHELL(modeMenu), double_mode_item_);
+  
+  // Add mode menu to game menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), modeMenuItem);
+
+  // Add separator after mode menu
+  GtkWidget *sep_mode = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep_mode);
 
   // Quit
   GtkWidget *quitItem = gtk_menu_item_new_with_mnemonic("_Quit (CTRL+Q)");
@@ -638,44 +724,57 @@ void FreecellGame::setupMenuBar() {
                     gtk_container_set_border_width(GTK_CONTAINER(content_area), 15);
                     
                     GtkWidget *label = gtk_label_new(NULL);
-                    const char *markup =
-                        "How to Play Freecell:\n\n"
-                        "OBJECTIVE:\n"
-                        "Move all 52 cards to the four foundation piles, building up by suit from Ace to King.\n\n"
-                        "GAME SETUP:\n"
-                        "- All 52 cards are dealt face-up across 8 tableau columns\n"
-                        "- 4 free cells are available for temporary storage\n"
-                        "- 4 foundation piles need to be built up by suit from Ace to King\n\n"
-                        "RULES:\n"
-                        "1. Moving Cards in the Tableau:\n"
-                        "   - Cards in the tableau can be moved one at a time\n"
-                        "   - Cards must be placed in descending order with alternating colors\n"
-                        "   - You can move multiple cards if you have enough free cells and empty columns\n"
-                        "   - The number of cards you can move at once = (empty free cells + 1) × 2^(empty columns)\n\n"
-                        "2. Free Cells:\n"
-                        "   - Each free cell can hold only one card\n"
-                        "   - Cards in free cells can be moved to tableau or foundation piles\n\n"
-                        "3. Foundation Piles:\n"
-                        "   - Each foundation must be built by suit starting with Ace\n"
-                        "   - Cards must be added in ascending order: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K\n"
-                        "   - Once a card is placed in a foundation, it can be moved back, but this is rarely useful\n\n"
-                        "4. Empty Tableau Columns:\n"
-                        "   - Any card can be placed in an empty tableau column\n"
-                        "   - Empty columns are valuable for moving sequences of cards\n\n"
-                        "CONTROLS:\n"
-                        "- Left-click and drag to move individual cards\n"
-                        "- Right-click or press Spacebar to automatically move cards to foundation piles\n"
-                        "- Use the keyboard arrow keys to navigate between piles\n"
-                        "- Use Enter to select and place cards when using keyboard navigation\n"
-                        "- Press F to auto-finish the game (automatically finds best moves)\n\n"
-                        "STRATEGY TIPS:\n"
-                        "1. Focus on creating empty columns early in the game\n"
-                        "2. Move Aces and Twos to the foundation as soon as it's safe\n"
-                        "3. Try not to block higher cards with lower cards of the same color\n"
-                        "4. Use free cells as a last resort since they limit your moves\n"
-                        "5. Plan ahead - sometimes it's better to temporarily avoid moving a card to the foundation\n\n"
-                        "WINNING THE GAME:\n"
-                        "You win when all 52 cards are moved to the foundation piles.";
+const char *markup =
+    "How to Play FreeCell Solitaire\n\n"
+    "GAME MODES:\n"
+    "- Classic FreeCell: Play with one 52-card deck\n"
+    "- Double FreeCell: Play with two 52-card decks (104 cards total)\n\n"
+    "OBJECTIVE:\n"
+    "Move all cards to the foundation piles, building up by suit from Ace to King.\n\n"
+    "GAME SETUP:\n"
+    "Classic FreeCell:\n"
+    "- 52 cards dealt face-up across 8 tableau columns\n"
+    "- 4 free cells for temporary storage\n"
+    "- 4 foundation piles\n\n"
+    "Double FreeCell:\n"
+    "- 104 cards dealt face-up across 10 tableau columns\n"
+    "- 6 free cells for temporary storage\n"
+    "- 4 foundation piles (each holds 26 cards)\n\n"
+    "RULES:\n"
+    "1. Moving Cards in the Tableau:\n"
+    "   - Cards can be moved one at a time or in valid sequences\n"
+    "   - Cards must be placed in descending order with alternating colors\n"
+    "   - Move multiple cards based on available free cells and empty columns\n"
+    "   - Maximum movable cards = (empty free cells + 1) × 2^(empty columns)\n\n"
+    "2. Free Cells:\n"
+    "   - Classic FreeCell: 4 free cells\n"
+    "   - Double FreeCell: 6 free cells\n"
+    "   - Each cell can hold only one card\n"
+    "   - Use free cells to temporarily store cards\n\n"
+    "3. Foundation Piles:\n"
+    "   - 4 foundation piles, one for each suit\n"
+    "   - Build from Ace to King in ascending order\n"
+    "   - Classic FreeCell: Each pile holds 13 cards\n"
+    "   - Double FreeCell: Each pile holds 26 cards (two complete sequences)\n"
+    "   - Once a card is placed in a foundation, it can be moved back (rarely useful)\n\n"
+    "4. Empty Tableau Columns:\n"
+    "   - Any card or valid card sequence can be placed in an empty column\n"
+    "   - Empty columns are crucial for strategic card movement\n\n"
+    "CONTROLS:\n"
+    "- Left-click and drag to move cards\n"
+    "- Right-click or Spacebar to auto-move cards to foundations\n"
+    "- Arrow keys to navigate between piles\n"
+    "- Enter to select/place cards\n"
+    "- 'F' to auto-finish the game\n\n"
+    "STRATEGY TIPS:\n"
+    "1. Create empty columns early in the game\n"
+    "2. Move Aces and low cards to foundations when safe\n"
+    "3. Avoid blocking higher cards with same-color cards\n"
+    "4. Use free cells sparingly\n"
+    "5. Plan moves carefully - sometimes delay moving to foundations\n\n"
+    "WINNING THE GAME:\n"
+    "- Classic FreeCell: Move all 52 cards to foundations\n"
+    "- Double FreeCell: Move all 104 cards to foundations";
                     
                     gtk_label_set_markup(GTK_LABEL(label), markup);
                     gtk_container_add(GTK_CONTAINER(content_area), label);
@@ -848,7 +947,7 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   gtk_container_add(GTK_CONTAINER(content_area), version_label);
   gtk_widget_set_margin_bottom(version_label, 12);
 
-  // Add game instructions in a scrolled window
+  // Add program information in a scrolled window
   GtkWidget *instructions_text = gtk_text_view_new();
   gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(instructions_text), GTK_WRAP_WORD);
   gtk_text_view_set_editable(GTK_TEXT_VIEW(instructions_text), FALSE);
@@ -856,41 +955,30 @@ void FreecellGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   gtk_text_view_set_left_margin(GTK_TEXT_VIEW(instructions_text), 12);
   gtk_text_view_set_right_margin(GTK_TEXT_VIEW(instructions_text), 12);
 
-  const char *instructions =
-      "How to Play Freecell:\n\n"
-      "Objective:\n"
-      "Build four foundation piles in ascending order by suit (A-K).\n\n"
-      "Game Setup:\n"
-      "- 52 cards are dealt face up to eight tableau columns\n"
-      "- Four free cells are available for temporary card storage\n"
-      "- Four foundation piles need to be built in ascending order by suit\n\n"
-      "Rules:\n"
-      "1. Only one card can be moved at a time unless empty columns are available\n"
-      "2. In the tableau, cards must be placed in descending order with alternating colors\n"
-      "3. Free cells can hold only one card each\n"
-      "4. Foundation piles are built up by suit from Ace to King\n"
-      "5. Empty tableau columns can be filled with any card\n\n"
-      "Controls:\n"
-      "- Left-click and drag to move cards\n"
-      "- Right-click to automatically move cards to foundation piles when possible\n\n"
-      "Keyboard Controls:\n"
-      "- Arrow keys (←, →, ↑, ↓) to navigate between piles and cards\n"
-      "- Enter to select a card or perform a move\n"
-      "- F11 to toggle fullscreen mode\n"
-      "- Ctrl+N for a new game\n"
-      "- Ctrl+Q to quit\n"
-      "- Ctrl+H for help\n\n"
-      "Strategy:\n"
-      "- Try to empty columns when possible to create more space for maneuvering\n"
-      "- Plan ahead to uncover cards in a specific order\n"
-      "- Use free cells wisely as a temporary storage\n\n"
-      "Written by Jason Hall\n"
+  const char *about_text =
+      "Freecell Solitaire\n\n"
+      "A classic card game that combines strategy, patience, and skill. "
+      "This implementation provides both Classic and Double FreeCell modes, "
+      "offering players a challenging and engaging solitaire experience.\n\n"
+      "Features:\n"
+      "- Classic and Double FreeCell game modes\n"
+      "- Customizable card decks\n"
+      "- Smooth, animated card movements\n"
+      "- Keyboard and mouse support\n"
+      "- Sound effects\n\n"
+      "Developed as an open-source project to provide an enjoyable "
+      "and accessible solitaire gaming experience.\n\n"
+      "Software Design:\n"
+      "- C++ Programming\n"
+      "- GTK+ GUI Framework\n"
+      "- Cairo Graphics Library\n\n"
+      "Created with passion for game development and software craftsmanship.\n\n"
       "Licensed under the MIT License\n"
+      "Copyright © 2025 Jason Hall\n"
       "https://github.com/jasonbrianhall/solitaire";
 
-
   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
-  gtk_text_buffer_set_text(buffer, instructions, -1);
+  gtk_text_buffer_set_text(buffer, about_text, -1);
 
   GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
@@ -1108,81 +1196,221 @@ void FreecellGame::setupEasyGame() {
   foundation_.clear();
   tableau_.clear();
 
-  // Initialize freecells (4 empty cells)
-  freecells_.resize(4);
+  // Determine the number of freecells and tableau columns based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int num_tableau = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+
+  // Initialize freecells (4 or 6 empty cells depending on mode)
+  freecells_.resize(num_freecells);
   
   // Initialize foundation piles (4 empty piles for aces)
   foundation_.resize(4);
 
-  // Initialize tableau (8 piles for Freecell)
-  tableau_.resize(8);
+  // Initialize tableau (8 or 10 piles depending on mode)
+  tableau_.resize(num_tableau);
 
-  // Create a pre-arranged deck that's easy to solve
-  // Distribute cards across all 8 columns, arranging by suit and rank
-  
-  // Hearts (K to A) in columns 0 and 1
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT});
-  tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN});
-  
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO});
-  tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE});
-  
-  // Diamonds (K to A) in columns 2 and 3
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT});
-  tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN});
-  
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO});
-  tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE});
-  
-  // Clubs (K to A) in columns 4 and 5
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT});
-  tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN});
-  
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO});
-  tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE});
-  
-  // Spades (K to A) in columns 6 and 7
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT});
-  tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN});
-  
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO});
-  tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE});
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // ==================== CLASSIC FREECELL MODE ====================
+    // Create a pre-arranged deck that's easy to solve
+    // Distribute cards across all 8 columns, arranging by suit and rank
+    
+    // Hearts (K to A) in columns 0 and 1
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN});
+    
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO});
+    tableau_[1].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE});
+    
+    // Diamonds (K to A) in columns 2 and 3
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT});
+    tableau_[2].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN});
+    
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO});
+    tableau_[3].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE});
+    
+    // Clubs (K to A) in columns 4 and 5
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT});
+    tableau_[4].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN});
+    
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO});
+    tableau_[5].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE});
+    
+    // Spades (K to A) in columns 6 and 7
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT});
+    tableau_[6].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN});
+    
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE});
+  }
+  else {
+    // ==================== DOUBLE FREECELL MODE ====================
+    // In Double FreeCell, we need to arrange 104 cards (2 complete decks)
+    // Each foundation pile will need to contain 26 cards (2 complete sequences)
+    
+    // Create the cards with "alternate art" flag to distinguish the second deck
+    bool first_deck = false;  // First deck uses regular art
+    bool second_deck = true;  // Second deck uses alternate art
+    
+    // First Deck
+    // Hearts (K to A) in column 0
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO, first_deck});
+    tableau_[0].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE, first_deck});
+    
+    // Diamonds (K to A) in column 1
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO, first_deck});
+    tableau_[1].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE, first_deck});
+    
+    // Clubs (K to A) in column 2
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO, first_deck});
+    tableau_[2].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE, first_deck});
+    
+    // Spades (K to A) in column 3
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO, first_deck});
+    tableau_[3].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE, first_deck});
+    
+    // Second Deck
+    // Hearts (K to A) in column 4
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::KING, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::QUEEN, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::JACK, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TEN, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::NINE, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::EIGHT, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SEVEN, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::SIX, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FIVE, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::FOUR, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::THREE, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::TWO, second_deck});
+    tableau_[4].push_back({cardlib::Suit::HEARTS, cardlib::Rank::ACE, second_deck});
+    
+    // Diamonds (K to A) in column 5
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::KING, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::QUEEN, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::JACK, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TEN, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::NINE, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::EIGHT, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SEVEN, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::SIX, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FIVE, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::FOUR, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::THREE, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::TWO, second_deck});
+    tableau_[5].push_back({cardlib::Suit::DIAMONDS, cardlib::Rank::ACE, second_deck});
+    
+    // Clubs (K to A) in column 6
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::KING, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::QUEEN, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::JACK, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TEN, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::NINE, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::EIGHT, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SEVEN, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::SIX, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FIVE, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::FOUR, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::THREE, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::TWO, second_deck});
+    tableau_[6].push_back({cardlib::Suit::CLUBS, cardlib::Rank::ACE, second_deck});
+    
+    // Spades (K to A) in column 7
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::KING, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::QUEEN, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::JACK, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TEN, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::NINE, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::EIGHT, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SEVEN, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::SIX, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FIVE, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::FOUR, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::THREE, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::TWO, second_deck});
+    tableau_[7].push_back({cardlib::Suit::SPADES, cardlib::Rank::ACE, second_deck});
+    
+    // We'll leave the 6 freecells empty for this easy game
+  }
   
   // Refresh the display
   refreshDisplay();
@@ -1260,8 +1488,13 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-// Check if a stack of cards can be moved to a tableau pile
 bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) {
+    // Just delegate to the const version to avoid duplicating code
+    return const_cast<const FreecellGame*>(this)->canMoveTableauStack(cards, tableau_idx);
+}
+
+// Check if a stack of cards can be moved to a tableau pile
+bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) const {
   // Tableau must be within range
   if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size()) {
     return false;
@@ -1293,7 +1526,7 @@ bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, 
   
   // For multiple cards, we need to check the Freecell formula
   
-  // Count empty free cells
+  // Count empty free cells (number depends on game mode)
   int empty_freecells = 0;
   for (const auto& cell : freecells_) {
     if (!cell.has_value()) {
@@ -1314,4 +1547,80 @@ bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, 
   int max_movable_cards = (empty_freecells + 1) * (1 << empty_tableau_columns);
   
   return cards.size() <= max_movable_cards;
+}
+
+void FreecellGame::updateLayoutForGameMode() {
+  // Clear existing piles
+  freecells_.clear();
+  foundation_.clear();
+  tableau_.clear();
+  
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Classic FreeCell: 4 freecells, 4 foundation piles, 8 tableau columns
+    freecells_.resize(4);
+    foundation_.resize(4);
+    tableau_.resize(8);
+  } else {
+    // Double FreeCell: 6 freecells, 4 foundation piles (will hold 2 sets each), 10 tableau columns
+    freecells_.resize(6);
+    foundation_.resize(4);
+    tableau_.resize(10);
+  }
+  
+  // Set minimum size based on game mode
+  if (game_area_) {
+    if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+      gtk_widget_set_size_request(
+          game_area_,
+          BASE_CARD_WIDTH * 8 + BASE_CARD_SPACING * 9, // 8 columns + spacing
+          BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 7 // 2 rows + tableau
+      );
+    } else {
+      gtk_widget_set_size_request(
+          game_area_,
+          BASE_CARD_WIDTH * 10 + BASE_CARD_SPACING * 11, // 10 columns + spacing
+          BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 10  // 2 rows + tableau
+      );
+    }
+  }
+}
+
+void FreecellGame::setGameMode(GameMode mode) {
+  if (mode == current_game_mode_) {
+    return;  // No change
+  }
+  
+  // Update mode
+  GameMode previous_mode = current_game_mode_;
+  
+  // Confirm with user before changing game in progress
+  bool start_new_game = true;
+  if (!tableau_.empty() && !tableau_[0].empty()) {
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(window_), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+        GTK_BUTTONS_YES_NO, "Changing game mode will start a new game. Continue?");
+    
+    int response = gtk_dialog_run(GTK_DIALOG(dialog));
+    start_new_game = (response == GTK_RESPONSE_YES);
+    gtk_widget_destroy(dialog);
+    
+    // If user cancelled, don't change the mode
+    if (!start_new_game) {
+      // Restore the radio button state to match the current mode
+      if (previous_mode == GameMode::CLASSIC_FREECELL) {
+        gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(classic_mode_item_), TRUE);
+      } else {
+        gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(double_mode_item_), TRUE);
+      }
+      return;  // Exit without changing mode
+    }
+  }
+  
+  // Only update the actual mode if we're proceeding with the change
+  current_game_mode_ = mode;
+  
+  if (start_new_game) {
+    // Initialize a new game with the updated mode
+    initializeGame();
+  }
 }

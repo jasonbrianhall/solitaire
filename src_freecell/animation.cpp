@@ -820,7 +820,10 @@ void FreecellGame::drawFreecells() {
   int x = current_card_spacing_;
   int y = current_card_spacing_;
   
-  for (int i = 0; i < 4; i++) {
+  // Number of freecells depends on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  
+  for (int i = 0; i < num_freecells; i++) {
     if (i < freecells_.size()) {
       // Skip drawing the source card if it's being animated to foundation
       bool is_animated = foundation_move_animation_active_ && 
@@ -857,7 +860,17 @@ void FreecellGame::drawFreecells() {
 // Draw the foundation piles (4 piles at the top-right)
 void FreecellGame::drawFoundationPiles() {
   GtkAllocation alloc = allocation;
-  int x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  
+  // Number of foundation piles is always 4, but their position depends on the game mode
+  // In Double FreeCell, we need to account for the extra freecells
+  int foundation_start_x;
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    foundation_start_x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  } else {
+    foundation_start_x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  }
+  
+  int x = foundation_start_x;
   int y = current_card_spacing_;
   
   for (int i = 0; i < 4; i++) {
@@ -889,7 +902,16 @@ void FreecellGame::drawFoundationPiles() {
 void FreecellGame::drawTableau() {
   int tableau_y = 2 * current_card_spacing_ + current_card_height_;
   
-  for (int i = 0; i < 8; i++) {
+  // Number of tableau columns depends on game mode
+  int num_tableau_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  // Determine pile indices based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int foundation_start = num_freecells;
+  int foundation_end = foundation_start + 4; // Always 4 foundation piles
+  int tableau_start = foundation_end;
+  
+  for (int i = 0; i < num_tableau_columns; i++) {
     int x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
     
     if (i < tableau_.size()) {
@@ -912,13 +934,32 @@ void FreecellGame::drawTableau() {
 // Draw a tableau column during deal animation
 void FreecellGame::drawTableauDuringDealAnimation(int column_index, int x, int tableau_y) {
   // During animation, we need to know which cards have been dealt already
-  int cards_in_this_column = (cards_dealt_ + 7 - column_index) / 8;
+  int cards_in_this_column;
   
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    cards_in_this_column = (cards_dealt_ + 7 - column_index) / 8;
+  } else {
+    // Special handling for Double FreeCell's distribution
+    if (cards_dealt_ >= 100) { // Near the end of dealing
+      cards_in_this_column = column_index < 4 ? 11 : 10;
+    } else {
+      cards_in_this_column = cards_dealt_ / 10; // Approximate cards per column
+      if (cards_in_this_column > tableau_[column_index].size()) {
+        cards_in_this_column = tableau_[column_index].size();
+      }
+    }
+  }
+  
+  // Now draw each card that's been dealt, using position to identify cards uniquely
   for (int j = 0; j < cards_in_this_column && j < tableau_[column_index].size(); j++) {
     bool is_animating = false;
+    
+    // For each card in the animation, check if it matches our current column and position
     for (const auto &anim_card : deal_cards_) {
-      if (anim_card.active && anim_card.card.suit == tableau_[column_index][j].suit &&
-          anim_card.card.rank == tableau_[column_index][j].rank) {
+      if (anim_card.active && 
+          // Use destination coordinates to identify the card uniquely
+          std::abs(anim_card.target_x - (x)) < 5 &&
+          std::abs(anim_card.target_y - (tableau_y + j * current_vert_spacing_)) < 5) {
         is_animating = true;
         break;
       }
@@ -933,21 +974,33 @@ void FreecellGame::drawTableauDuringDealAnimation(int column_index, int x, int t
 
 // Draw a normal tableau column (not during animation)
 void FreecellGame::drawNormalTableauColumn(int column_index, int x, int tableau_y) {
+  // Determine pile indices based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int foundation_start = num_freecells;
+  int foundation_end = foundation_start + 4; // Always 4 foundation piles
+  int tableau_start = foundation_end;
+  
+  // Calculate this column's pile index
+  int this_pile_index = tableau_start + column_index;
+  
   for (size_t j = 0; j < tableau_[column_index].size(); j++) {
-    // Skip dragged cards and cards being animated to foundation
+    // Skip dragged cards
+    // Check if this is the dragging source pile and this is a card being dragged
+    bool should_skip = false;
+    
+    if (dragging_ && drag_source_pile_ == this_pile_index && 
+        j >= drag_source_card_idx_) {
+      should_skip = true;
+    }
+    
+    // Skip cards being animated to foundation
     bool is_animated = foundation_move_animation_active_ && 
-                       foundation_source_pile_ == column_index + 8 &&
+                       foundation_source_pile_ == this_pile_index &&
                        j == tableau_[column_index].size() - 1 &&
                        foundation_move_card_.card.suit == tableau_[column_index][j].suit &&
                        foundation_move_card_.card.rank == tableau_[column_index][j].rank;
                        
-    if (dragging_ && drag_source_pile_ >= 8 && 
-        drag_source_pile_ - 8 == column_index && 
-        j >= drag_source_card_idx_) {
-      continue;  // Skip the card being dragged
-    }
-    
-    if (!is_animated) {
+    if (!should_skip && !is_animated) {
       int card_y = tableau_y + j * current_vert_spacing_;
       drawCard(buffer_cr_, x, card_y, &tableau_[column_index][j]);
     }
