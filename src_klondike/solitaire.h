@@ -8,6 +8,22 @@
 #include <unordered_map>
 #include <vector>
 
+
+
+class SolitaireGame {
+public:
+  SolitaireGame();
+  ~SolitaireGame();
+  bool setSoundsZipPath(const std::string &path);
+
+  void run(int argc, char **argv);
+
+  enum class GameMode {
+    STANDARD_KLONDIKE,  // Single deck
+    DOUBLE_KLONDIKE,    // Two decks
+    TRIPLE_KLONDIKE     // Three decks (for future expansion)
+  };
+
 enum class GameSoundEvent {
   CardFlip,
   CardPlace,
@@ -54,14 +70,6 @@ struct TableauCard {
 
   TableauCard(const cardlib::Card &c, bool up) : card(c), face_up(up) {}
 };
-
-class SolitaireGame {
-public:
-  SolitaireGame();
-  ~SolitaireGame();
-  bool setSoundsZipPath(const std::string &path);
-
-  void run(int argc, char **argv);
 
 private:
   // Game state
