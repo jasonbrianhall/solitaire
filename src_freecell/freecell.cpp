@@ -1593,7 +1593,7 @@ void FreecellGame::setGameMode(GameMode mode) {
   }
   
   // Update mode
-  current_game_mode_ = mode;
+  GameMode previous_mode = current_game_mode_;
   
   // Confirm with user before changing game in progress
   bool start_new_game = true;
@@ -1605,19 +1605,24 @@ void FreecellGame::setGameMode(GameMode mode) {
     int response = gtk_dialog_run(GTK_DIALOG(dialog));
     start_new_game = (response == GTK_RESPONSE_YES);
     gtk_widget_destroy(dialog);
+    
+    // If user cancelled, don't change the mode
+    if (!start_new_game) {
+      // Restore the radio button state to match the current mode
+      if (previous_mode == GameMode::CLASSIC_FREECELL) {
+        gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(classic_mode_item_), TRUE);
+      } else {
+        gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(double_mode_item_), TRUE);
+      }
+      return;  // Exit without changing mode
+    }
   }
+  
+  // Only update the actual mode if we're proceeding with the change
+  current_game_mode_ = mode;
   
   if (start_new_game) {
     // Initialize a new game with the updated mode
     initializeGame();
-  } else {
-    // If user cancelled, revert the radio button state
-    if (mode == GameMode::CLASSIC_FREECELL) {
-      gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(double_mode_item_), TRUE);
-      current_game_mode_ = GameMode::DOUBLE_FREECELL;
-    } else {
-      gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(classic_mode_item_), TRUE);
-      current_game_mode_ = GameMode::CLASSIC_FREECELL;
-    }
   }
 }
