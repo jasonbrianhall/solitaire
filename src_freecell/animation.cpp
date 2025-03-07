@@ -905,6 +905,12 @@ void FreecellGame::drawTableau() {
   // Number of tableau columns depends on game mode
   int num_tableau_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
   
+  // Determine pile indices based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int foundation_start = num_freecells;
+  int foundation_end = foundation_start + 4; // Always 4 foundation piles
+  int tableau_start = foundation_end;
+  
   for (int i = 0; i < num_tableau_columns; i++) {
     int x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
     
@@ -968,21 +974,33 @@ void FreecellGame::drawTableauDuringDealAnimation(int column_index, int x, int t
 
 // Draw a normal tableau column (not during animation)
 void FreecellGame::drawNormalTableauColumn(int column_index, int x, int tableau_y) {
+  // Determine pile indices based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int foundation_start = num_freecells;
+  int foundation_end = foundation_start + 4; // Always 4 foundation piles
+  int tableau_start = foundation_end;
+  
+  // Calculate this column's pile index
+  int this_pile_index = tableau_start + column_index;
+  
   for (size_t j = 0; j < tableau_[column_index].size(); j++) {
-    // Skip dragged cards and cards being animated to foundation
+    // Skip dragged cards
+    // Check if this is the dragging source pile and this is a card being dragged
+    bool should_skip = false;
+    
+    if (dragging_ && drag_source_pile_ == this_pile_index && 
+        j >= drag_source_card_idx_) {
+      should_skip = true;
+    }
+    
+    // Skip cards being animated to foundation
     bool is_animated = foundation_move_animation_active_ && 
-                       foundation_source_pile_ == column_index + 8 &&
+                       foundation_source_pile_ == this_pile_index &&
                        j == tableau_[column_index].size() - 1 &&
                        foundation_move_card_.card.suit == tableau_[column_index][j].suit &&
                        foundation_move_card_.card.rank == tableau_[column_index][j].rank;
                        
-    if (dragging_ && drag_source_pile_ >= 8 && 
-        drag_source_pile_ - 8 == column_index && 
-        j >= drag_source_card_idx_) {
-      continue;  // Skip the card being dragged
-    }
-    
-    if (!is_animated) {
+    if (!should_skip && !is_animated) {
       int card_y = tableau_y + j * current_vert_spacing_;
       drawCard(buffer_cr_, x, card_y, &tableau_[column_index][j]);
     }
