@@ -838,6 +838,28 @@ bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation
     return false;
   }
   
+  // In Double FreeCell, we want more flexibility
+  if (current_game_mode_ == GameMode::DOUBLE_FREECELL) {
+    // Empty foundation can accept an Ace
+    if (foundation_[foundation_idx].empty()) {
+      return card.rank == cardlib::Rank::ACE;
+    }
+    
+    const cardlib::Card& top_card = foundation_[foundation_idx].back();
+    
+    // If we've completed one full sequence (26 cards), wrap back to Ace
+    if (foundation_[foundation_idx].size() == 26) {
+      return false;  // Cannot add more to a completed foundation
+    }
+    
+    // Check if card matches suit and is either one rank higher 
+    // or wrapping from King back to Ace in the same suit
+    return (card.suit == top_card.suit) && 
+           (static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1 ||
+            (top_card.rank == cardlib::Rank::KING && card.rank == cardlib::Rank::ACE));
+  }
+  
+  // Classic FreeCell rules remain the same
   // Empty foundation can only accept Ace
   if (foundation_[foundation_idx].empty()) {
     return card.rank == cardlib::Rank::ACE;
@@ -845,21 +867,9 @@ bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation
   
   const cardlib::Card& top_card = foundation_[foundation_idx].back();
   
-  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
-    // Classic FreeCell: Check suit and rank (must be same suit, one rank higher)
-    return (card.suit == top_card.suit && 
-           static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
-  } else {
-    // Double FreeCell: Same rule, but watch for wrap-around after King
-    if (top_card.rank == cardlib::Rank::KING) {
-      // If top card is King, the next card must be Ace of the same suit
-      return (card.suit == top_card.suit && card.rank == cardlib::Rank::ACE);
-    } else {
-      // Otherwise, same as classic (same suit, one rank higher)
-      return (card.suit == top_card.suit && 
-             static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
-    }
-  }
+  // Must be same suit and one rank higher
+  return (card.suit == top_card.suit && 
+          static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
 }
 
 
