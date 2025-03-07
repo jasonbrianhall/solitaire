@@ -1,6 +1,9 @@
 #include "freecell.h"
 #include <gtk/gtk.h>
 
+#include "freecell.h"
+#include <gtk/gtk.h>
+
 gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, gpointer data) {
   FreecellGame *game = static_cast<FreecellGame *>(data);
 
@@ -31,7 +34,7 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
         game->drag_cards_.clear(); // Clear any previous drag sequence
         
         // Get the card being dragged
-        if (pile_index < 4) {
+        if (pile_index < game->freecells_.size()) {  // Use actual size instead of hardcoded 4
           // Dragging from freecell
           game->drag_card_ = game->freecells_[pile_index];
           // For freecell, only one card is dragged
@@ -44,9 +47,9 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
                                  pile_index * (game->current_card_width_ + game->current_card_spacing_));
           game->drag_offset_y_ = event->y - game->current_card_spacing_;
         }
-        else if (pile_index >= 4 && pile_index < 8) {
+        else if (pile_index >= game->freecells_.size() && pile_index < game->freecells_.size() + 4) {
           // Dragging from foundation - only top card
-          int foundation_idx = pile_index - 4;
+          int foundation_idx = pile_index - game->freecells_.size();
           if (!game->foundation_[foundation_idx].empty()) {
             game->drag_card_ = game->foundation_[foundation_idx].back();
             // For foundation, only one card is dragged
@@ -59,9 +62,9 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
             game->drag_offset_y_ = event->y - game->current_card_spacing_;
           }
         }
-        else if (pile_index >= 8) {
+        else if (pile_index >= game->freecells_.size() + 4) {
           // Dragging from tableau
-          int tableau_idx = pile_index - 8;
+          int tableau_idx = pile_index - (game->freecells_.size() + 4);
           if (card_index >= 0 && card_index < game->tableau_[tableau_idx].size()) {
             // Store top card for visual representation during drag
             game->drag_card_ = game->tableau_[tableau_idx][card_index];
@@ -87,10 +90,13 @@ gboolean FreecellGame::onButtonPress(GtkWidget *widget, GdkEventButton *event, g
 else if (event->button == 3) { // Right click
     auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
+    // Determine number of freecells based on game mode
+    int num_freecells = (game->current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+
     // Try to automatically move card to foundation
     if (pile_index >= 0) {
       // Source: freecell
-      if (pile_index < 4 && game->freecells_[pile_index].has_value()) {
+      if (pile_index < num_freecells && game->freecells_[pile_index].has_value()) {
         const cardlib::Card card = game->freecells_[pile_index].value();
         
         // Try to find a valid foundation
@@ -122,8 +128,8 @@ else if (event->button == 3) { // Right click
         // as the card is already in a freecell
       }
       // Source: tableau
-      else if (pile_index >= 8) {
-        int tableau_idx = pile_index - 8;
+      else if (pile_index >= num_freecells + 4) {
+        int tableau_idx = pile_index - (num_freecells + 4);
         auto &pile = game->tableau_[tableau_idx];
         
         if (!pile.empty()) {
@@ -157,7 +163,7 @@ else if (event->button == 3) { // Right click
           else {
             // If cannot move to foundation, try to move to the first available freecell
             int target_freecell = -1;
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < num_freecells; i++) {  // Use num_freecells instead of hardcoded 4
               if (!game->freecells_[i].has_value()) {
                 target_freecell = i;
                 break;
