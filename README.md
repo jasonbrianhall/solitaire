@@ -22,7 +22,9 @@ Currently includes three games
 - **Draw-One or Draw-Three Mode**: Because sometimes you want it easy, and sometimes you want it Vegas-style
 
 ### Freecell
-- **Four Free Cells**: Temporary storage spaces for strategic card movement
+
+#### Choice of Normal Freecell or Double Freecell via game menu
+- **Four to Six Free Cells**: Temporary storage spaces for strategic card movement
 - **Smart Card Movement**: Automatic calculation of how many cards can be moved based on available free cells
 - **Auto-Finish**: Let the computer complete the game when the path to victory is clear
 
