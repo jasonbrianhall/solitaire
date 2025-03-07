@@ -820,7 +820,10 @@ void FreecellGame::drawFreecells() {
   int x = current_card_spacing_;
   int y = current_card_spacing_;
   
-  for (int i = 0; i < 4; i++) {
+  // Number of freecells depends on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  
+  for (int i = 0; i < num_freecells; i++) {
     if (i < freecells_.size()) {
       // Skip drawing the source card if it's being animated to foundation
       bool is_animated = foundation_move_animation_active_ && 
@@ -857,7 +860,17 @@ void FreecellGame::drawFreecells() {
 // Draw the foundation piles (4 piles at the top-right)
 void FreecellGame::drawFoundationPiles() {
   GtkAllocation alloc = allocation;
-  int x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  
+  // Number of foundation piles is always 4, but their position depends on the game mode
+  // In Double FreeCell, we need to account for the extra freecells
+  int foundation_start_x;
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    foundation_start_x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  } else {
+    foundation_start_x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  }
+  
+  int x = foundation_start_x;
   int y = current_card_spacing_;
   
   for (int i = 0; i < 4; i++) {
@@ -889,7 +902,10 @@ void FreecellGame::drawFoundationPiles() {
 void FreecellGame::drawTableau() {
   int tableau_y = 2 * current_card_spacing_ + current_card_height_;
   
-  for (int i = 0; i < 8; i++) {
+  // Number of tableau columns depends on game mode
+  int num_tableau_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  for (int i = 0; i < num_tableau_columns; i++) {
     int x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
     
     if (i < tableau_.size()) {

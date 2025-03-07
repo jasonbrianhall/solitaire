@@ -54,8 +54,16 @@ void FreecellGame::initializeGame() {
     bool loaded = false;
     for (const auto &path : paths) {
       try {
-        deck_ = cardlib::Deck(path);
-        deck_.removeJokers();
+        if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+          // Initialize a single deck for Classic FreeCell
+          deck_ = cardlib::Deck(path);
+          deck_.removeJokers();
+        } else {
+          // Initialize a MultiDeck with 2 decks for Double FreeCell
+          multi_deck_ = cardlib::MultiDeck(2, path);
+          multi_deck_.includeJokersInAllDecks(false);
+          has_multi_deck_ = true;
+        }
         loaded = true;
         break;
       } catch (const std::exception &e) {
@@ -68,27 +76,25 @@ void FreecellGame::initializeGame() {
       throw std::runtime_error("Could not find cards.zip in any search path");
     }
 
-    deck_.shuffle(current_seed_);
+    // Shuffle with current seed
+    if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+      deck_.shuffle(current_seed_);
+    } else {
+      multi_deck_.shuffle(current_seed_);
+    }
 
-    // Clear all piles
-    freecells_.clear();
-    foundation_.clear();
-    tableau_.clear();
-
-    // Initialize freecells (4 empty cells)
-    freecells_.resize(4);
-    
-    // Initialize foundation piles (4 empty piles for aces)
-    foundation_.resize(4);
-
-    // Initialize tableau (8 piles for Freecell)
-    tableau_.resize(8);
+    // Update layout based on game mode
+    updateLayoutForGameMode();
     
     // Initialize the foundation cards tracking vector
     animated_foundation_cards_.clear();
     animated_foundation_cards_.resize(4);
     for (auto& pile : animated_foundation_cards_) {
-      pile.resize(13, false);  // Each foundation can have at most 13 cards (A to K)
+      if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+        pile.resize(13, false);  // 13 cards per foundation in classic mode
+      } else {
+        pile.resize(26, false);  // 26 cards per foundation in double mode (2 full sequences)
+      }
     }
 
     // Deal cards
@@ -107,19 +113,30 @@ void FreecellGame::deal() {
   foundation_.clear();
   tableau_.clear();
 
-  // Reset freecells and foundation
-  freecells_.resize(4);
-  foundation_.resize(4);
-  tableau_.resize(8);
+  // Reset freecells and foundation based on game mode
+  updateLayoutForGameMode();
 
-  // Deal to tableau columns (all face up)
-  // In Freecell, all 52 cards are dealt across 8 columns
-  int currentColumn = 0;
-  
-  // Deal all cards to the tableau columns
-  while (auto card = deck_.drawCard()) {
-    tableau_[currentColumn].push_back(*card);
-    currentColumn = (currentColumn + 1) % 8;  // Move to next column in round-robin fashion
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Deal to 8 tableau columns for Classic FreeCell (52 cards)
+    int currentColumn = 0;
+    
+    // Deal all cards to the tableau columns
+    while (auto card = deck_.drawCard()) {
+      tableau_[currentColumn].push_back(*card);
+      currentColumn = (currentColumn + 1) % 8;  // Cycle through 8 columns
+    }
+  } else {
+    // Deal to 10 tableau columns for Double FreeCell (104 cards)
+    // First four columns get 11 cards, remaining six get 10 cards
+    for (int i = 0; i < 104; i++) {
+      auto card = multi_deck_.drawCard();
+      if (!card.has_value()) {
+        break;  // No more cards
+      }
+      
+      int column = i % 10;  // Determine which of the 10 columns
+      tableau_[column].push_back(*card);
+    }
   }
 
   // Start the deal animation
@@ -215,12 +232,30 @@ void FreecellGame::updateDealAnimation() {
 }
 
 void FreecellGame::dealNextCard() {
-  if (cards_dealt_ >= 52) // All cards are dealt in Freecell
+  int total_cards = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 52 : 104;
+  int num_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  if (cards_dealt_ >= total_cards)
     return;
 
   // Calculate which tableau column and position this card belongs to
-  int column_index = cards_dealt_ % 8;
-  int card_index = cards_dealt_ / 8;
+  int column_index = cards_dealt_ % num_columns;
+  int card_index = cards_dealt_ / num_columns;
+  
+  // For Double FreeCell, apply special distribution (first 4 columns get 11 cards, rest get 10)
+  if (current_game_mode_ == GameMode::DOUBLE_FREECELL) {
+    // We need to adjust the card_index calculation for Double FreeCell's distribution
+    if (cards_dealt_ >= num_columns * 10) {
+      // We're dealing the extra cards to the first 4 columns
+      column_index = cards_dealt_ - (num_columns * 10);
+      if (column_index >= 4) {
+        // We've dealt all 104 cards
+        cards_dealt_++;
+        return;
+      }
+      card_index = 10; // These are the 11th cards in those columns
+    }
+  }
 
   // Make sure the tableau column exists and has enough cards
   if (column_index >= tableau_.size() || card_index >= tableau_[column_index].size()) {
@@ -513,6 +548,56 @@ void FreecellGame::setupMenuBar() {
                   }), 
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
+
+
+  GtkWidget *modeMenuItem = gtk_menu_item_new_with_mnemonic("Game _Mode");
+  GtkWidget *modeMenu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(modeMenuItem), modeMenu);
+  
+  // Create radio items for game modes
+  GSList *mode_group = NULL;
+  classic_mode_item_ = gtk_radio_menu_item_new_with_label(mode_group, "Classic FreeCell");
+  mode_group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(classic_mode_item_));
+  double_mode_item_ = gtk_radio_menu_item_new_with_label(mode_group, "Double FreeCell");
+  
+  // Set initial state
+  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(classic_mode_item_), 
+      current_game_mode_ == GameMode::CLASSIC_FREECELL);
+  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(double_mode_item_), 
+      current_game_mode_ == GameMode::DOUBLE_FREECELL);
+  
+  // Connect signals
+  g_signal_connect(G_OBJECT(classic_mode_item_), "toggled",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    FreecellGame *game = static_cast<FreecellGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      game->setGameMode(GameMode::CLASSIC_FREECELL);
+                    }
+                  }),
+                  this);
+  
+  g_signal_connect(G_OBJECT(double_mode_item_), "toggled",
+                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+                    FreecellGame *game = static_cast<FreecellGame *>(data);
+                    if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+                      game->setGameMode(GameMode::DOUBLE_FREECELL);
+                    }
+                  }),
+                  this);
+  
+  // Add radio items to the mode menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(modeMenu), classic_mode_item_);
+  gtk_menu_shell_append(GTK_MENU_SHELL(modeMenu), double_mode_item_);
+  
+  // Add mode menu to game menu
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), modeMenuItem);
+
+  // Add separator after mode menu
+  GtkWidget *sep_mode = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep_mode);
+
+
+
 
   // Separator before quit
   GtkWidget *sep3 = gtk_separator_menu_item_new();
@@ -1260,8 +1345,13 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-// Check if a stack of cards can be moved to a tableau pile
 bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) {
+    // Just delegate to the const version to avoid duplicating code
+    return const_cast<const FreecellGame*>(this)->canMoveTableauStack(cards, tableau_idx);
+}
+
+// Check if a stack of cards can be moved to a tableau pile
+bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, int tableau_idx) const {
   // Tableau must be within range
   if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size()) {
     return false;
@@ -1293,7 +1383,7 @@ bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, 
   
   // For multiple cards, we need to check the Freecell formula
   
-  // Count empty free cells
+  // Count empty free cells (number depends on game mode)
   int empty_freecells = 0;
   for (const auto& cell : freecells_) {
     if (!cell.has_value()) {
@@ -1314,4 +1404,75 @@ bool FreecellGame::canMoveTableauStack(const std::vector<cardlib::Card>& cards, 
   int max_movable_cards = (empty_freecells + 1) * (1 << empty_tableau_columns);
   
   return cards.size() <= max_movable_cards;
+}
+
+void FreecellGame::updateLayoutForGameMode() {
+  // Clear existing piles
+  freecells_.clear();
+  foundation_.clear();
+  tableau_.clear();
+  
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Classic FreeCell: 4 freecells, 4 foundation piles, 8 tableau columns
+    freecells_.resize(4);
+    foundation_.resize(4);
+    tableau_.resize(8);
+  } else {
+    // Double FreeCell: 6 freecells, 4 foundation piles (will hold 2 sets each), 10 tableau columns
+    freecells_.resize(6);
+    foundation_.resize(4);
+    tableau_.resize(10);
+  }
+  
+  // Set minimum size based on game mode
+  if (game_area_) {
+    if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+      gtk_widget_set_size_request(
+          game_area_,
+          BASE_CARD_WIDTH * 8 + BASE_CARD_SPACING * 9, // 8 columns + spacing
+          BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 7 // 2 rows + tableau
+      );
+    } else {
+      gtk_widget_set_size_request(
+          game_area_,
+          BASE_CARD_WIDTH * 10 + BASE_CARD_SPACING * 11, // 10 columns + spacing
+          BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 10  // 2 rows + tableau
+      );
+    }
+  }
+}
+
+void FreecellGame::setGameMode(GameMode mode) {
+  if (mode == current_game_mode_) {
+    return;  // No change
+  }
+  
+  // Update mode
+  current_game_mode_ = mode;
+  
+  // Confirm with user before changing game in progress
+  bool start_new_game = true;
+  if (!tableau_.empty() && !tableau_[0].empty()) {
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(window_), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+        GTK_BUTTONS_YES_NO, "Changing game mode will start a new game. Continue?");
+    
+    int response = gtk_dialog_run(GTK_DIALOG(dialog));
+    start_new_game = (response == GTK_RESPONSE_YES);
+    gtk_widget_destroy(dialog);
+  }
+  
+  if (start_new_game) {
+    // Initialize a new game with the updated mode
+    initializeGame();
+  } else {
+    // If user cancelled, revert the radio button state
+    if (mode == GameMode::CLASSIC_FREECELL) {
+      gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(double_mode_item_), TRUE);
+      current_game_mode_ = GameMode::DOUBLE_FREECELL;
+    } else {
+      gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(classic_mode_item_), TRUE);
+      current_game_mode_ = GameMode::CLASSIC_FREECELL;
+    }
+  }
 }

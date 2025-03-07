@@ -266,6 +266,16 @@ int FreecellGame::findFirstPlayableCard(int tableau_idx) {
 
 // Select the next (right) pile
 void FreecellGame::selectNextPile() {
+  // Determine max pile index based on game mode
+  int max_pile_index;
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Classic: 4 freecells + 4 foundations + 8 tableau = 16 piles (0-15)
+    max_pile_index = 15;
+  } else {
+    // Double: 6 freecells + 4 foundations + 10 tableau = 20 piles (0-19)
+    max_pile_index = 19;
+  }
+  
   if (selected_pile_ == -1) {
     // Start with freecell (index 0)
     selected_pile_ = 0;
@@ -274,24 +284,25 @@ void FreecellGame::selectNextPile() {
     // Move to the next pile
     selected_pile_++;
 
-    // Wrap around if we're past the last tableau pile (index 15)
-    // In Freecell: 0-3 are freecells, 4-7 are foundation, 8-15 are tableau
-    if (selected_pile_ > 15) {
+    // Wrap around if we're past the last tableau pile
+    if (selected_pile_ > max_pile_index) {
       selected_pile_ = 0;
     }
 
     // Set card index based on the selected pile
-    if (selected_pile_ >= 0 && selected_pile_ <= 3) {
+    int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+    
+    if (selected_pile_ >= 0 && selected_pile_ < num_freecells) {
       // Freecells - only one card possible
       selected_card_idx_ = 0;
-    } else if (selected_pile_ >= 4 && selected_pile_ <= 7) {
+    } else if (selected_pile_ >= num_freecells && selected_pile_ < num_freecells + 4) {
       // Foundation piles - select top card
-      int foundation_idx = selected_pile_ - 4;
+      int foundation_idx = selected_pile_ - num_freecells;
       selected_card_idx_ = foundation_[foundation_idx].empty() ? 
                           -1 : foundation_[foundation_idx].size() - 1;
-    } else if (selected_pile_ >= 8 && selected_pile_ <= 15) {
+    } else {
       // Tableau piles - select bottom (visible) card
-      int tableau_idx = selected_pile_ - 8;
+      int tableau_idx = selected_pile_ - (num_freecells + 4);
       selected_card_idx_ = tableau_[tableau_idx].empty() ? 
                           -1 : tableau_[tableau_idx].size() - 1;
     }
@@ -302,31 +313,45 @@ void FreecellGame::selectNextPile() {
 
 // Select the previous (left) pile
 void FreecellGame::selectPreviousPile() {
+  // Determine max pile index based on game mode
+  int max_pile_index;
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int num_tableau = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Classic: 4 freecells + 4 foundations + 8 tableau = 16 piles (0-15)
+    max_pile_index = 15;
+  } else {
+    // Double: 6 freecells + 4 foundations + 10 tableau = 20 piles (0-19)
+    max_pile_index = 19;
+  }
+  
   if (selected_pile_ == -1) {
-    // Start with the last tableau pile (index 15)
-    selected_pile_ = 15;
-    selected_card_idx_ = tableau_[7].empty() ? -1 : tableau_[7].size() - 1;
+    // Start with the last tableau pile
+    selected_pile_ = max_pile_index;
+    int last_tableau_idx = num_tableau - 1;
+    selected_card_idx_ = tableau_[last_tableau_idx].empty() ? -1 : tableau_[last_tableau_idx].size() - 1;
   } else {
     // Move to the previous pile
     selected_pile_--;
 
     // Wrap around if we're before the first freecell (index 0)
     if (selected_pile_ < 0) {
-      selected_pile_ = 15;
+      selected_pile_ = max_pile_index;
     }
 
     // Set card index based on the selected pile
-    if (selected_pile_ >= 0 && selected_pile_ <= 3) {
+    if (selected_pile_ >= 0 && selected_pile_ < num_freecells) {
       // Freecells - only one card possible
       selected_card_idx_ = 0;
-    } else if (selected_pile_ >= 4 && selected_pile_ <= 7) {
+    } else if (selected_pile_ >= num_freecells && selected_pile_ < num_freecells + 4) {
       // Foundation piles - select top card
-      int foundation_idx = selected_pile_ - 4;
+      int foundation_idx = selected_pile_ - num_freecells;
       selected_card_idx_ = foundation_[foundation_idx].empty() ? 
                           -1 : foundation_[foundation_idx].size() - 1;
-    } else if (selected_pile_ >= 8 && selected_pile_ <= 15) {
+    } else {
       // Tableau piles - select bottom (visible) card
-      int tableau_idx = selected_pile_ - 8;
+      int tableau_idx = selected_pile_ - (num_freecells + 4);
       selected_card_idx_ = tableau_[tableau_idx].empty() ? 
                           -1 : tableau_[tableau_idx].size() - 1;
     }
@@ -334,6 +359,7 @@ void FreecellGame::selectPreviousPile() {
 
   refreshDisplay();
 }
+
 
 // Move selection up in a tableau pile
 void FreecellGame::selectCardUp() {
@@ -733,7 +759,7 @@ bool FreecellGame::tryMoveFromTableau() {
 // Check if a card can be moved to a foundation pile
 bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation_idx) {
   // Foundation must be within range
-  if (foundation_idx < 0 || foundation_idx >= foundation_.size()) {
+  if (foundation_idx < 0 || static_cast<size_t>(foundation_idx) >= foundation_.size()) {
     return false;
   }
   
@@ -742,11 +768,25 @@ bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation
     return card.rank == cardlib::Rank::ACE;
   }
   
-  // Non-empty foundation - check suit and rank
   const cardlib::Card& top_card = foundation_[foundation_idx].back();
-  return (card.suit == top_card.suit && 
-         static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
+  
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Classic FreeCell: Check suit and rank (must be same suit, one rank higher)
+    return (card.suit == top_card.suit && 
+           static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
+  } else {
+    // Double FreeCell: Same rule, but watch for wrap-around after King
+    if (top_card.rank == cardlib::Rank::KING) {
+      // If top card is King, the next card must be Ace of the same suit
+      return (card.suit == top_card.suit && card.rank == cardlib::Rank::ACE);
+    } else {
+      // Otherwise, same as classic (same suit, one rank higher)
+      return (card.suit == top_card.suit && 
+             static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
+    }
+  }
 }
+
 
 // Check if a card can be moved to a tableau pile
 bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) {

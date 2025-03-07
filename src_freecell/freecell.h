@@ -19,6 +19,11 @@ enum class GameSoundEvent {
   CardDeal
 };
 
+  enum class GameMode {
+    CLASSIC_FREECELL,
+    DOUBLE_FREECELL
+  };
+
 // Reusing CardFragment struct
 struct CardFragment {
   double x;
@@ -62,6 +67,9 @@ public:
   void run(int argc, char **argv);
 
 private:
+
+  cardlib::MultiDeck multi_deck_ = cardlib::MultiDeck(1);
+  bool has_multi_deck_ = false;
 
   bool auto_finish_active_ = false;
   guint auto_finish_timer_id_ = 0;
@@ -222,7 +230,7 @@ private:
   bool isCardPlayable();
   
   std::pair<int, int> getPileAt(int x, int y) const;
-  
+
   // Card movement helpers
   bool tryMoveFromFreecell();
   bool tryMoveFromFoundation();
@@ -278,6 +286,14 @@ private:
   void drawDraggedCards();
   void drawAnimations();
   void drawWinAnimation();
+
+  GameMode current_game_mode_ = GameMode::CLASSIC_FREECELL;
+  void setGameMode(GameMode mode);
+  void updateLayoutForGameMode();
+  
+  // Menu radio item for game modes
+  GtkWidget *classic_mode_item_ = nullptr;
+  GtkWidget *double_mode_item_ = nullptr;
 
   // For drawing allocation
   GtkAllocation allocation;

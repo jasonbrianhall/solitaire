@@ -328,47 +328,64 @@ gboolean FreecellGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
   return TRUE;
 }
 
+// Corrected to return std::pair<int, int> instead of void
 std::pair<int, int> FreecellGame::getPileAt(int x, int y) const {
   // Get widget dimensions
   GtkAllocation allocation;
   gtk_widget_get_allocation(game_area_, &allocation);
   
-  // Check freecells (0-3)
+  // Determine number of freecells based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  
+  // Check freecells
   int freecell_y = current_card_spacing_;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < num_freecells; i++) {
     int pile_x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
     if (x >= pile_x && x <= pile_x + current_card_width_ &&
         y >= freecell_y && y <= freecell_y + current_card_height_) {
-      return {i, 0}; // Freecell piles are index 0-3
+      return {i, 0}; // Freecell piles are index 0-(num_freecells-1)
     }
   }
   
+  // Foundation piles are always 4, but positioned differently
+  int foundation_start_x;
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    foundation_start_x = allocation.width - 4 * (current_card_width_ + current_card_spacing_);
+  } else {
+    foundation_start_x = allocation.width - 4 * (current_card_width_ + current_card_spacing_);
+  }
+  
   // Check foundation piles (4-7)
-  int foundation_x = allocation.width - 4 * (current_card_width_ + current_card_spacing_);
+  int foundation_x = foundation_start_x;
   for (int i = 0; i < 4; i++) {
     if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
         y >= freecell_y && y <= freecell_y + current_card_height_) {
-      return {4 + i, foundation_[i].empty() ? -1 : static_cast<int>(foundation_[i].size() - 1)};
+      return {num_freecells + i, foundation_[i].empty() ? -1 : static_cast<int>(foundation_[i].size() - 1)};
     }
     foundation_x += current_card_width_ + current_card_spacing_;
   }
   
-  // Check tableau piles (8-15)
+  // Number of tableau columns depends on game mode
+  int num_tableau_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  // Check tableau piles (starts after foundations)
+  int tableau_start_idx = num_freecells + 4; // After freecells and foundations
   int tableau_y = 2 * current_card_spacing_ + current_card_height_;
-  for (int i = 0; i < 8; i++) {
+  
+  for (int i = 0; i < num_tableau_columns; i++) {
     int pile_x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
     if (x >= pile_x && x <= pile_x + current_card_width_) {
       const auto &pile = tableau_[i];
       
       if (pile.empty() && y >= tableau_y && y <= tableau_y + current_card_height_) {
-        return {8 + i, -1}; // Empty tableau pile
+        return {tableau_start_idx + i, -1}; // Empty tableau pile
       }
       
       // Check each card from bottom to top (later cards overlay earlier ones)
       for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
         int card_y = tableau_y + j * current_vert_spacing_;
         if (y >= card_y && y <= card_y + current_card_height_) {
-          return {8 + i, j};
+          return {tableau_start_idx + i, j};
         }
       }
     }
@@ -410,10 +427,19 @@ bool FreecellGame::isValidDragSource(int pile_index, int card_index) const {
 }
 
 bool FreecellGame::checkWinCondition() const {
-  // Check if all foundation piles have 13 cards
-  for (const auto &pile : foundation_) {
-    if (pile.size() != 13) {
-      return false;
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    // Classic FreeCell: Each foundation pile should have 13 cards (A-K)
+    for (const auto &pile : foundation_) {
+      if (pile.size() != 13) {
+        return false;
+      }
+    }
+  } else {
+    // Double FreeCell: Each foundation pile should have 26 cards (two sets of A-K)
+    for (const auto &pile : foundation_) {
+      if (pile.size() != 26) {
+        return false;
+      }
     }
   }
   
@@ -432,6 +458,7 @@ bool FreecellGame::checkWinCondition() const {
   
   return true;
 }
+
 
 // Tableau movement validation functions
 bool FreecellGame::isValidTableauSequence(const std::vector<cardlib::Card>& cards) const {
@@ -460,44 +487,6 @@ bool FreecellGame::isValidTableauSequence(const std::vector<cardlib::Card>& card
 
 bool FreecellGame::isCardRed(const cardlib::Card& card) const {
   return card.suit == cardlib::Suit::HEARTS || card.suit == cardlib::Suit::DIAMONDS;
-}
-
-bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation_idx) const {
-  // Foundation must be within range
-  if (foundation_idx < 0 || static_cast<size_t>(foundation_idx) >= foundation_.size()) {
-    return false;
-  }
-  
-  // Empty foundation can only accept Ace
-  if (foundation_[foundation_idx].empty()) {
-    return card.rank == cardlib::Rank::ACE;
-  }
-  
-  // Non-empty foundation - check suit and rank
-  const cardlib::Card& top_card = foundation_[foundation_idx].back();
-  return (card.suit == top_card.suit && 
-         static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1);
-}
-
-bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) const {
-  // Tableau must be within range
-  if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size()) {
-    return false;
-  }
-  
-  // Empty tableau can accept any card
-  if (tableau_[tableau_idx].empty()) {
-    return true;
-  }
-  
-  // Non-empty tableau - check color and rank
-  const cardlib::Card& top_card = tableau_[tableau_idx].back();
-  
-  // Cards must be in alternating colors and descending rank
-  bool different_colors = isCardRed(card) != isCardRed(top_card);
-  bool descending_rank = static_cast<int>(card.rank) + 1 == static_cast<int>(top_card.rank);
-  
-  return different_colors && descending_rank;
 }
 
 gboolean FreecellGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
