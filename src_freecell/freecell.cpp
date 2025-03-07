@@ -279,6 +279,11 @@ void FreecellGame::dealNextCard() {
   anim_card.y = start_y;
   anim_card.target_x = target_x;
   anim_card.target_y = target_y;
+  
+  // Add a unique identifier to help distinguish duplicate cards
+  anim_card.source_pile = column_index;  // Store the column index
+  anim_card.face_up = (card_index == card_index);  // Just a hack to store card_index (always true)
+  
   anim_card.velocity_x = 0;
   anim_card.velocity_y = 0;
   anim_card.rotation = (rand() % 628) / 100.0 - 3.14; // Random initial rotation

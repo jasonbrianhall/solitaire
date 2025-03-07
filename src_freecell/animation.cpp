@@ -928,13 +928,32 @@ void FreecellGame::drawTableau() {
 // Draw a tableau column during deal animation
 void FreecellGame::drawTableauDuringDealAnimation(int column_index, int x, int tableau_y) {
   // During animation, we need to know which cards have been dealt already
-  int cards_in_this_column = (cards_dealt_ + 7 - column_index) / 8;
+  int cards_in_this_column;
   
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    cards_in_this_column = (cards_dealt_ + 7 - column_index) / 8;
+  } else {
+    // Special handling for Double FreeCell's distribution
+    if (cards_dealt_ >= 100) { // Near the end of dealing
+      cards_in_this_column = column_index < 4 ? 11 : 10;
+    } else {
+      cards_in_this_column = cards_dealt_ / 10; // Approximate cards per column
+      if (cards_in_this_column > tableau_[column_index].size()) {
+        cards_in_this_column = tableau_[column_index].size();
+      }
+    }
+  }
+  
+  // Now draw each card that's been dealt, using position to identify cards uniquely
   for (int j = 0; j < cards_in_this_column && j < tableau_[column_index].size(); j++) {
     bool is_animating = false;
+    
+    // For each card in the animation, check if it matches our current column and position
     for (const auto &anim_card : deal_cards_) {
-      if (anim_card.active && anim_card.card.suit == tableau_[column_index][j].suit &&
-          anim_card.card.rank == tableau_[column_index][j].rank) {
+      if (anim_card.active && 
+          // Use destination coordinates to identify the card uniquely
+          std::abs(anim_card.target_x - (x)) < 5 &&
+          std::abs(anim_card.target_y - (tableau_y + j * current_vert_spacing_)) < 5) {
         is_animating = true;
         break;
       }
