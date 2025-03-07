@@ -314,6 +314,23 @@ private:
 void showHowToPlay();
 void showKeyboardShortcuts();
 
+// In the private: section of the SolitaireGame class in solitaire.h
+
+  // Drawing-related methods
+  void initializeOrResizeBuffer(int width, int height);
+  void drawStockPile();
+  void drawWastePile();
+  void drawFoundationPiles();
+  void drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawTableauPiles();
+  void drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y);
+  void drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y);
+  void drawAllAnimations();
+  void drawDraggedCards();
+  void drawWinAnimation();
+  void drawDealAnimation();
+
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
                           std::vector<uint8_t> &fileData);
