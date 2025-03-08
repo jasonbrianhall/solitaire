@@ -368,6 +368,7 @@ void SolitaireGame::selectCardUp() {
 
   refreshDisplay();
 }
+
 // Move selection down in a tableau pile
 void SolitaireGame::selectCardDown() {
   // If we're in the top row, move down to the corresponding tableau pile
@@ -386,7 +387,7 @@ void SolitaireGame::selectCardDown() {
     }
 
     // Check if the target_tableau is within range
-    if (target_tableau < tableau_.size()) {
+    if (target_tableau < static_cast<int>(tableau_.size())) {
       selected_pile_ = 6 + target_tableau;
       selected_card_idx_ = tableau_[target_tableau].empty()
                                ? -1
@@ -397,7 +398,7 @@ void SolitaireGame::selectCardDown() {
   else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
     int tableau_idx = selected_pile_ - 6;
     if (!tableau_[tableau_idx].empty() && selected_card_idx_ >= 0) {
-      if (static_cast<size_t>(selected_card_idx_) <
+      if (static_cast<size_t>(selected_card_idx_) < 
           tableau_[tableau_idx].size() - 1) {
         selected_card_idx_++;
       }

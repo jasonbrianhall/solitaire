@@ -974,7 +974,7 @@ GtkWidget *gameModeMenu = gtk_menu_new();
 gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
 
 // Standard Klondike option (1 deck)
-GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "_Standard (1 Deck)");
+GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "Standard Klondike");
 GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
 g_signal_connect(
     G_OBJECT(standardItem), "activate",
@@ -987,7 +987,7 @@ g_signal_connect(
 gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
 
 // Double Klondike option (2 decks)
-GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "_Double (2 Decks)");
+GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Double Klondike");
 g_signal_connect(
     G_OBJECT(doubleItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
@@ -999,7 +999,7 @@ g_signal_connect(
 gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
 
 // Triple Klondike option (3 decks)
-GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "_Triple (3 Decks)");
+GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Tripe Klondike");
 g_signal_connect(
     G_OBJECT(tripleItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
