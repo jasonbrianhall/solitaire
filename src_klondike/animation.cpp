@@ -594,13 +594,20 @@ void SolitaireGame::drawTableauDuringDealAnimation(size_t pile_index, const std:
       std::max(0, cards_dealt_ - total_cards_before_this_pile));
 
   for (int j = 0; j < cards_to_draw; j++) {
-    // Skip drawing the card if it's currently animating
+    // Skip drawing the card if it's currently being animated to this exact position
     bool is_animating = false;
     for (const auto &anim_card : deal_cards_) {
-      if (anim_card.active && anim_card.card.suit == pile[j].card.suit &&
-          anim_card.card.rank == pile[j].card.rank) {
-        is_animating = true;
-        break;
+      if (anim_card.active) {
+        // Calculate the target pile and position from the animation's target coordinates
+        int target_pile_index = std::round((anim_card.target_x - current_card_spacing_) / 
+                                          (current_card_width_ + current_card_spacing_));
+        int target_card_index = std::round((anim_card.target_y - base_y) / current_vert_spacing_);
+        
+        // If this animation is targeting the current pile and position, don't draw the card
+        if (target_pile_index == static_cast<int>(pile_index) && target_card_index == j) {
+          is_animating = true;
+          break;
+        }
       }
     }
 
