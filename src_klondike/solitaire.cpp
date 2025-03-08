@@ -18,14 +18,17 @@ SolitaireGame::SolitaireGame()
       selected_pile_(-1), selected_card_idx_(-1),
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
+      current_game_mode_(GameMode::STANDARD_KLONDIKE),
+      multi_deck_(1), // Initialize with 1 deck
       sound_enabled_(true),           // Set sound to enabled by default
       sounds_zip_path_("sound.zip"),
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
+  initializeAudio();
+  sleep(0.1);
   current_seed_ = rand();  // Generate random seed
   initializeGame();
   initializeSettingsDir();
-  initializeAudio();
   loadSettings();
 }
 
@@ -47,48 +50,54 @@ void SolitaireGame::run(int argc, char **argv) {
 }
 
 void SolitaireGame::initializeGame() {
-  try {
-    // Try to find cards.zip in several common locations
-    const std::vector<std::string> paths = {"cards.zip"};
+  if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {
+    // Original single-deck initialization
+    try {
+      // Try to find cards.zip in several common locations
+      const std::vector<std::string> paths = {"cards.zip"};
 
-    bool loaded = false;
-    for (const auto &path : paths) {
-      try {
-        deck_ = cardlib::Deck(path);
-        deck_.removeJokers();
-        loaded = true;
-        break;
-      } catch (const std::exception &e) {
-        std::cerr << "Failed to load cards from " << path << ": " << e.what()
-                  << std::endl;
+      bool loaded = false;
+      for (const auto &path : paths) {
+        try {
+          deck_ = cardlib::Deck(path);
+          deck_.removeJokers();
+          loaded = true;
+          break;
+        } catch (const std::exception &e) {
+          std::cerr << "Failed to load cards from " << path << ": " << e.what()
+                    << std::endl;
+        }
       }
+
+      if (!loaded) {
+        throw std::runtime_error("Could not find cards.zip in any search path");
+      }
+      
+      deck_.shuffle(current_seed_);
+
+      // Clear all piles
+      stock_.clear();
+      waste_.clear();
+      foundation_.clear();
+      tableau_.clear();
+
+      // Initialize foundation piles (4 empty piles for aces)
+      foundation_.resize(4);
+
+      // Initialize tableau (7 piles)
+      tableau_.resize(7);
+
+      // Deal cards
+      deal();
+
+    } catch (const std::exception &e) {
+      std::cerr << "Fatal error during game initialization: " << e.what()
+                << std::endl;
+      exit(1);
     }
-
-    if (!loaded) {
-      throw std::runtime_error("Could not find cards.zip in any search path");
-    }
-    
-    deck_.shuffle(current_seed_);
-
-    // Clear all piles
-    stock_.clear();
-    waste_.clear();
-    foundation_.clear();
-    tableau_.clear();
-
-    // Initialize foundation piles (4 empty piles for aces)
-    foundation_.resize(4);
-
-    // Initialize tableau (7 piles)
-    tableau_.resize(7);
-
-    // Deal cards
-    deal();
-
-  } catch (const std::exception &e) {
-    std::cerr << "Fatal error during game initialization: " << e.what()
-              << std::endl;
-    exit(1);
+  } else {
+    // Multi-deck initialization
+    initializeMultiDeckGame();
   }
 }
 
@@ -102,18 +111,27 @@ bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
            static_cast<size_t>(card_index) == waste_.size() - 1;
   }
 
+  // Calculate maximum foundation index
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+
   // Can drag from foundation only top card
-  if (pile_index >= 2 && pile_index <= 5) {
+  if (pile_index >= 2 && pile_index <= max_foundation_index) {
     const auto &pile = foundation_[pile_index - 2];
     return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
   }
 
   // Can drag from tableau if cards are face up
-  if (pile_index >= 6 && pile_index <= 12) {
-    const auto &pile = tableau_[pile_index - 6];
-    return !pile.empty() && card_index >= 0 &&
-           static_cast<size_t>(card_index) < pile.size() &&
-           pile[card_index].face_up; // Make sure card is face up
+  if (pile_index >= first_tableau_index) {
+    int tableau_idx = pile_index - first_tableau_index;
+    if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
+      const auto &pile = tableau_[tableau_idx];
+      return !pile.empty() && card_index >= 0 &&
+             static_cast<size_t>(card_index) < pile.size() &&
+             pile[card_index].face_up; // Make sure card is face up
+    }
   }
 
   return false;
@@ -124,8 +142,12 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
     return stock_;
   if (pile_index == 1)
     return waste_;
-  if (pile_index >= 2 && pile_index <= 5)
+    
+  // Check foundation piles using foundation_.size() instead of hardcoded limit
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  if (pile_index >= 2 && pile_index <= max_foundation_index)
     return foundation_[pile_index - 2];
+    
   if (pile_index >= 6 && pile_index <= 12) {
     // We need to handle tableau differently or change the function signature
     throw std::runtime_error(
@@ -334,307 +356,6 @@ std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
   return cards;
 }
 
-std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
-                                                       int card_index) {
-  if (pile_index >= 6 && pile_index <= 12) {
-    // Handle tableau piles
-    const auto &tableau_pile = tableau_[pile_index - 6];
-    if (card_index >= 0 &&
-        static_cast<size_t>(card_index) < tableau_pile.size() &&
-        tableau_pile[card_index].face_up) {
-      return getTableauCardsAsCards(tableau_pile, card_index);
-    }
-    return std::vector<cardlib::Card>();
-  }
-
-  // Handle other piles using getPileReference
-  auto &pile = getPileReference(pile_index);
-  if (card_index >= 0 && static_cast<size_t>(card_index) < pile.size()) {
-    return std::vector<cardlib::Card>(pile.begin() + card_index, pile.end());
-  }
-  return std::vector<cardlib::Card>();
-}
-
-gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
-                                      gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
-
-  game->keyboard_navigation_active_ = false;
-  game->keyboard_selection_active_ = false;
-
-if (game->win_animation_active_) {
-  game->stopWinAnimation();
-  return TRUE;
-}
-
-  // If any animation is active, block all interactions
-  if (game->foundation_move_animation_active_ ||
-      game->stock_to_waste_animation_active_) {
-    return TRUE;
-  }
-
-  if (event->button == 1) { // Left click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-    if (pile_index == 0) { // Stock pile
-      game->handleStockPileClick();
-      return TRUE;
-    }
-
-    if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
-      game->dragging_ = true;
-      game->drag_source_pile_ = pile_index;
-      game->drag_start_x_ = event->x;
-      game->drag_start_y_ = event->y;
-      game->drag_cards_ = game->getDragCards(pile_index, card_index);
-      game->playSound(GameSoundEvent::CardFlip);
-      // Calculate offsets
-      int x_offset_multiplier;
-      if (pile_index >= 6) {
-        x_offset_multiplier = pile_index - 6;
-      } else if (pile_index >= 2 && pile_index <= 5) {
-        x_offset_multiplier = pile_index + 1;
-      } else if (pile_index == 1) {
-        x_offset_multiplier = 1;
-      } else {
-        x_offset_multiplier = 0;
-      }
-
-      game->drag_offset_x_ =
-          event->x - (game->current_card_spacing_ +
-                      x_offset_multiplier * (game->current_card_width_ +
-                                             game->current_card_spacing_));
-
-      if (pile_index >= 6) {
-        game->drag_offset_y_ =
-            event->y -
-            (game->current_card_spacing_ + game->current_card_height_ +
-             game->current_vert_spacing_ +
-             card_index * game->current_vert_spacing_);
-      } else {
-        game->drag_offset_y_ = event->y - game->current_card_spacing_;
-      }
-    }
-  } else if (event->button == 3) { // Right click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-    // Try to move card to foundation
-    if (pile_index >= 0) {
-      const cardlib::Card *card = nullptr;
-      int target_foundation = -1;
-
-      // Get the card based on pile type
-      if (pile_index == 1 && !game->waste_.empty()) {
-        card = &game->waste_.back();
-        // Find which foundation to move to
-        for (int i = 0; i < game->foundation_.size(); i++) {
-          if (game->canMoveToFoundation(*card, i)) {
-            target_foundation = i;
-            break;
-          }
-        }
-
-        if (target_foundation >= 0) {
-          // Start animation
-          game->startFoundationMoveAnimation(*card, pile_index, 0,
-                                             target_foundation + 2);
-          game->playSound(GameSoundEvent::CardPlace);
-          // Remove card from waste pile
-          game->waste_.pop_back();
-
-          // The card will be added to the foundation in
-          // updateFoundationMoveAnimation when animation completes
-          return TRUE;
-        }
-      } else if (pile_index >= 6 && pile_index <= 12) {
-        auto &tableau_pile = game->tableau_[pile_index - 6];
-        if (!tableau_pile.empty() && tableau_pile.back().face_up) {
-          card = &tableau_pile.back().card;
-
-          // Find which foundation to move to
-          for (int i = 0; i < game->foundation_.size(); i++) {
-            if (game->canMoveToFoundation(*card, i)) {
-              target_foundation = i;
-              break;
-            }
-          }
-
-          if (target_foundation >= 0) {
-            // Start animation
-            game->startFoundationMoveAnimation(*card, pile_index,
-                                               tableau_pile.size() - 1,
-                                               target_foundation + 2);
-            game->playSound(GameSoundEvent::CardPlace);
-
-            // Remove card from tableau
-            tableau_pile.pop_back();
-
-            // Flip new top card if needed
-            if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
-              tableau_pile.back().face_up = true;
-            }
-
-            // The card will be added to the foundation in
-            // updateFoundationMoveAnimation when animation completes
-            return TRUE;
-          }
-        }
-      }
-    }
-
-    return TRUE;
-  }
-
-  return TRUE;
-}
-
-gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
-                                        GdkEventButton *event, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
-  game->keyboard_navigation_active_ = false;
-
-  if (event->button == 1 && game->dragging_) {
-    auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
-
-    if (target_pile >= 0) {
-      bool move_successful = false;
-
-      // Handle dropping on foundation piles (index 2-5)
-      if (target_pile >= 2 && target_pile <= 5) {
-        auto &foundation_pile = game->foundation_[target_pile - 2];
-        if (game->canMoveToPile(game->drag_cards_, foundation_pile, true)) {
-          // Remove card from source
-          if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-            auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
-            source_tableau.pop_back();
-
-            // Flip over the new top card if there is one
-            if (!source_tableau.empty() && !source_tableau.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
-              source_tableau.back().face_up = true;
-            }
-          } else {
-            auto &source = game->getPileReference(game->drag_source_pile_);
-            source.pop_back();
-          }
-
-          // Add to foundation
-          foundation_pile.push_back(game->drag_cards_[0]);
-          move_successful = true;
-        }
-      }
-      // Handle dropping on tableau piles (index 6-12)
-      else if (target_pile >= 6 && target_pile <= 12) {
-        auto &tableau_pile = game->tableau_[target_pile - 6];
-        std::vector<cardlib::Card> target_cards;
-        if (!tableau_pile.empty()) {
-          target_cards = {tableau_pile.back().card};
-        }
-
-        if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
-          // Remove cards from source
-          if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-            auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
-            source_tableau.erase(source_tableau.end() -
-                                     game->drag_cards_.size(),
-                                 source_tableau.end());
-
-            // Flip over the new top card if there is one
-            if (!source_tableau.empty() && !source_tableau.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
-              source_tableau.back().face_up = true;
-            }
-          } else {
-            auto &source = game->getPileReference(game->drag_source_pile_);
-            source.erase(source.end() - game->drag_cards_.size(), source.end());
-          }
-
-          // Add cards to target tableau
-          for (const auto &card : game->drag_cards_) {
-            tableau_pile.emplace_back(card, true);
-          }
-          move_successful = true;
-          game->playSound(GameSoundEvent::CardPlace);
-        }
-      }
-
-      if (move_successful) {
-        /*if (game->checkWinCondition()) {
-          GtkWidget *dialog = gtk_message_dialog_new(
-              GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-              GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-          gtk_dialog_run(GTK_DIALOG(dialog));
-          gtk_widget_destroy(dialog);
-
-          game->initializeGame();
-        }
-        gtk_widget_queue_draw(game->game_area_);
-      }*/
-        if (game->checkWinCondition()) {
-          game->startWinAnimation(); // Start animation instead of showing
-                                     // dialog
-        }
-        gtk_widget_queue_draw(game->game_area_);
-      }
-    }
-
-    game->dragging_ = false;
-    game->drag_cards_.clear();
-    game->drag_source_pile_ = -1;
-    gtk_widget_queue_draw(game->game_area_);
-  }
-
-  return TRUE;
-}
-
-void SolitaireGame::handleStockPileClick() {
-  if (stock_.empty()) {
-    // If stock is empty, move all waste cards back to stock in reverse order
-    while (!waste_.empty()) {
-      stock_.push_back(waste_.back());
-      waste_.pop_back();
-    }
-    refreshDisplay();
-  } else {
-    // Don't start a new animation if one is already running
-    if (stock_to_waste_animation_active_) {
-      return;
-    }
-
-    // Start animation instead of immediately moving cards
-    startStockToWasteAnimation();
-  }
-}
-
-bool SolitaireGame::tryMoveToFoundation(const cardlib::Card &card) {
-  // Try each foundation pile
-  for (size_t i = 0; i < foundation_.size(); i++) {
-    std::vector<cardlib::Card> cards = {card};
-    if (canMoveToPile(cards, foundation_[i], true)) {
-      foundation_[i].push_back(card);
-      return true;
-    }
-  }
-  return false;
-}
-
-gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
-                                       gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
-
-  if (game->dragging_) {
-    game->drag_start_x_ = event->x;
-    game->drag_start_y_ = event->y;
-    gtk_widget_queue_draw(game->game_area_);
-  }
-
-  return TRUE;
-}
-
 std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
   // Check stock pile
   if (x >= current_card_spacing_ &&
@@ -652,9 +373,9 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
     return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
   }
 
-  // Check foundation piles
+  // Check foundation piles - using foundation_.size() instead of hardcoded limit
   int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < foundation_.size(); i++) {
     if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
         y >= current_card_spacing_ &&
         y <= current_card_spacing_ + current_card_height_) {
@@ -665,17 +386,20 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
     foundation_x += current_card_width_ + current_card_spacing_;
   }
 
+  // Calculate first tableau index
+  int first_tableau_index = 2 + foundation_.size();
+
   // Check tableau piles - check from top card down
   int tableau_y =
       current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < tableau_.size(); i++) {
     int pile_x = current_card_spacing_ +
                  i * (current_card_width_ + current_card_spacing_);
     if (x >= pile_x && x <= pile_x + current_card_width_) {
       const auto &pile = tableau_[i];
       if (pile.empty() && y >= tableau_y &&
           y <= tableau_y + current_card_height_) {
-        return {6 + i, -1};
+        return {first_tableau_index + i, -1};
       }
 
       // Check cards from top to bottom
@@ -683,7 +407,7 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
         int card_y = tableau_y + j * current_vert_spacing_;
         if (y >= card_y && y <= card_y + current_card_height_) {
           if (pile[j].face_up) {
-            return {6 + i, j};
+            return {first_tableau_index + i, j};
           }
           break; // Hit a face-down card, stop checking
         }
@@ -693,6 +417,7 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
 
   return {-1, -1};
 }
+
 bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                                   const std::vector<cardlib::Card> &target,
                                   bool is_foundation) const {
@@ -765,8 +490,126 @@ void SolitaireGame::moveCards(std::vector<cardlib::Card> &from,
   from.erase(from.end() - count, from.end());
 }
 
+void SolitaireGame::switchGameMode(GameMode mode) {
+  if (mode == current_game_mode_)
+    return;
+
+  if (win_animation_active_) {
+    stopWinAnimation();
+  }
+    
+  // Update the game mode
+  current_game_mode_ = mode;
+
+  // Start a new game with the selected mode
+  if (mode == GameMode::STANDARD_KLONDIKE) {
+    initializeGame(); // Use the existing single-deck initialization
+  } else {
+    initializeMultiDeckGame(); // Use the new multi-deck initialization
+  }
+  
+  // Get current window dimensions to update card scaling
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(game_area_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
+  
+  refreshDisplay();
+}
+
+void SolitaireGame::initializeMultiDeckGame() {
+  try {
+    // Determine number of decks based on mode
+    size_t num_decks = (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
+    
+    // Try to find cards.zip in several common locations
+    const std::vector<std::string> paths = {"cards.zip"};
+
+    bool loaded = false;
+    for (const auto &path : paths) {
+      try {
+        // Use MultiDeck instead of Deck
+        multi_deck_ = cardlib::MultiDeck(num_decks, path);
+        
+        // Remove jokers from all decks
+        for (size_t i = 0; i < num_decks; i++) {
+          multi_deck_.getDeck(i).removeJokers();
+        }
+        
+        loaded = true;
+        break;
+      } catch (const std::exception &e) {
+        std::cerr << "Failed to load cards from " << path << ": " << e.what()
+                  << std::endl;
+      }
+    }
+
+    if (!loaded) {
+      throw std::runtime_error("Could not find cards.zip in any search path");
+    }
+    
+    multi_deck_.shuffle(current_seed_);
+
+    // Clear all piles
+    stock_.clear();
+    waste_.clear();
+    foundation_.clear();
+    tableau_.clear();
+
+    // For multiple decks, increase the number of foundation piles
+    // Each suit appears multiple times (once per deck)
+    foundation_.resize(4 * num_decks);
+
+    // Keep tableau at 7 piles for simplicity
+    tableau_.resize(7);
+
+    // Deal cards using the multi-deck deal method
+    dealMultiDeck();
+
+  } catch (const std::exception &e) {
+    std::cerr << "Fatal error during game initialization: " << e.what()
+              << std::endl;
+    exit(1);
+  }
+}
+
+
+void SolitaireGame::dealMultiDeck() {
+  // Clear all piles first
+  stock_.clear();
+  waste_.clear();
+  
+  // Deal to tableau - i represents the pile number (0-6)
+  for (int i = 0; i < 7; i++) {
+    // For each pile i, deal i cards face down
+    for (int j = 0; j < i; j++) {
+      if (auto card = multi_deck_.drawCard()) {
+        tableau_[i].emplace_back(*card, false); // face down
+        playSound(GameSoundEvent::CardFlip);
+      }
+    }
+    // Deal one card face up at the end
+    if (auto card = multi_deck_.drawCard()) {
+      tableau_[i].emplace_back(*card, true); // face up
+      playSound(GameSoundEvent::CardFlip);
+    }
+  }
+
+  // Move remaining cards to stock (face down)
+  while (auto card = multi_deck_.drawCard()) {
+    stock_.push_back(*card);
+  }
+
+  // Start the deal animation
+  startDealAnimation();
+}
+
 bool SolitaireGame::checkWinCondition() const {
-  // Check if all foundation piles have 13 cards
+  // Get the number of decks based on the current mode
+  size_t num_decks = (current_game_mode_ == GameMode::STANDARD_KLONDIKE) ? 1 : 
+                     (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
+  
+  // For multi-deck games, each foundation should have 13 cards
+  // There are 4 * num_decks foundations
   for (const auto &pile : foundation_) {
     if (pile.size() != 13)
       return false;
@@ -775,7 +618,7 @@ bool SolitaireGame::checkWinCondition() const {
   // Check if all other piles are empty
   return stock_.empty() && waste_.empty() &&
          std::all_of(tableau_.begin(), tableau_.end(),
-                     [](const auto &pile) { return pile.empty(); });
+                    [](const auto &pile) { return pile.empty(); });
 }
 
 // Function to refresh the display
@@ -993,6 +836,58 @@ void SolitaireGame::setupMenuBar() {
                   }),
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
+
+GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
+GtkWidget *gameModeMenu = gtk_menu_new();
+gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
+
+// Standard Klondike option (1 deck)
+GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "One Deck");
+GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
+g_signal_connect(
+    G_OBJECT(standardItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::STANDARD_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
+
+// Double Klondike option (2 decks)
+GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Two Decks");
+g_signal_connect(
+    G_OBJECT(doubleItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::DOUBLE_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
+
+// Triple Klondike option (3 decks)
+GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Three Decks");
+g_signal_connect(
+    G_OBJECT(tripleItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::TRIPLE_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
+
+// Set initial state based on current mode
+gtk_check_menu_item_set_active(
+    GTK_CHECK_MENU_ITEM(
+        current_game_mode_ == GameMode::STANDARD_KLONDIKE ? standardItem :
+        current_game_mode_ == GameMode::DOUBLE_KLONDIKE ? doubleItem : tripleItem),
+    TRUE);
+
+// Add the game mode submenu to the options menu
+gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
+
 
   // Add separator before Quit
   GtkWidget *sep = gtk_separator_menu_item_new();
@@ -1350,29 +1245,46 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
 
 void SolitaireGame::dealTestLayout() {
   // Clear all piles
+  if (win_animation_active_) {
+    stopWinAnimation();
+  }
+
   stock_.clear();
   waste_.clear();
   foundation_.clear();
   tableau_.clear();
 
   // Reset foundation and tableau
-  foundation_.resize(4);
-  tableau_.resize(7);
+  // Number of foundation piles depends on the game mode
+  size_t num_decks = 1;
+  if (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) {
+    num_decks = 2;
+  } else if (current_game_mode_ == GameMode::TRIPLE_KLONDIKE) {
+    num_decks = 3;
+  }
+
+  // Resize foundation based on number of decks (4 foundations per deck)
+  foundation_.resize(4 * num_decks);
+  tableau_.resize(7);  // Always 7 tableau piles
 
   // Set up each suit in order in the tableau
-  for (int suit = 0; suit < 4; suit++) {
-    // Add 13 cards of this suit to a vector in reverse order (King to Ace)
-    std::vector<cardlib::Card> suit_cards;
-    for (int rank = static_cast<int>(cardlib::Rank::KING);
-         rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
-      suit_cards.emplace_back(static_cast<cardlib::Suit>(suit),
-                              static_cast<cardlib::Rank>(rank));
-    }
+  std::vector<cardlib::Card> all_cards;
 
-    // Distribute the cards to tableau
-    for (size_t i = 0; i < suit_cards.size(); i++) {
-      tableau_[i % 7].emplace_back(suit_cards[i], true); // All cards face up
+  // Create cards for each deck
+  for (size_t deck = 0; deck < num_decks; deck++) {
+    for (int suit = 0; suit < 4; suit++) {
+      // Add 13 cards of this suit to a vector in reverse order (King to Ace)
+      for (int rank = static_cast<int>(cardlib::Rank::KING);
+           rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
+        all_cards.emplace_back(static_cast<cardlib::Suit>(suit),
+                              static_cast<cardlib::Rank>(rank));
+      }
     }
+  }
+
+  // Distribute the cards to tableau
+  for (size_t i = 0; i < all_cards.size(); i++) {
+    tableau_[i % 7].emplace_back(all_cards[i], true);  // All cards face up
   }
 }
 
@@ -1669,8 +1581,28 @@ void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
 
 double SolitaireGame::getScaleFactor(int window_width,
                                      int window_height) const {
+  // Define optimal widths for each game mode based on testing
+  const int OPTIMAL_WIDTH_STANDARD = 800;
+  const int OPTIMAL_WIDTH_DOUBLE = 1300;
+  const int OPTIMAL_WIDTH_TRIPLE = 1800;
+  
+  // Select the optimal width based on current game mode
+  int optimal_width;
+  switch (current_game_mode_) {
+    case GameMode::DOUBLE_KLONDIKE:
+      optimal_width = OPTIMAL_WIDTH_DOUBLE;
+      break;
+    case GameMode::TRIPLE_KLONDIKE:
+      optimal_width = OPTIMAL_WIDTH_TRIPLE;
+      break;
+    case GameMode::STANDARD_KLONDIKE:
+    default:
+      optimal_width = OPTIMAL_WIDTH_STANDARD;
+      break;
+  }
+  
   // Calculate scale factors for both dimensions
-  double width_scale = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
+  double width_scale = static_cast<double>(window_width) / optimal_width;
   double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
 
   // Use the smaller scale to ensure everything fits

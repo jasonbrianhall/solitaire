@@ -20,6 +20,7 @@ Currently includes three games
 
 ### Klondike (Classic Solitaire)
 - **Draw-One or Draw-Three Mode**: Because sometimes you want it easy, and sometimes you want it Vegas-style
+- **Multiple Deck Support**: Play with one, two, or three decks because sometimes you just need to relax
 
 ### Freecell
 

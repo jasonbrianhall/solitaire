@@ -100,6 +100,7 @@ void SolitaireGame::updateWinAnimation() {
   refreshDisplay();
 }
 
+// Simple fix for the win animation in multi-deck mode
 void SolitaireGame::startWinAnimation() {
   if (win_animation_active_)
     return;
@@ -108,40 +109,64 @@ void SolitaireGame::startWinAnimation() {
 
   playSound(GameSoundEvent::WinGame);
   // Show win message
-GtkWidget *dialog = gtk_message_dialog_new(
-    GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
-    GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+      GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
 
-// Get the message area to apply formatting
-GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
+  // Get the message area to apply formatting
+  GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
 
-// Create a label with centered text
-GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
-gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
-gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
-gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
-gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
-gtk_widget_set_margin_start(label, 20);
-gtk_widget_set_margin_end(label, 20);
-gtk_widget_set_margin_top(label, 10);
-gtk_widget_set_margin_bottom(label, 10);
+  // Create a label with centered text
+  GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
+  gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+  gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+  gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_margin_start(label, 20);
+  gtk_widget_set_margin_end(label, 20);
+  gtk_widget_set_margin_top(label, 10);
+  gtk_widget_set_margin_bottom(label, 10);
 
-// Add the label to the message area
-gtk_container_add(GTK_CONTAINER(message_area), label);
-gtk_widget_show(label);
+  // Add the label to the message area
+  gtk_container_add(GTK_CONTAINER(message_area), label);
+  gtk_widget_show(label);
 
-// Run the dialog
-gtk_dialog_run(GTK_DIALOG(dialog));
-gtk_widget_destroy(dialog);
+  // Run the dialog
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 
   win_animation_active_ = true;
   cards_launched_ = 0;
   launch_timer_ = 0;
   animated_cards_.clear();
 
-  // Initialize tracking for animated cards
+  // If we're not in single-deck mode, adjust the foundation piles for the animation
+  if (current_game_mode_ != GameMode::STANDARD_KLONDIKE) {
+    // Save the original foundation piles for potential restoration later if needed
+    std::vector<std::vector<cardlib::Card>> original_foundation = foundation_;
+    
+    // Clear the foundation piles for animation
+    foundation_.clear();
+    foundation_.resize(4); // Always 4 foundation piles (1 deck) for animation
+    
+    // Create a standard ordered deck (Ace to King for each suit)
+    for (int suit = 0; suit < 4; suit++) {
+      foundation_[suit].clear();
+      
+      // Add cards Ace to King
+      for (int rank = static_cast<int>(cardlib::Rank::ACE); 
+           rank <= static_cast<int>(cardlib::Rank::KING); 
+           rank++) {
+        cardlib::Card card(static_cast<cardlib::Suit>(suit), 
+                           static_cast<cardlib::Rank>(rank));
+        foundation_[suit].push_back(card);
+      }
+    }
+  }
+
+  // Set up the animation tracking structure
   animated_foundation_cards_.clear();
-  animated_foundation_cards_.resize(4); // 4 foundation piles
+  animated_foundation_cards_.resize(4); // Always 4 foundation piles (1 deck)
   for (size_t i = 0; i < 4; i++) {
     animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
   }
@@ -412,220 +437,22 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   gtk_widget_get_allocation(widget, &allocation);
 
   // Create or resize buffer surface if needed
-  if (!game->buffer_surface_ ||
-      cairo_image_surface_get_width(game->buffer_surface_) !=
-          allocation.width ||
-      cairo_image_surface_get_height(game->buffer_surface_) !=
-          allocation.height) {
+  game->initializeOrResizeBuffer(allocation.width, allocation.height);
 
-    if (game->buffer_surface_) {
-      cairo_surface_destroy(game->buffer_surface_);
-      cairo_destroy(game->buffer_cr_);
-    }
-
-    game->buffer_surface_ = cairo_image_surface_create(
-        CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
-    game->buffer_cr_ = cairo_create(game->buffer_surface_);
-  }
-
-  // Clear buffer with lighter green background
+  // Clear buffer with background color
   cairo_set_source_rgb(game->buffer_cr_, 0.0, 0.6, 0.0);
   cairo_paint(game->buffer_cr_);
 
-  // Draw stock pile
-  int x = game->current_card_spacing_;
-  int y = game->current_card_spacing_;
-  if (!game->stock_.empty()) {
-    game->drawCard(game->buffer_cr_, x, y, nullptr, false);
-  } else {
-    // Draw empty stock pile outline using rounded rectangle
-    game->drawEmptyPile(game->buffer_cr_, x, y);
-  }
-
-  // Draw waste pile
-  x += game->current_card_width_ + game->current_card_spacing_;
-  if (!game->waste_.empty()) {
-    // Check if the top card is being dragged
-    bool top_card_dragging =
-        (game->dragging_ && game->drag_source_pile_ == 1 &&
-         game->drag_cards_.size() == 1 && game->waste_.size() >= 1 &&
-         game->drag_cards_[0].suit == game->waste_.back().suit &&
-         game->drag_cards_[0].rank == game->waste_.back().rank);
-
-    if (top_card_dragging && game->waste_.size() > 1) {
-      // Draw the second-to-top card
-      const auto &second_card = game->waste_[game->waste_.size() - 2];
-      game->drawCard(game->buffer_cr_, x, y, &second_card, true);
-    } else if (!top_card_dragging) {
-      // Draw the top card if it's not being dragged
-      const auto &top_card = game->waste_.back();
-      game->drawCard(game->buffer_cr_, x, y, &top_card, true);
-    } else {
-      // Draw an empty placeholder if top card is being dragged and there are no
-      // other cards
-      game->drawEmptyPile(game->buffer_cr_, x, y);
-    }
-  }
-
-  // Draw foundation piles
-  x = 3 * (game->current_card_width_ + game->current_card_spacing_);
-  for (size_t i = 0; i < game->foundation_.size(); i++) {
-    // Draw empty foundation pile with rounded rectangle
-    game->drawEmptyPile(game->buffer_cr_, x, y);
-
-    const auto &pile = game->foundation_[i];
-    if (!pile.empty()) {
-      // Only draw the topmost non-animated card
-      if (game->win_animation_active_) {
-        for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-          if (!game->animated_foundation_cards_[i][j]) {
-            game->drawCard(game->buffer_cr_, x, y, &pile[j], true);
-            break;
-          }
-        }
-      } else {
-        // Check if the top card is being dragged from foundation
-        bool top_card_dragging =
-            (game->dragging_ && game->drag_source_pile_ == i + 2 &&
-             !pile.empty() && game->drag_cards_.size() == 1 &&
-             game->drag_cards_[0].suit == pile.back().suit &&
-             game->drag_cards_[0].rank == pile.back().rank);
-
-        if (!top_card_dragging) {
-          const auto &top_card = pile.back();
-          game->drawCard(game->buffer_cr_, x, y, &top_card, true);
-        } else if (pile.size() > 1) {
-          // Draw the second-to-top card
-          const auto &second_card = pile[pile.size() - 2];
-          game->drawCard(game->buffer_cr_, x, y, &second_card, true);
-        }
-      }
-    }
-    x += game->current_card_width_ + game->current_card_spacing_;
-  }
-
-  // Draw tableau piles
-  const int tableau_base_y = game->current_card_spacing_ +
-                             game->current_card_height_ +
-                             game->current_vert_spacing_;
-
-  for (size_t i = 0; i < game->tableau_.size(); i++) {
-    x = game->current_card_spacing_ +
-        i * (game->current_card_width_ + game->current_card_spacing_);
-    const auto &pile = game->tableau_[i];
-
-    // Draw empty pile outline with rounded rectangle
-    if (pile.empty()) {
-      game->drawEmptyPile(game->buffer_cr_, x, tableau_base_y);
-    }
-
-    // During animation, we need to know which cards have been dealt already
-    if (game->deal_animation_active_) {
-      // Figure out how many cards should be visible in this pile
-      int cards_in_this_pile = i + 1; // Each pile has (index + 1) cards
-      int total_cards_before_this_pile = 0;
-
-      for (int p = 0; p < i; p++) {
-        total_cards_before_this_pile += (p + 1);
-      }
-
-      // Only draw cards that have already been dealt and are not currently
-      // animating
-      int cards_to_draw = std::min(
-          static_cast<int>(pile.size()),
-          std::max(0, game->cards_dealt_ - total_cards_before_this_pile));
-
-      for (int j = 0; j < cards_to_draw; j++) {
-        // Skip drawing the card if it's currently animating
-        bool is_animating = false;
-        for (const auto &anim_card : game->deal_cards_) {
-          if (anim_card.active && anim_card.card.suit == pile[j].card.suit &&
-              anim_card.card.rank == pile[j].card.rank) {
-            is_animating = true;
-            break;
-          }
-        }
-
-        if (!is_animating) {
-          int current_y = tableau_base_y + j * game->current_vert_spacing_;
-          game->drawCard(game->buffer_cr_, x, current_y, &pile[j].card,
-                         pile[j].face_up);
-        }
-      }
-    } else {
-      // Normal drawing (not during animation)
-      for (size_t j = 0; j < pile.size(); j++) {
-        if (game->dragging_ && game->drag_source_pile_ >= 6 &&
-            game->drag_source_pile_ - 6 == static_cast<int>(i) &&
-            j >= static_cast<size_t>(game->tableau_[i].size() -
-                                     game->drag_cards_.size())) {
-          continue;
-        }
-
-        int current_y = tableau_base_y + j * game->current_vert_spacing_;
-        const auto &tableau_card = pile[j];
-        game->drawCard(game->buffer_cr_, x, current_y, &tableau_card.card,
-                       tableau_card.face_up);
-      }
-    }
-  }
-
-  // Draw dragged cards
-  if (game->stock_to_waste_animation_active_) {
-    game->drawAnimatedCard(game->buffer_cr_, game->stock_to_waste_card_);
-  }
-  if (game->dragging_ && !game->drag_cards_.empty()) {
-    int drag_x = static_cast<int>(game->drag_start_x_ - game->drag_offset_x_);
-    int drag_y = static_cast<int>(game->drag_start_y_ - game->drag_offset_y_);
-
-    for (size_t i = 0; i < game->drag_cards_.size(); i++) {
-      game->drawCard(game->buffer_cr_, drag_x,
-                     drag_y + i * game->current_vert_spacing_,
-                     &game->drag_cards_[i], true);
-    }
-  }
-
-  // Draw animated cards for win animation
-  if (game->win_animation_active_) {
-    for (const auto &anim_card : game->animated_cards_) {
-      if (!anim_card.active)
-        continue;
-
-      if (!anim_card.exploded) {
-        // Draw the whole card with rotation
-        game->drawAnimatedCard(game->buffer_cr_, anim_card);
-      } else {
-        // Draw all the fragments for this card
-        for (const auto &fragment : anim_card.fragments) {
-          if (fragment.active) {
-            game->drawCardFragment(game->buffer_cr_, fragment);
-          }
-        }
-      }
-    }
-  }
-
-  // Draw animated card for foundation move animation
-  if (game->foundation_move_animation_active_) {
-    game->drawAnimatedCard(game->buffer_cr_, game->foundation_move_card_);
-  }
-
-  // Draw animated cards for deal animation
-  if (game->deal_animation_active_) {
-    // Debug indicator - small red square to indicate deal animation is active
-    cairo_set_source_rgb(game->buffer_cr_, 1.0, 0.0, 0.0);
-    cairo_rectangle(game->buffer_cr_, 10, 10, 10, 10);
-    cairo_fill(game->buffer_cr_);
-
-    for (const auto &anim_card : game->deal_cards_) {
-      if (!anim_card.active)
-        continue;
-
-      // Draw the card with rotation
-      game->drawAnimatedCard(game->buffer_cr_, anim_card);
-    }
-  }
-
+  // Draw main game components in order
+  game->drawStockPile();
+  game->drawWastePile();
+  game->drawFoundationPiles();
+  game->drawTableauPiles();
+  
+  // Draw animations and dragged cards
+  game->drawAllAnimations();
+  
+  // Draw keyboard navigation highlight if active
   if (game->keyboard_navigation_active_ && !game->dragging_ &&
       !game->deal_animation_active_ && !game->win_animation_active_ &&
       !game->foundation_move_animation_active_ &&
@@ -638,6 +465,279 @@ gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   cairo_paint(cr);
 
   return TRUE;
+}
+
+// Initialize or resize the drawing buffer as needed
+void SolitaireGame::initializeOrResizeBuffer(int width, int height) {
+  if (!buffer_surface_ ||
+      cairo_image_surface_get_width(buffer_surface_) != width ||
+      cairo_image_surface_get_height(buffer_surface_) != height) {
+
+    if (buffer_surface_) {
+      cairo_surface_destroy(buffer_surface_);
+      cairo_destroy(buffer_cr_);
+    }
+
+    buffer_surface_ = cairo_image_surface_create(
+        CAIRO_FORMAT_ARGB32, width, height);
+    buffer_cr_ = cairo_create(buffer_surface_);
+  }
+}
+
+// Draw the stock pile (face-down cards to draw from)
+void SolitaireGame::drawStockPile() {
+  int x = current_card_spacing_;
+  int y = current_card_spacing_;
+  
+  if (!stock_.empty()) {
+    drawCard(buffer_cr_, x, y, nullptr, false);
+  } else {
+    // Draw empty stock pile outline
+    drawEmptyPile(buffer_cr_, x, y);
+  }
+}
+
+// Draw the waste pile (cards drawn from stock)
+void SolitaireGame::drawWastePile() {
+  int x = current_card_spacing_ + current_card_width_ + current_card_spacing_;
+  int y = current_card_spacing_;
+  
+  if (waste_.empty()) {
+    drawEmptyPile(buffer_cr_, x, y);
+    return;
+  }
+  
+  // Check if the top card is being dragged
+  bool top_card_dragging =
+      (dragging_ && drag_source_pile_ == 1 &&
+       drag_cards_.size() == 1 && waste_.size() >= 1 &&
+       drag_cards_[0].suit == waste_.back().suit &&
+       drag_cards_[0].rank == waste_.back().rank);
+
+  if (top_card_dragging && waste_.size() > 1) {
+    // Draw the second-to-top card
+    const auto &second_card = waste_[waste_.size() - 2];
+    drawCard(buffer_cr_, x, y, &second_card, true);
+  } else if (!top_card_dragging) {
+    // Draw the top card if it's not being dragged
+    const auto &top_card = waste_.back();
+    drawCard(buffer_cr_, x, y, &top_card, true);
+  } else {
+    // Draw an empty placeholder if top card is being dragged and there are no other cards
+    drawEmptyPile(buffer_cr_, x, y);
+  }
+}
+
+// Draw the foundation piles (where aces build up to kings)
+void SolitaireGame::drawFoundationPiles() {
+  int x = 3 * (current_card_width_ + current_card_spacing_);
+  int y = current_card_spacing_;
+  
+  for (size_t i = 0; i < foundation_.size(); i++) {
+    // Always draw the empty foundation pile outline
+    drawEmptyPile(buffer_cr_, x, y);
+
+    const auto &pile = foundation_[i];
+    if (!pile.empty()) {
+      if (win_animation_active_) {
+        drawFoundationDuringWinAnimation(i, pile, x, y);
+      } else {
+        drawNormalFoundationPile(i, pile, x, y);
+      }
+    }
+    x += current_card_width_ + current_card_spacing_;
+  }
+}
+
+// Draw foundation pile during win animation
+void SolitaireGame::drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+  // Only draw the topmost non-animated card
+  for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
+    if (!animated_foundation_cards_[pile_index][j]) {
+      drawCard(buffer_cr_, x, y, &pile[j], true);
+      break;
+    }
+  }
+}
+
+// Draw foundation pile during normal gameplay
+void SolitaireGame::drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+  // Check if the top card is being dragged from foundation
+  bool top_card_dragging =
+      (dragging_ && drag_source_pile_ == pile_index + 2 &&
+       !pile.empty() && drag_cards_.size() == 1 &&
+       drag_cards_[0].suit == pile.back().suit &&
+       drag_cards_[0].rank == pile.back().rank);
+
+  if (!top_card_dragging) {
+    const auto &top_card = pile.back();
+    drawCard(buffer_cr_, x, y, &top_card, true);
+  } else if (pile.size() > 1) {
+    // Draw the second-to-top card
+    const auto &second_card = pile[pile.size() - 2];
+    drawCard(buffer_cr_, x, y, &second_card, true);
+  }
+}
+
+// Draw the tableau piles (the main playing area)
+void SolitaireGame::drawTableauPiles() {
+  const int tableau_base_y = current_card_spacing_ +
+                           current_card_height_ +
+                           current_vert_spacing_;
+
+  for (size_t i = 0; i < tableau_.size(); i++) {
+    int x = current_card_spacing_ +
+        i * (current_card_width_ + current_card_spacing_);
+    const auto &pile = tableau_[i];
+
+    // Draw empty pile outline for empty piles
+    if (pile.empty()) {
+      drawEmptyPile(buffer_cr_, x, tableau_base_y);
+    }
+
+    if (deal_animation_active_) {
+      drawTableauDuringDealAnimation(i, pile, x, tableau_base_y);
+    } else {
+      drawNormalTableauPile(i, pile, x, tableau_base_y);
+    }
+  }
+}
+
+// Draw tableau piles during the deal animation
+void SolitaireGame::drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
+  // Figure out how many cards should be visible in this pile
+  int cards_in_this_pile = pile_index + 1; // Each pile has (index + 1) cards
+  int total_cards_before_this_pile = 0;
+
+  for (int p = 0; p < pile_index; p++) {
+    total_cards_before_this_pile += (p + 1);
+  }
+
+  // Only draw cards that have already been dealt and are not currently animating
+  int cards_to_draw = std::min(
+      static_cast<int>(pile.size()),
+      std::max(0, cards_dealt_ - total_cards_before_this_pile));
+
+  for (int j = 0; j < cards_to_draw; j++) {
+    // Skip drawing the card if it's currently being animated to this exact position
+    bool is_animating = false;
+    for (const auto &anim_card : deal_cards_) {
+      if (anim_card.active) {
+        // Calculate the target pile and position from the animation's target coordinates
+        int target_pile_index = std::round((anim_card.target_x - current_card_spacing_) / 
+                                          (current_card_width_ + current_card_spacing_));
+        int target_card_index = std::round((anim_card.target_y - base_y) / current_vert_spacing_);
+        
+        // If this animation is targeting the current pile and position, don't draw the card
+        if (target_pile_index == static_cast<int>(pile_index) && target_card_index == j) {
+          is_animating = true;
+          break;
+        }
+      }
+    }
+
+    if (!is_animating) {
+      int current_y = base_y + j * current_vert_spacing_;
+      drawCard(buffer_cr_, x, current_y, &pile[j].card, pile[j].face_up);
+    }
+  }
+}
+
+// Draw tableau piles during normal gameplay
+// Fix to prevent tableau cards from disappearing when dragging foundation cards
+void SolitaireGame::drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
+  // Calculate max foundation index and first tableau index
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  int first_tableau_index = max_foundation_index + 1;
+  
+  for (size_t j = 0; j < pile.size(); j++) {
+    // Skip cards that are being dragged, but ONLY if they're from THIS tableau pile
+    // This ensures other tableau piles are always drawn
+    if (dragging_ && 
+        drag_source_pile_ >= first_tableau_index && 
+        drag_source_pile_ - first_tableau_index == static_cast<int>(pile_index) &&
+        j >= pile.size() - drag_cards_.size()) {
+      continue;
+    }
+
+    int current_y = base_y + j * current_vert_spacing_;
+    const auto &tableau_card = pile[j];
+    drawCard(buffer_cr_, x, current_y, &tableau_card.card, tableau_card.face_up);
+  }
+}
+
+// Draw all active animations and dragged cards
+void SolitaireGame::drawAllAnimations() {
+  // Draw stock to waste animation
+  if (stock_to_waste_animation_active_) {
+    drawAnimatedCard(buffer_cr_, stock_to_waste_card_);
+  }
+  
+  // Draw cards being dragged
+  if (dragging_ && !drag_cards_.empty()) {
+    drawDraggedCards();
+  }
+
+  // Draw win animation
+  if (win_animation_active_) {
+    drawWinAnimation();
+  }
+
+  // Draw foundation move animation
+  if (foundation_move_animation_active_) {
+    drawAnimatedCard(buffer_cr_, foundation_move_card_);
+  }
+
+  // Draw deal animation
+  if (deal_animation_active_) {
+    drawDealAnimation();
+  }
+}
+
+// Draw cards that are currently being dragged
+void SolitaireGame::drawDraggedCards() {
+  int drag_x = static_cast<int>(drag_start_x_ - drag_offset_x_);
+  int drag_y = static_cast<int>(drag_start_y_ - drag_offset_y_);
+
+  for (size_t i = 0; i < drag_cards_.size(); i++) {
+    drawCard(buffer_cr_, drag_x,
+            drag_y + i * current_vert_spacing_,
+            &drag_cards_[i], true);
+  }
+}
+
+// Draw the win animation effects
+void SolitaireGame::drawWinAnimation() {
+  for (const auto &anim_card : animated_cards_) {
+    if (!anim_card.active)
+      continue;
+
+    if (!anim_card.exploded) {
+      // Draw the whole card with rotation
+      drawAnimatedCard(buffer_cr_, anim_card);
+    } else {
+      // Draw all the fragments for this card
+      for (const auto &fragment : anim_card.fragments) {
+        if (fragment.active) {
+          drawCardFragment(buffer_cr_, fragment);
+        }
+      }
+    }
+  }
+}
+
+// Draw the deal animation
+void SolitaireGame::drawDealAnimation() {
+  // Debug indicator - small red square to indicate deal animation is active
+  cairo_set_source_rgb(buffer_cr_, 1.0, 0.0, 0.0);
+  cairo_rectangle(buffer_cr_, 10, 10, 10, 10);
+  cairo_fill(buffer_cr_);
+
+  for (const auto &anim_card : deal_cards_) {
+    if (anim_card.active) {
+      drawAnimatedCard(buffer_cr_, anim_card);
+    }
+  }
 }
 
 void SolitaireGame::explodeCard(AnimatedCard &card) {

@@ -8,6 +8,22 @@
 #include <unordered_map>
 #include <vector>
 
+
+
+class SolitaireGame {
+public:
+  SolitaireGame();
+  ~SolitaireGame();
+  bool setSoundsZipPath(const std::string &path);
+
+  void run(int argc, char **argv);
+
+  enum class GameMode {
+    STANDARD_KLONDIKE,  // Single deck
+    DOUBLE_KLONDIKE,    // Two decks
+    TRIPLE_KLONDIKE     // Three decks (for future expansion)
+  };
+
 enum class GameSoundEvent {
   CardFlip,
   CardPlace,
@@ -54,14 +70,6 @@ struct TableauCard {
 
   TableauCard(const cardlib::Card &c, bool up) : card(c), face_up(up) {}
 };
-
-class SolitaireGame {
-public:
-  SolitaireGame();
-  ~SolitaireGame();
-  bool setSoundsZipPath(const std::string &path);
-
-  void run(int argc, char **argv);
 
 private:
   // Game state
@@ -305,6 +313,36 @@ private:
 
 void showHowToPlay();
 void showKeyboardShortcuts();
+
+// In the private: section of the SolitaireGame class in solitaire.h
+
+  // Drawing-related methods
+  void initializeOrResizeBuffer(int width, int height);
+  void drawStockPile();
+  void drawWastePile();
+  void drawFoundationPiles();
+  void drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawTableauPiles();
+  void drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y);
+  void drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y);
+  void drawAllAnimations();
+  void drawDraggedCards();
+  void drawWinAnimation();
+  void drawDealAnimation();
+  void dealMultiDeck();
+  // Game mode (number of decks)
+  GameMode current_game_mode_ = GameMode::STANDARD_KLONDIKE;
+  
+  // Replace the single deck with a MultiDeck
+  cardlib::MultiDeck multi_deck_;
+  
+  // Add a method to switch game modes
+  void switchGameMode(GameMode mode);
+  
+  // Initialization method for multiple decks
+  void initializeMultiDeckGame();
+
 
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
