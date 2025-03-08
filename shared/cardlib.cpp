@@ -466,17 +466,9 @@ void MultiDeck::shuffle(unsigned seed) {
     // Shuffle all cards together
     std::shuffle(all_cards.begin(), all_cards.end(), gen);
     
-    // Redistribute cards evenly among decks
-    size_t cards_per_deck = all_cards.size() / decks_.size();
-    size_t remainder = all_cards.size() % decks_.size();
-    
-    size_t card_index = 0;
-    for (size_t i = 0; i < decks_.size(); ++i) {
-        size_t deck_size = cards_per_deck + (i < remainder ? 1 : 0);
-        
-        for (size_t j = 0; j < deck_size && card_index < all_cards.size(); ++j) {
-            decks_[i].addCard(all_cards[card_index++]);
-        }
+    // Put all cards into the first deck
+    for (const auto &card : all_cards) {
+        decks_[0].addCard(card);
     }
 }
 
