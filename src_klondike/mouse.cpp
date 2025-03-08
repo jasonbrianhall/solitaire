@@ -44,10 +44,11 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
       int first_tableau_index = max_foundation_index + 1;
       
       if (pile_index >= 2 && pile_index <= max_foundation_index) { 
-        // Foundation piles
-        x_offset_multiplier = pile_index - 2;
+        // Foundation piles - adjust offset multiplier
+        // Use correct foundation position for drag offset
+        x_offset_multiplier = 3 + (pile_index - 2);
       } else if (pile_index >= first_tableau_index) { 
-        // Tableau piles - using the dynamic index
+        // Tableau piles - use tableau index for offset
         x_offset_multiplier = pile_index - first_tableau_index;
       } else if (pile_index == 1) { // Waste pile
         x_offset_multiplier = 1;
