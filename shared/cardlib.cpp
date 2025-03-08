@@ -439,25 +439,44 @@ void MultiDeck::loadCardsFromZip(const std::string &zip_path, size_t num_decks) 
 }
 
 void MultiDeck::shuffle(unsigned seed) {
+    std::mt19937 gen(seed);
+    
+    // First shuffle each individual deck
+    for (auto &deck : decks_) {
+        deck.shuffle(seed);
+    }
+    
+    // Skip inter-deck swapping if we have less than 2 decks
+    if (decks_.size() < 2) {
+        return;
+    }
+    
     // Collect all cards from all decks
     std::vector<Card> all_cards;
     for (auto &deck : decks_) {
         auto deck_cards = deck.getAllCards();
         all_cards.insert(all_cards.end(), deck_cards.begin(), deck_cards.end());
+        
+        // Clear the deck
+        while (!deck.isEmpty()) {
+            deck.drawCard();
+        }
     }
     
     // Shuffle all cards together
-    std::mt19937 gen(seed);
     std::shuffle(all_cards.begin(), all_cards.end(), gen);
     
-    // Clear all decks
-    for (auto &deck : decks_) {
-        deck = Deck();  // Reset to empty deck
-    }
+    // Redistribute cards evenly among decks
+    size_t cards_per_deck = all_cards.size() / decks_.size();
+    size_t remainder = all_cards.size() % decks_.size();
     
-    // Redistribute cards evenly
-    for (size_t i = 0; i < all_cards.size(); i++) {
-        decks_[i % decks_.size()].addCard(all_cards[i]);
+    size_t card_index = 0;
+    for (size_t i = 0; i < decks_.size(); ++i) {
+        size_t deck_size = cards_per_deck + (i < remainder ? 1 : 0);
+        
+        for (size_t j = 0; j < deck_size && card_index < all_cards.size(); ++j) {
+            decks_[i].addCard(all_cards[card_index++]);
+        }
     }
 }
 
