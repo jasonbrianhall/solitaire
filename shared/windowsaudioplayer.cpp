@@ -25,7 +25,7 @@ struct WavSound {
     uint32_t sampleRate;           // Sample rate
     uint16_t bitsPerSample;        // Bits per sample
     bool isPlaying;                // Whether this sound is currently playing
-    size_t position;               // Current playback position in samples
+    size_t position;               // Current playback position in frames (not samples)
     float volume;                  // Volume multiplier (0.0 to 1.0)
     std::shared_ptr<std::promise<void>> completionPromise;
     
@@ -187,6 +187,11 @@ public:
             return false;
         }
         
+#ifdef DEBUG
+        std::cout << "WAV file sample rate: " << sound.sampleRate 
+                  << ", Output sample rate: " << OUTPUT_SAMPLE_RATE << std::endl;
+#endif
+        
         // Add the sound to our list
         std::lock_guard<std::mutex> lock(mutex_);
         sounds_.push_back(std::move(sound));
@@ -203,10 +208,41 @@ public:
     }
 
 private:
-    // Private constructor for singleton
-    AudioMixer() : initialized_(false), hWaveOut_(NULL), 
-                  currentBuffer_(0), masterVolume_(1.0f), 
-                  exitThread_(false) {}
+    // Add a sample rate conversion function
+    void resampleSound(const WavSound& sound, float* resampledBuffer, 
+                     size_t outputSamples, size_t startPos, size_t& endPos) {
+        // Calculate ratio between source and target sample rates
+        double ratio = static_cast<double>(sound.sampleRate) / OUTPUT_SAMPLE_RATE;
+        
+        // Simple linear interpolation resampling
+        for (size_t i = 0; i < outputSamples; i++) {
+            double srcPos = (startPos + i) * ratio;
+            size_t srcPosInt = static_cast<size_t>(srcPos);
+            float fraction = static_cast<float>(srcPos - srcPosInt);
+            
+            // If we've reached the end of the source data
+            if (srcPosInt >= sound.sampleCount / sound.channels - 1) {
+                endPos = i;
+                return;
+            }
+            
+            // For each channel
+            for (uint16_t ch = 0; ch < sound.channels; ch++) {
+                // Get samples at position and next position
+                int16_t sample1 = sound.samples[(srcPosInt * sound.channels) + ch];
+                int16_t sample2 = sound.samples[((srcPosInt + 1) * sound.channels) + ch];
+                
+                // Linear interpolation
+                float sample = sample1 * (1.0f - fraction) + sample2 * fraction;
+                
+                // Store in output buffer, normalize to float [-1.0, 1.0]
+                resampledBuffer[(i * OUTPUT_CHANNELS) + (ch % OUTPUT_CHANNELS)] = 
+                    sample / 32768.0f;
+            }
+        }
+        
+        endPos = outputSamples;
+    }
     
     // Parse a WAV header and set up the sound object
     bool parseWavHeader(WavSound& sound) {
@@ -254,10 +290,13 @@ private:
         return true;
     }
     
-    // Mix all active sounds into a buffer
+    // Mix all active sounds into a buffer with resampling
     void mixSounds(int16_t* outputBuffer, size_t sampleCount) {
         // First clear the output buffer
         std::memset(outputBuffer, 0, sampleCount * sizeof(int16_t));
+        
+        // Create a float buffer for mixing (to avoid clipping)
+        std::vector<float> mixBuffer(sampleCount * OUTPUT_CHANNELS, 0.0f);
         
         std::lock_guard<std::mutex> lock(mutex_);
         
@@ -273,33 +312,27 @@ private:
                 continue;
             }
             
-            // Mix this sound into the output buffer
-            size_t remainingSamples = it->sampleCount - it->position;
-            size_t samplesToCopy = std::min(sampleCount, remainingSamples);
+            // Create temporary buffer for resampled data
+            std::vector<float> resampledBuffer(sampleCount * OUTPUT_CHANNELS, 0.0f);
             
-            if (samplesToCopy > 0) {
-                // Mix samples with volume adjustment
-                for (size_t i = 0; i < samplesToCopy; i++) {
-                    // Get the input sample
-                    int32_t sample = static_cast<int32_t>(it->samples[it->position + i]);
-                    
-                    // Apply volume
-                    sample = static_cast<int32_t>(sample * it->volume * masterVolume_);
-                    
-                    // Mix with existing output (with clipping protection)
-                    int32_t mixed = static_cast<int32_t>(outputBuffer[i]) + sample;
-                    mixed = std::max(static_cast<int32_t>(INT16_MIN), std::min(mixed, static_cast<int32_t>(INT16_MAX)));
-                    
-                    // Store the result
-                    outputBuffer[i] = static_cast<int16_t>(mixed);
-                }
+            // Calculate samples considering sample rate conversion
+            size_t samplesResampled = 0;
+            resampleSound(*it, resampledBuffer.data(), sampleCount, 
+                        it->position, samplesResampled);
+            
+            // Mix resampled sound to the float buffer
+            for (size_t i = 0; i < samplesResampled * OUTPUT_CHANNELS; i++) {
+                // Apply volume
+                float sample = resampledBuffer[i] * it->volume * masterVolume_;
                 
-                // Update position
-                it->position += samplesToCopy;
+                // Add to mix buffer
+                mixBuffer[i] += sample;
             }
             
-            // Check if we've reached the end of the sound
-            if (it->position >= it->sampleCount) {
+            // Update position and check if finished
+            it->position += samplesResampled;
+            
+            if (samplesResampled < sampleCount || it->position >= it->sampleCount / it->channels) {
                 it->isPlaying = false;
                 if (it->completionPromise) {
                     it->completionPromise->set_value();
@@ -308,6 +341,15 @@ private:
             } else {
                 ++it;
             }
+        }
+        
+        // Convert float mix buffer back to int16_t with clipping protection
+        for (size_t i = 0; i < sampleCount * OUTPUT_CHANNELS; i++) {
+            float sample = mixBuffer[i];
+            // Clip to [-1.0, 1.0]
+            sample = std::max(-1.0f, std::min(1.0f, sample));
+            // Convert to int16_t
+            outputBuffer[i] = static_cast<int16_t>(sample * 32767.0f);
         }
     }
     
@@ -336,7 +378,7 @@ private:
             if (bufferIndex != -1) {
                 // Mix audio into this buffer
                 int16_t* outputBuffer = reinterpret_cast<int16_t*>(buffers_[bufferIndex].data());
-                mixSounds(outputBuffer, bufferSizeSamples_);
+                mixSounds(outputBuffer, bufferSizeSamples_ / OUTPUT_CHANNELS);
                 
                 // Write the buffer to the output device
                 MMRESULT result = waveOutWrite(hWaveOut_, &waveHeaders_[bufferIndex], sizeof(WAVEHDR));
@@ -360,6 +402,11 @@ private:
             mixer->condVar_.notify_one();
         }
     }
+    
+    // Private constructor for singleton
+    AudioMixer() : initialized_(false), hWaveOut_(NULL), 
+                  currentBuffer_(0), masterVolume_(1.0f), 
+                  exitThread_(false) {}
     
     // Constants
     static constexpr int NUM_BUFFERS = 4;
