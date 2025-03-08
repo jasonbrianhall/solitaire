@@ -612,12 +612,19 @@ void SolitaireGame::drawTableauDuringDealAnimation(size_t pile_index, const std:
 }
 
 // Draw tableau piles during normal gameplay
+// Fix to prevent tableau cards from disappearing when dragging foundation cards
 void SolitaireGame::drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
+  // Calculate max foundation index and first tableau index
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  int first_tableau_index = max_foundation_index + 1;
+  
   for (size_t j = 0; j < pile.size(); j++) {
-    // Skip cards that are being dragged
-    if (dragging_ && drag_source_pile_ >= 6 &&
-        drag_source_pile_ - 6 == static_cast<int>(pile_index) &&
-        j >= static_cast<size_t>(tableau_[pile_index].size() - drag_cards_.size())) {
+    // Skip cards that are being dragged, but ONLY if they're from THIS tableau pile
+    // This ensures other tableau piles are always drawn
+    if (dragging_ && 
+        drag_source_pile_ >= first_tableau_index && 
+        drag_source_pile_ - first_tableau_index == static_cast<int>(pile_index) &&
+        j >= pile.size() - drag_cards_.size()) {
       continue;
     }
 
