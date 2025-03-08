@@ -1246,23 +1246,36 @@ void SolitaireGame::dealTestLayout() {
   tableau_.clear();
 
   // Reset foundation and tableau
-  foundation_.resize(4);
-  tableau_.resize(7);
+  // Number of foundation piles depends on the game mode
+  size_t num_decks = 1;
+  if (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) {
+    num_decks = 2;
+  } else if (current_game_mode_ == GameMode::TRIPLE_KLONDIKE) {
+    num_decks = 3;
+  }
+
+  // Resize foundation based on number of decks (4 foundations per deck)
+  foundation_.resize(4 * num_decks);
+  tableau_.resize(7);  // Always 7 tableau piles
 
   // Set up each suit in order in the tableau
-  for (int suit = 0; suit < 4; suit++) {
-    // Add 13 cards of this suit to a vector in reverse order (King to Ace)
-    std::vector<cardlib::Card> suit_cards;
-    for (int rank = static_cast<int>(cardlib::Rank::KING);
-         rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
-      suit_cards.emplace_back(static_cast<cardlib::Suit>(suit),
-                              static_cast<cardlib::Rank>(rank));
-    }
+  std::vector<cardlib::Card> all_cards;
 
-    // Distribute the cards to tableau
-    for (size_t i = 0; i < suit_cards.size(); i++) {
-      tableau_[i % 7].emplace_back(suit_cards[i], true); // All cards face up
+  // Create cards for each deck
+  for (size_t deck = 0; deck < num_decks; deck++) {
+    for (int suit = 0; suit < 4; suit++) {
+      // Add 13 cards of this suit to a vector in reverse order (King to Ace)
+      for (int rank = static_cast<int>(cardlib::Rank::KING);
+           rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
+        all_cards.emplace_back(static_cast<cardlib::Suit>(suit),
+                              static_cast<cardlib::Rank>(rank));
+      }
     }
+  }
+
+  // Distribute the cards to tableau
+  for (size_t i = 0; i < all_cards.size(); i++) {
+    tableau_[i % 7].emplace_back(all_cards[i], true);  // All cards face up
   }
 }
 
