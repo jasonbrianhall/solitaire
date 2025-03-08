@@ -1,5 +1,7 @@
 #include "solitaire.h"
+#include <iostream>
 
+// Fix for onButtonPress in mouse.cpp to handle all foundation piles
 gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
                                       gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -7,10 +9,10 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
   game->keyboard_navigation_active_ = false;
   game->keyboard_selection_active_ = false;
 
-if (game->win_animation_active_) {
-  game->stopWinAnimation();
-  return TRUE;
-}
+  if (game->win_animation_active_) {
+    game->stopWinAnimation();
+    return TRUE;
+  }
 
   // If any animation is active, block all interactions
   if (game->foundation_move_animation_active_ ||
@@ -33,15 +35,20 @@ if (game->win_animation_active_) {
       game->drag_start_y_ = event->y;
       game->drag_cards_ = game->getDragCards(pile_index, card_index);
       game->playSound(GameSoundEvent::CardFlip);
+      
       // Calculate offsets
       int x_offset_multiplier;
-      if (pile_index >= 6) {
+      // Calculate max foundation index
+      int max_foundation_index = 2 + game->foundation_.size() - 1;
+      
+      if (pile_index >= 6) { // Tableau piles
         x_offset_multiplier = pile_index - 6;
-      } else if (pile_index >= 2 && pile_index <= 5) {
+      } else if (pile_index >= 2 && pile_index <= max_foundation_index) { 
+        // Foundation piles - handle all foundations, not just the first four
         x_offset_multiplier = pile_index + 1;
-      } else if (pile_index == 1) {
+      } else if (pile_index == 1) { // Waste pile
         x_offset_multiplier = 1;
-      } else {
+      } else { // Stock pile
         x_offset_multiplier = 0;
       }
 
@@ -50,13 +57,13 @@ if (game->win_animation_active_) {
                       x_offset_multiplier * (game->current_card_width_ +
                                              game->current_card_spacing_));
 
-      if (pile_index >= 6) {
+      if (pile_index >= 6) { // Tableau piles
         game->drag_offset_y_ =
             event->y -
             (game->current_card_spacing_ + game->current_card_height_ +
              game->current_vert_spacing_ +
              card_index * game->current_vert_spacing_);
-      } else {
+      } else { // Stock, waste, and foundation piles
         game->drag_offset_y_ = event->y - game->current_card_spacing_;
       }
     }
@@ -91,7 +98,7 @@ if (game->win_animation_active_) {
           // updateFoundationMoveAnimation when animation completes
           return TRUE;
         }
-      } else if (pile_index >= 6 && pile_index <= 12) {
+      } else if (pile_index >= 6 && pile_index <= 12) { // Tableau piles
         auto &tableau_pile = game->tableau_[pile_index - 6];
         if (!tableau_pile.empty() && tableau_pile.back().face_up) {
           card = &tableau_pile.back().card;
@@ -116,8 +123,6 @@ if (game->win_animation_active_) {
 
             // Flip new top card if needed
             if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
               tableau_pile.back().face_up = true;
             }
 
@@ -134,6 +139,7 @@ if (game->win_animation_active_) {
 
   return TRUE;
 }
+
 
 gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
                                         GdkEventButton *event, gpointer data) {
@@ -275,6 +281,9 @@ gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
 
 std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
                                                        int card_index) {
+  // Calculate maximum foundation index
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  
   if (pile_index >= 6 && pile_index <= 12) {
     // Handle tableau piles
     const auto &tableau_pile = tableau_[pile_index - 6];
@@ -285,11 +294,28 @@ std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
     }
     return std::vector<cardlib::Card>();
   }
+  
+  // Handle foundation piles
+  if (pile_index >= 2 && pile_index <= max_foundation_index) {
+    // Get foundation pile
+    const auto &foundation_pile = foundation_[pile_index - 2];
+    if (card_index >= 0 && static_cast<size_t>(card_index) < foundation_pile.size()) {
+      // Return only the top card
+      return {foundation_pile.back()};
+    }
+    return std::vector<cardlib::Card>();
+  }
 
   // Handle other piles using getPileReference
-  auto &pile = getPileReference(pile_index);
-  if (card_index >= 0 && static_cast<size_t>(card_index) < pile.size()) {
-    return std::vector<cardlib::Card>(pile.begin() + card_index, pile.end());
+  try {
+    auto &pile = getPileReference(pile_index);
+    if (card_index >= 0 && static_cast<size_t>(card_index) < pile.size()) {
+      return std::vector<cardlib::Card>(pile.begin() + card_index, pile.end());
+    }
+  } catch (const std::exception &e) {
+    // Handle exceptions (e.g., if pile_index is out of range)
+    std::cerr << "Error in getDragCards: " << e.what() << std::endl;
   }
+  
   return std::vector<cardlib::Card>();
 }
