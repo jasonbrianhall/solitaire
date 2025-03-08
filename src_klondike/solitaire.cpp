@@ -492,6 +492,10 @@ void SolitaireGame::moveCards(std::vector<cardlib::Card> &from,
 void SolitaireGame::switchGameMode(GameMode mode) {
   if (mode == current_game_mode_)
     return;
+
+  if (win_animation_active_) {
+    stopWinAnimation();
+  }
     
   // Update the game mode
   current_game_mode_ = mode;
@@ -1240,6 +1244,10 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
 
 void SolitaireGame::dealTestLayout() {
   // Clear all piles
+  if (win_animation_active_) {
+    stopWinAnimation();
+  }
+
   stock_.clear();
   waste_.clear();
   foundation_.clear();
