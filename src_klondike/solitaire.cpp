@@ -110,20 +110,27 @@ bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
            static_cast<size_t>(card_index) == waste_.size() - 1;
   }
 
-  // Can drag from foundation only top card
-  // Check foundation piles using foundation_.size() instead of hardcoded limit
+  // Calculate maximum foundation index
   int max_foundation_index = 2 + foundation_.size() - 1;
+  
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+
+  // Can drag from foundation only top card
   if (pile_index >= 2 && pile_index <= max_foundation_index) {
     const auto &pile = foundation_[pile_index - 2];
     return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
   }
 
   // Can drag from tableau if cards are face up
-  if (pile_index >= 6 && pile_index <= 12) {
-    const auto &pile = tableau_[pile_index - 6];
-    return !pile.empty() && card_index >= 0 &&
-           static_cast<size_t>(card_index) < pile.size() &&
-           pile[card_index].face_up; // Make sure card is face up
+  if (pile_index >= first_tableau_index) {
+    int tableau_idx = pile_index - first_tableau_index;
+    if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
+      const auto &pile = tableau_[tableau_idx];
+      return !pile.empty() && card_index >= 0 &&
+             static_cast<size_t>(card_index) < pile.size() &&
+             pile[card_index].face_up; // Make sure card is face up
+    }
   }
 
   return false;
@@ -378,17 +385,20 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
     foundation_x += current_card_width_ + current_card_spacing_;
   }
 
+  // Calculate first tableau index
+  int first_tableau_index = 2 + foundation_.size();
+
   // Check tableau piles - check from top card down
   int tableau_y =
       current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < tableau_.size(); i++) {
     int pile_x = current_card_spacing_ +
                  i * (current_card_width_ + current_card_spacing_);
     if (x >= pile_x && x <= pile_x + current_card_width_) {
       const auto &pile = tableau_[i];
       if (pile.empty() && y >= tableau_y &&
           y <= tableau_y + current_card_height_) {
-        return {6 + i, -1};
+        return {first_tableau_index + i, -1};
       }
 
       // Check cards from top to bottom
@@ -396,7 +406,7 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
         int card_y = tableau_y + j * current_vert_spacing_;
         if (y >= card_y && y <= card_y + current_card_height_) {
           if (pile[j].face_up) {
-            return {6 + i, j};
+            return {first_tableau_index + i, j};
           }
           break; // Hit a face-down card, stop checking
         }
