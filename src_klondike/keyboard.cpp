@@ -429,6 +429,7 @@ void SolitaireGame::selectCardUp() {
 }
 
 // Move selection down in a tableau pile
+// Move selection down in a tableau pile
 void SolitaireGame::selectCardDown() {
   // Calculate max foundation index (depends on game mode)
   int max_foundation_index = 2 + foundation_.size() - 1;
@@ -441,55 +442,51 @@ void SolitaireGame::selectCardDown() {
   if (selected_pile_ >= 0 && selected_pile_ <= max_foundation_index) {
     int target_tableau;
 
+    // Direct mapping from top row to tableau piles
     if (selected_pile_ == 0) {
-      // Stock pile goes to tableau pile 0
+      // Stock pile goes to tableau pile 0 (first tableau)
       target_tableau = 0;
     } else if (selected_pile_ == 1) {
-      // Waste pile goes to tableau pile 1
+      // Waste pile goes to tableau pile 1 (second tableau)
       target_tableau = 1;
     } else {
-      // Foundation piles go to corresponding tableau piles
-      target_tableau = selected_pile_ - 2;
+      // Foundation piles map to tableau piles 2-6
+      // Foundation 0 (pile 2) -> Tableau 2
+      // Foundation 1 (pile 3) -> Tableau 3
+      // Foundation 2 (pile 4) -> Tableau 4
+      // Foundation 3 (pile 5) -> Tableau 5
+      // Foundation 4+ (pile 6+) -> Tableau 6 (last tableau)
+      
+      int foundation_idx = selected_pile_ - 2;
+      
+      if (foundation_idx <= 4) {
+        // Direct mapping for first 5 foundations (0-4)
+        target_tableau = foundation_idx + 2;
+      } else {
+        // Any foundation beyond the 5th goes to the 7th tableau (index 6)
+        target_tableau = 6;
+      }
     }
 
     // Check if the target_tableau is within range and valid
     if (target_tableau >= 0 && target_tableau < tableau_.size()) {
       selected_pile_ = first_tableau_index + target_tableau;
       
-      // Always select the bottom-most (highest) face-up card
-      int highest_face_up = -1;
-      for (int i = 0; i < tableau_[target_tableau].size(); i++) {
-        if (tableau_[target_tableau][i].face_up) {
-          highest_face_up = i;
-        }
-      }
-      
-      // If no face-up cards, use -1 (empty) or the last card index
+      // Select the bottom-most card in the tableau
       selected_card_idx_ = tableau_[target_tableau].empty() ? 
                            -1 : 
-                           (highest_face_up == -1 ? 
-                           0 : 
-                           tableau_[target_tableau].size() - 1);
+                           tableau_[target_tableau].size() - 1;
     }
   }
   // If we're already in the tableau, try to move down
   else if (selected_pile_ >= first_tableau_index && selected_pile_ <= last_tableau_index) {
     int tableau_idx = selected_pile_ - first_tableau_index;
     if (tableau_idx >= 0 && tableau_idx < tableau_.size() && !tableau_[tableau_idx].empty()) {
-      // If no card selected yet, select the topmost face-up card
+      // If no card selected yet, select the top card
       if (selected_card_idx_ < 0) {
-        for (int i = 0; i < tableau_[tableau_idx].size(); i++) {
-          if (tableau_[tableau_idx][i].face_up) {
-            selected_card_idx_ = i;
-            break;
-          }
-        }
-        // If still no card found, select the top card (even if face down)
-        if (selected_card_idx_ < 0) {
-          selected_card_idx_ = 0;
-        }
+        selected_card_idx_ = 0;
       }
-      // Try to move down to next face-up card
+      // Try to move down to next card
       else if (selected_card_idx_ < tableau_[tableau_idx].size() - 1) {
         selected_card_idx_++;
       }
