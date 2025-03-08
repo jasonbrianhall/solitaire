@@ -18,6 +18,8 @@ SolitaireGame::SolitaireGame()
       selected_pile_(-1), selected_card_idx_(-1),
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
+      current_game_mode_(GameMode::STANDARD_KLONDIKE),
+      multi_deck_(1), // Initialize with 1 deck
       sound_enabled_(true),           // Set sound to enabled by default
       sounds_zip_path_("sound.zip"),
       current_seed_(0) { // Initialize to 0 temporarily
@@ -47,48 +49,54 @@ void SolitaireGame::run(int argc, char **argv) {
 }
 
 void SolitaireGame::initializeGame() {
-  try {
-    // Try to find cards.zip in several common locations
-    const std::vector<std::string> paths = {"cards.zip"};
+  if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {
+    // Original single-deck initialization
+    try {
+      // Try to find cards.zip in several common locations
+      const std::vector<std::string> paths = {"cards.zip"};
 
-    bool loaded = false;
-    for (const auto &path : paths) {
-      try {
-        deck_ = cardlib::Deck(path);
-        deck_.removeJokers();
-        loaded = true;
-        break;
-      } catch (const std::exception &e) {
-        std::cerr << "Failed to load cards from " << path << ": " << e.what()
-                  << std::endl;
+      bool loaded = false;
+      for (const auto &path : paths) {
+        try {
+          deck_ = cardlib::Deck(path);
+          deck_.removeJokers();
+          loaded = true;
+          break;
+        } catch (const std::exception &e) {
+          std::cerr << "Failed to load cards from " << path << ": " << e.what()
+                    << std::endl;
+        }
       }
+
+      if (!loaded) {
+        throw std::runtime_error("Could not find cards.zip in any search path");
+      }
+      
+      deck_.shuffle(current_seed_);
+
+      // Clear all piles
+      stock_.clear();
+      waste_.clear();
+      foundation_.clear();
+      tableau_.clear();
+
+      // Initialize foundation piles (4 empty piles for aces)
+      foundation_.resize(4);
+
+      // Initialize tableau (7 piles)
+      tableau_.resize(7);
+
+      // Deal cards
+      deal();
+
+    } catch (const std::exception &e) {
+      std::cerr << "Fatal error during game initialization: " << e.what()
+                << std::endl;
+      exit(1);
     }
-
-    if (!loaded) {
-      throw std::runtime_error("Could not find cards.zip in any search path");
-    }
-    
-    deck_.shuffle(current_seed_);
-
-    // Clear all piles
-    stock_.clear();
-    waste_.clear();
-    foundation_.clear();
-    tableau_.clear();
-
-    // Initialize foundation piles (4 empty piles for aces)
-    foundation_.resize(4);
-
-    // Initialize tableau (7 piles)
-    tableau_.resize(7);
-
-    // Deal cards
-    deal();
-
-  } catch (const std::exception &e) {
-    std::cerr << "Fatal error during game initialization: " << e.what()
-              << std::endl;
-    exit(1);
+  } else {
+    // Multi-deck initialization
+    initializeMultiDeckGame();
   }
 }
 
@@ -465,8 +473,117 @@ void SolitaireGame::moveCards(std::vector<cardlib::Card> &from,
   from.erase(from.end() - count, from.end());
 }
 
+void SolitaireGame::switchGameMode(GameMode mode) {
+  if (mode == current_game_mode_)
+    return;
+    
+  // Update the game mode
+  current_game_mode_ = mode;
+
+  // Start a new game with the selected mode
+  if (mode == GameMode::STANDARD_KLONDIKE) {
+    initializeGame(); // Use the existing single-deck initialization
+  } else {
+    initializeMultiDeckGame(); // Use the new multi-deck initialization
+  }
+  
+  refreshDisplay();
+}
+
+void SolitaireGame::initializeMultiDeckGame() {
+  try {
+    // Determine number of decks based on mode
+    size_t num_decks = (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
+    
+    // Try to find cards.zip in several common locations
+    const std::vector<std::string> paths = {"cards.zip"};
+
+    bool loaded = false;
+    for (const auto &path : paths) {
+      try {
+        // Use MultiDeck instead of Deck
+        multi_deck_ = cardlib::MultiDeck(num_decks, path);
+        
+        // Remove jokers from all decks
+        for (size_t i = 0; i < num_decks; i++) {
+          multi_deck_.getDeck(i).removeJokers();
+        }
+        
+        loaded = true;
+        break;
+      } catch (const std::exception &e) {
+        std::cerr << "Failed to load cards from " << path << ": " << e.what()
+                  << std::endl;
+      }
+    }
+
+    if (!loaded) {
+      throw std::runtime_error("Could not find cards.zip in any search path");
+    }
+    
+    multi_deck_.shuffle(current_seed_);
+
+    // Clear all piles
+    stock_.clear();
+    waste_.clear();
+    foundation_.clear();
+    tableau_.clear();
+
+    // For multiple decks, increase the number of foundation piles
+    // Each suit appears multiple times (once per deck)
+    foundation_.resize(4 * num_decks);
+
+    // Keep tableau at 7 piles for simplicity
+    tableau_.resize(7);
+
+    // Deal cards using the multi-deck deal method
+    dealMultiDeck();
+
+  } catch (const std::exception &e) {
+    std::cerr << "Fatal error during game initialization: " << e.what()
+              << std::endl;
+    exit(1);
+  }
+}
+
+
+void SolitaireGame::dealMultiDeck() {
+  // Clear all piles first
+  stock_.clear();
+  waste_.clear();
+  
+  // Deal to tableau - i represents the pile number (0-6)
+  for (int i = 0; i < 7; i++) {
+    // For each pile i, deal i cards face down
+    for (int j = 0; j < i; j++) {
+      if (auto card = multi_deck_.drawCard()) {
+        tableau_[i].emplace_back(*card, false); // face down
+        playSound(GameSoundEvent::CardFlip);
+      }
+    }
+    // Deal one card face up at the end
+    if (auto card = multi_deck_.drawCard()) {
+      tableau_[i].emplace_back(*card, true); // face up
+      playSound(GameSoundEvent::CardFlip);
+    }
+  }
+
+  // Move remaining cards to stock (face down)
+  while (auto card = multi_deck_.drawCard()) {
+    stock_.push_back(*card);
+  }
+
+  // Start the deal animation
+  startDealAnimation();
+}
+
 bool SolitaireGame::checkWinCondition() const {
-  // Check if all foundation piles have 13 cards
+  // Get the number of decks based on the current mode
+  size_t num_decks = (current_game_mode_ == GameMode::STANDARD_KLONDIKE) ? 1 : 
+                     (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
+  
+  // For multi-deck games, each foundation should have 13 cards
+  // There are 4 * num_decks foundations
   for (const auto &pile : foundation_) {
     if (pile.size() != 13)
       return false;
@@ -475,7 +592,7 @@ bool SolitaireGame::checkWinCondition() const {
   // Check if all other piles are empty
   return stock_.empty() && waste_.empty() &&
          std::all_of(tableau_.begin(), tableau_.end(),
-                     [](const auto &pile) { return pile.empty(); });
+                    [](const auto &pile) { return pile.empty(); });
 }
 
 // Function to refresh the display
@@ -694,6 +811,7 @@ void SolitaireGame::setupMenuBar() {
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
 
+
   // Add separator before Quit
   GtkWidget *sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
@@ -850,6 +968,57 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), soundItem);
 
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), optionsMenuItem);
+
+GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
+GtkWidget *gameModeMenu = gtk_menu_new();
+gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
+
+// Standard Klondike option (1 deck)
+GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "_Standard (1 Deck)");
+GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
+g_signal_connect(
+    G_OBJECT(standardItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::STANDARD_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
+
+// Double Klondike option (2 decks)
+GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "_Double (2 Decks)");
+g_signal_connect(
+    G_OBJECT(doubleItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::DOUBLE_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
+
+// Triple Klondike option (3 decks)
+GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "_Triple (3 Decks)");
+g_signal_connect(
+    G_OBJECT(tripleItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::TRIPLE_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
+
+// Set initial state based on current mode
+gtk_check_menu_item_set_active(
+    GTK_CHECK_MENU_ITEM(
+        current_game_mode_ == GameMode::STANDARD_KLONDIKE ? standardItem :
+        current_game_mode_ == GameMode::DOUBLE_KLONDIKE ? doubleItem : tripleItem),
+    TRUE);
+
+// Add the game mode submenu to the options menu
+gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), gameModeItem);
 
   // ==================== HELP MENU ====================
   GtkWidget *helpMenu = gtk_menu_new();

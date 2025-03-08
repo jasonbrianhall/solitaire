@@ -330,6 +330,19 @@ void showKeyboardShortcuts();
   void drawDraggedCards();
   void drawWinAnimation();
   void drawDealAnimation();
+  void dealMultiDeck();
+  // Game mode (number of decks)
+  GameMode current_game_mode_ = GameMode::STANDARD_KLONDIKE;
+  
+  // Replace the single deck with a MultiDeck
+  cardlib::MultiDeck multi_deck_;
+  
+  // Add a method to switch game modes
+  void switchGameMode(GameMode mode);
+  
+  // Initialization method for multiple decks
+  void initializeMultiDeckGame();
+
 
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
