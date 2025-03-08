@@ -503,6 +503,11 @@ void SolitaireGame::switchGameMode(GameMode mode) {
     initializeMultiDeckGame(); // Use the new multi-deck initialization
   }
   
+  // Get current window dimensions to update card scaling
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(game_area_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
+  
   refreshDisplay();
 }
 
@@ -1554,8 +1559,28 @@ void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
 
 double SolitaireGame::getScaleFactor(int window_width,
                                      int window_height) const {
+  // Define optimal widths for each game mode based on testing
+  const int OPTIMAL_WIDTH_STANDARD = 800;
+  const int OPTIMAL_WIDTH_DOUBLE = 1300;
+  const int OPTIMAL_WIDTH_TRIPLE = 1800;
+  
+  // Select the optimal width based on current game mode
+  int optimal_width;
+  switch (current_game_mode_) {
+    case GameMode::DOUBLE_KLONDIKE:
+      optimal_width = OPTIMAL_WIDTH_DOUBLE;
+      break;
+    case GameMode::TRIPLE_KLONDIKE:
+      optimal_width = OPTIMAL_WIDTH_TRIPLE;
+      break;
+    case GameMode::STANDARD_KLONDIKE:
+    default:
+      optimal_width = OPTIMAL_WIDTH_STANDARD;
+      break;
+  }
+  
   // Calculate scale factors for both dimensions
-  double width_scale = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
+  double width_scale = static_cast<double>(window_width) / optimal_width;
   double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
 
   // Use the smaller scale to ensure everything fits
