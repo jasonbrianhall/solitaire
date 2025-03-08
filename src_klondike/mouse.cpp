@@ -75,80 +75,9 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
       }
     }
   } else if (event->button == 3) { // Right click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
-
-    // Try to move card to foundation
-    if (pile_index >= 0) {
-      const cardlib::Card *card = nullptr;
-      int target_foundation = -1;
-
-      // Calculate max foundation index
-      int max_foundation_index = 2 + game->foundation_.size() - 1;
-      // First tableau index is right after the last foundation
-      int first_tableau_index = max_foundation_index + 1;
-
-      // Get the card based on pile type
-      if (pile_index == 1 && !game->waste_.empty()) {
-        card = &game->waste_.back();
-        // Find which foundation to move to
-        for (int i = 0; i < game->foundation_.size(); i++) {
-          if (game->canMoveToFoundation(*card, i)) {
-            target_foundation = i;
-            break;
-          }
-        }
-
-        if (target_foundation >= 0) {
-          // Start animation
-          game->startFoundationMoveAnimation(*card, pile_index, 0,
-                                             target_foundation + 2);
-          game->playSound(GameSoundEvent::CardPlace);
-          // Remove card from waste pile
-          game->waste_.pop_back();
-
-          // The card will be added to the foundation in
-          // updateFoundationMoveAnimation when animation completes
-          return TRUE;
-        }
-      } else if (pile_index >= first_tableau_index) { // Tableau piles with dynamic index
-        int tableau_idx = pile_index - first_tableau_index;
-        if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
-          auto &tableau_pile = game->tableau_[tableau_idx];
-          if (!tableau_pile.empty() && tableau_pile.back().face_up) {
-            card = &tableau_pile.back().card;
-
-            // Find which foundation to move to
-            for (int i = 0; i < game->foundation_.size(); i++) {
-              if (game->canMoveToFoundation(*card, i)) {
-                target_foundation = i;
-                break;
-              }
-            }
-
-            if (target_foundation >= 0) {
-              // Start animation
-              game->startFoundationMoveAnimation(*card, pile_index,
-                                               tableau_pile.size() - 1,
-                                               target_foundation + 2);
-              game->playSound(GameSoundEvent::CardPlace);
-
-              // Remove card from tableau
-              tableau_pile.pop_back();
-
-              // Flip new top card if needed
-              if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-                tableau_pile.back().face_up = true;
-              }
-
-              // The card will be added to the foundation in
-              // updateFoundationMoveAnimation when animation completes
-              return TRUE;
-            }
-          }
-        }
-      }
-    }
-
+    // Instead of trying to move specific cards, just call autoFinishGame()
+    // which already knows how to properly move cards to foundation piles
+    game->autoFinishGame();
     return TRUE;
   }
 
