@@ -100,6 +100,7 @@ void SolitaireGame::updateWinAnimation() {
   refreshDisplay();
 }
 
+// Simple fix for the win animation in multi-deck mode
 void SolitaireGame::startWinAnimation() {
   if (win_animation_active_)
     return;
@@ -108,40 +109,64 @@ void SolitaireGame::startWinAnimation() {
 
   playSound(GameSoundEvent::WinGame);
   // Show win message
-GtkWidget *dialog = gtk_message_dialog_new(
-    GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
-    GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+      GTK_BUTTONS_OK, NULL);  // Set message text to NULL initially
 
-// Get the message area to apply formatting
-GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
+  // Get the message area to apply formatting
+  GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
 
-// Create a label with centered text
-GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
-gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
-gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
-gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
-gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
-gtk_widget_set_margin_start(label, 20);
-gtk_widget_set_margin_end(label, 20);
-gtk_widget_set_margin_top(label, 10);
-gtk_widget_set_margin_bottom(label, 10);
+  // Create a label with centered text
+  GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\nClick or press any key to stop the celebration and start a new game");
+  gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+  gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+  gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_margin_start(label, 20);
+  gtk_widget_set_margin_end(label, 20);
+  gtk_widget_set_margin_top(label, 10);
+  gtk_widget_set_margin_bottom(label, 10);
 
-// Add the label to the message area
-gtk_container_add(GTK_CONTAINER(message_area), label);
-gtk_widget_show(label);
+  // Add the label to the message area
+  gtk_container_add(GTK_CONTAINER(message_area), label);
+  gtk_widget_show(label);
 
-// Run the dialog
-gtk_dialog_run(GTK_DIALOG(dialog));
-gtk_widget_destroy(dialog);
+  // Run the dialog
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 
   win_animation_active_ = true;
   cards_launched_ = 0;
   launch_timer_ = 0;
   animated_cards_.clear();
 
-  // Initialize tracking for animated cards
+  // If we're not in single-deck mode, adjust the foundation piles for the animation
+  if (current_game_mode_ != GameMode::STANDARD_KLONDIKE) {
+    // Save the original foundation piles for potential restoration later if needed
+    std::vector<std::vector<cardlib::Card>> original_foundation = foundation_;
+    
+    // Clear the foundation piles for animation
+    foundation_.clear();
+    foundation_.resize(4); // Always 4 foundation piles (1 deck) for animation
+    
+    // Create a standard ordered deck (Ace to King for each suit)
+    for (int suit = 0; suit < 4; suit++) {
+      foundation_[suit].clear();
+      
+      // Add cards Ace to King
+      for (int rank = static_cast<int>(cardlib::Rank::ACE); 
+           rank <= static_cast<int>(cardlib::Rank::KING); 
+           rank++) {
+        cardlib::Card card(static_cast<cardlib::Suit>(suit), 
+                           static_cast<cardlib::Rank>(rank));
+        foundation_[suit].push_back(card);
+      }
+    }
+  }
+
+  // Set up the animation tracking structure
   animated_foundation_cards_.clear();
-  animated_foundation_cards_.resize(4); // 4 foundation piles
+  animated_foundation_cards_.resize(4); // Always 4 foundation piles (1 deck)
   for (size_t i = 0; i < 4; i++) {
     animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
   }
