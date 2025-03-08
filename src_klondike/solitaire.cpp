@@ -5,6 +5,9 @@
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <direct.h>
+#include <windows.h>  // For Sleep function on Windows
+#else
+#include <unistd.h>   // For usleep function on Unix/Linux
 #endif
 
 SolitaireGame::SolitaireGame()
@@ -25,7 +28,11 @@ SolitaireGame::SolitaireGame()
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
   initializeAudio();
-  sleep(0.1);
+#ifdef _WIN32
+   Sleep(100);  // Windows sleep takes milliseconds
+#else
+   usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second)
+#endif
   current_seed_ = rand();  // Generate random seed
   initializeGame();
   initializeSettingsDir();
