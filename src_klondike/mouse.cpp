@@ -146,19 +146,25 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
     if (target_pile >= 0) {
       bool move_successful = false;
 
-      // Handle dropping on foundation piles (index 2-5)
-      if (target_pile >= 2 && target_pile <= 5) {
+      // Calculate max foundation index based on actual foundation size
+      int max_foundation_index = 2 + game->foundation_.size() - 1;
+      
+      // Calculate max tableau index
+      int first_tableau_index = 6; // Tableau piles always start at index 6
+      int max_tableau_index = first_tableau_index + game->tableau_.size() - 1;
+
+      // Handle dropping on foundation piles (all foundation piles, not just the first four)
+      if (target_pile >= 2 && target_pile <= max_foundation_index) {
         auto &foundation_pile = game->foundation_[target_pile - 2];
         if (game->canMoveToPile(game->drag_cards_, foundation_pile, true)) {
           // Remove card from source
-          if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-            auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
+          if (game->drag_source_pile_ >= first_tableau_index && 
+              game->drag_source_pile_ <= max_tableau_index) {
+            auto &source_tableau = game->tableau_[game->drag_source_pile_ - first_tableau_index];
             source_tableau.pop_back();
 
             // Flip over the new top card if there is one
             if (!source_tableau.empty() && !source_tableau.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
               source_tableau.back().face_up = true;
             }
           } else {
@@ -171,9 +177,9 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
           move_successful = true;
         }
       }
-      // Handle dropping on tableau piles (index 6-12)
-      else if (target_pile >= 6 && target_pile <= 12) {
-        auto &tableau_pile = game->tableau_[target_pile - 6];
+      // Handle dropping on tableau piles
+      else if (target_pile >= first_tableau_index && target_pile <= max_tableau_index) {
+        auto &tableau_pile = game->tableau_[target_pile - first_tableau_index];
         std::vector<cardlib::Card> target_cards;
         if (!tableau_pile.empty()) {
           target_cards = {tableau_pile.back().card};
@@ -181,16 +187,15 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
 
         if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
           // Remove cards from source
-          if (game->drag_source_pile_ >= 6 && game->drag_source_pile_ <= 12) {
-            auto &source_tableau = game->tableau_[game->drag_source_pile_ - 6];
+          if (game->drag_source_pile_ >= first_tableau_index && 
+              game->drag_source_pile_ <= max_tableau_index) {
+            auto &source_tableau = game->tableau_[game->drag_source_pile_ - first_tableau_index];
             source_tableau.erase(source_tableau.end() -
                                      game->drag_cards_.size(),
                                  source_tableau.end());
 
             // Flip over the new top card if there is one
             if (!source_tableau.empty() && !source_tableau.back().face_up) {
-              // game->playSound(GameSoundEvent::CardFlip);
-
               source_tableau.back().face_up = true;
             }
           } else {
@@ -208,20 +213,8 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
       }
 
       if (move_successful) {
-        /*if (game->checkWinCondition()) {
-          GtkWidget *dialog = gtk_message_dialog_new(
-              GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-              GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Congratulations! You've won!");
-          gtk_dialog_run(GTK_DIALOG(dialog));
-          gtk_widget_destroy(dialog);
-
-          game->initializeGame();
-        }
-        gtk_widget_queue_draw(game->game_area_);
-      }*/
         if (game->checkWinCondition()) {
-          game->startWinAnimation(); // Start animation instead of showing
-                                     // dialog
+          game->startWinAnimation(); // Start animation instead of showing dialog
         }
         gtk_widget_queue_draw(game->game_area_);
       }

@@ -111,7 +111,9 @@ bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
   }
 
   // Can drag from foundation only top card
-  if (pile_index >= 2 && pile_index <= 5) {
+  // Check foundation piles using foundation_.size() instead of hardcoded limit
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  if (pile_index >= 2 && pile_index <= max_foundation_index) {
     const auto &pile = foundation_[pile_index - 2];
     return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
   }
@@ -132,8 +134,12 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
     return stock_;
   if (pile_index == 1)
     return waste_;
-  if (pile_index >= 2 && pile_index <= 5)
+    
+  // Check foundation piles using foundation_.size() instead of hardcoded limit
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  if (pile_index >= 2 && pile_index <= max_foundation_index)
     return foundation_[pile_index - 2];
+    
   if (pile_index >= 6 && pile_index <= 12) {
     // We need to handle tableau differently or change the function signature
     throw std::runtime_error(
@@ -359,9 +365,9 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
     return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
   }
 
-  // Check foundation piles
+  // Check foundation piles - using foundation_.size() instead of hardcoded limit
   int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < foundation_.size(); i++) {
     if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
         y >= current_card_spacing_ &&
         y <= current_card_spacing_ + current_card_height_) {
