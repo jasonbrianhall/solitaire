@@ -28,12 +28,9 @@ SolitaireGame::SolitaireGame()
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
   initializeAudio();
-#ifdef _WIN32
-   Sleep(100);  // Windows sleep takes milliseconds
-#else
-   usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second)
-#endif
-  current_seed_ = rand();  // Generate random seed
+#ifndef _WIN32
+   usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second); timing issue; doesn't initialize the sound before the game is loaded.
+#endif  current_seed_ = rand();  // Generate random seed
   initializeGame();
   initializeSettingsDir();
   loadSettings();
