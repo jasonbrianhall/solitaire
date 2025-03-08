@@ -915,6 +915,7 @@ void SolitaireGame::updateDealAnimation() {
       card.x = card.target_x;
       card.y = card.target_y;
       card.active = false;
+      playSound(GameSoundEvent::CardPlace);
 #ifdef DEBUG
       std::cout << "Card arrived at destination" << std::endl; // Debug output
 #endif
@@ -1005,6 +1006,10 @@ void SolitaireGame::dealNextCard() {
 
   // Give it a bigger initial rotation to make it more visible
   anim_card.rotation = (rand() % 1256) / 100.0 - 6.28;
+
+  playSound(tableau_[pile_index][card_index].face_up ? 
+            GameSoundEvent::CardFlip : 
+            GameSoundEvent::DealCard);
 
   // Add to animation list
   deal_cards_.push_back(anim_card);

@@ -283,13 +283,13 @@ void SolitaireGame::deal() {
     for (int j = 0; j < i; j++) {
       if (auto card = deck_.drawCard()) {
         tableau_[i].emplace_back(*card, false); // face down
-        playSound(GameSoundEvent::CardFlip);
+        //playSound(GameSoundEvent::CardFlip);
       }
     }
     // Deal one card face up at the end
     if (auto card = deck_.drawCard()) {
       tableau_[i].emplace_back(*card, true); // face up
-      playSound(GameSoundEvent::CardFlip);
+      //playSound(GameSoundEvent::CardFlip);
     }
   }
 
@@ -588,13 +588,13 @@ void SolitaireGame::dealMultiDeck() {
     for (int j = 0; j < i; j++) {
       if (auto card = multi_deck_.drawCard()) {
         tableau_[i].emplace_back(*card, false); // face down
-        playSound(GameSoundEvent::CardFlip);
+        //playSound(GameSoundEvent::CardFlip);
       }
     }
     // Deal one card face up at the end
     if (auto card = multi_deck_.drawCard()) {
       tableau_[i].emplace_back(*card, true); // face up
-      playSound(GameSoundEvent::CardFlip);
+      //playSound(GameSoundEvent::CardFlip);
     }
   }
 
