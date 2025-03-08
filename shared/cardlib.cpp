@@ -439,8 +439,25 @@ void MultiDeck::loadCardsFromZip(const std::string &zip_path, size_t num_decks) 
 }
 
 void MultiDeck::shuffle(unsigned seed) {
+    // Collect all cards from all decks
+    std::vector<Card> all_cards;
     for (auto &deck : decks_) {
-        deck.shuffle(seed);
+        auto deck_cards = deck.getAllCards();
+        all_cards.insert(all_cards.end(), deck_cards.begin(), deck_cards.end());
+    }
+    
+    // Shuffle all cards together
+    std::mt19937 gen(seed);
+    std::shuffle(all_cards.begin(), all_cards.end(), gen);
+    
+    // Clear all decks
+    for (auto &deck : decks_) {
+        deck = Deck();  // Reset to empty deck
+    }
+    
+    // Redistribute cards evenly
+    for (size_t i = 0; i < all_cards.size(); i++) {
+        decks_[i % decks_.size()].addCard(all_cards[i]);
     }
 }
 
