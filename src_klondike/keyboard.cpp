@@ -216,6 +216,7 @@ void SolitaireGame::toggleFullscreen() {
 }
 
 // Select the next (right) pile
+// Select the next (right) pile
 void SolitaireGame::selectNextPile() {
   // Calculate max indices based on actual sizes
   int max_foundation_index = 2 + foundation_.size() - 1;
@@ -229,22 +230,31 @@ void SolitaireGame::selectNextPile() {
     // Move to the next pile
     selected_pile_++;
 
-    // Wrap around if we're past the last tableau pile
+    // If we're at the last foundation pile, go to first tableau pile
+    if (selected_pile_ > max_foundation_index && selected_pile_ < 6) {
+      selected_pile_ = 6;  // First tableau pile
+    }
+    
+    // If we're past the last tableau pile, go to stock pile
     if (selected_pile_ > max_tableau_index) {
-      selected_pile_ = 0;
+      selected_pile_ = 0;  // Stock pile
     }
 
     // Set card index based on the selected pile
     if (selected_pile_ == 0) {
+      // Stock pile
       selected_card_idx_ = stock_.empty() ? -1 : 0;
     } else if (selected_pile_ == 1) {
+      // Waste pile - select top card
       selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
     } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
+      // Foundation piles
       int foundation_idx = selected_pile_ - 2;
       selected_card_idx_ = foundation_[foundation_idx].empty()
-                               ? -1
-                               : foundation_[foundation_idx].size() - 1;
+                              ? -1
+                              : foundation_[foundation_idx].size() - 1;
     } else if (selected_pile_ >= 6 && selected_pile_ <= max_tableau_index) {
+      // Tableau piles
       int tableau_idx = selected_pile_ - 6;
       selected_card_idx_ =
           tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
@@ -268,22 +278,31 @@ void SolitaireGame::selectPreviousPile() {
     // Move to the previous pile
     selected_pile_--;
 
-    // Wrap around if we're before the stock pile (index 0)
+    // If we're at pile 5 (between foundation and tableau), go to last foundation pile
+    if (selected_pile_ == 5) {
+      selected_pile_ = max_foundation_index;
+    }
+
+    // If we're before the first pile, wrap to the last tableau pile
     if (selected_pile_ < 0) {
       selected_pile_ = max_tableau_index;
     }
 
     // Set card index based on the selected pile
     if (selected_pile_ == 0) {
+      // Stock pile
       selected_card_idx_ = stock_.empty() ? -1 : 0;
     } else if (selected_pile_ == 1) {
+      // Waste pile - select top card
       selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
     } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
+      // Foundation piles
       int foundation_idx = selected_pile_ - 2;
       selected_card_idx_ = foundation_[foundation_idx].empty()
                                ? -1
                                : foundation_[foundation_idx].size() - 1;
     } else if (selected_pile_ >= 6 && selected_pile_ <= max_tableau_index) {
+      // Tableau piles
       int tableau_idx = selected_pile_ - 6;
       selected_card_idx_ =
           tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
@@ -590,9 +609,27 @@ bool SolitaireGame::tryMoveSelectedCard() {
 void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
   int x = 0, y = 0;
   
-  // Calculate max indices based on actual sizes
+  // Calculate max indices based on actual sizes and game mode
   int max_foundation_index = 2 + foundation_.size() - 1;
-  int max_tableau_index = 6 + tableau_.size() - 1;
+  int first_tableau_index;
+  
+  // Determine first tableau index based on game mode
+  switch (current_game_mode_) {
+    case GameMode::STANDARD_KLONDIKE:
+      first_tableau_index = 6;
+      break;
+    case GameMode::DOUBLE_KLONDIKE:
+      first_tableau_index = 10;
+      break;
+    case GameMode::TRIPLE_KLONDIKE:
+      first_tableau_index = 14;
+      break;
+    default:
+      first_tableau_index = 6; // Default fallback
+      break;
+  }
+  
+  int max_tableau_index = first_tableau_index + tableau_.size() - 1;
 
   if (!cr || selected_pile_ == -1) {
     return;
@@ -601,7 +638,7 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
   // Validate keyboard selection
   if (keyboard_selection_active_) {
     if (source_pile_ < 0 ||
-        (source_pile_ >= 6 && source_pile_ - 6 >= tableau_.size()) ||
+        (source_pile_ >= first_tableau_index && source_pile_ - first_tableau_index >= tableau_.size()) ||
         (source_pile_ == 1 && waste_.empty())) {
       // Invalid source pile, reset selection state
       keyboard_selection_active_ = false;
@@ -625,9 +662,9 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     x = (3 + selected_pile_ - 2) *
         (current_card_width_ + current_card_spacing_);
     y = current_card_spacing_;
-  } else if (selected_pile_ >= 6 && selected_pile_ <= max_tableau_index) {
+  } else if (selected_pile_ >= first_tableau_index && selected_pile_ <= max_tableau_index) {
     // Tableau piles
-    int tableau_idx = selected_pile_ - 6;
+    int tableau_idx = selected_pile_ - first_tableau_index;
     x = current_card_spacing_ +
         tableau_idx * (current_card_width_ + current_card_spacing_);
 
@@ -635,8 +672,18 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     if (selected_card_idx_ == -1) {
       y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
     } else {
-      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-          selected_card_idx_ * current_vert_spacing_;
+      // Make sure we have a valid card index for this tableau
+      if (tableau_idx >= 0 && tableau_idx < tableau_.size() && 
+          selected_card_idx_ >= 0 && selected_card_idx_ < tableau_[tableau_idx].size()) {
+        // Highlight the specific card at the selected index
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            selected_card_idx_ * current_vert_spacing_;
+      } else {
+        // If card index is invalid, default to highlighting the pile spot
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+        // Reset the invalid card index
+        selected_card_idx_ = -1;
+      }
     }
   }
 
@@ -657,9 +704,9 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
 
   // If we have a card selected for movement, highlight all cards below it in a
   // tableau pile
-  if (keyboard_selection_active_ && source_pile_ >= 6 && source_pile_ <= max_tableau_index &&
+  if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_pile_ <= max_tableau_index &&
       source_card_idx_ >= 0) {
-    int tableau_idx = source_pile_ - 6;
+    int tableau_idx = source_pile_ - first_tableau_index;
     auto &tableau_pile = tableau_[tableau_idx];
 
     if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
