@@ -217,6 +217,13 @@ void SolitaireGame::toggleFullscreen() {
 
 // Select the next (right) pile
 void SolitaireGame::selectNextPile() {
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+  // Calculate last tableau index
+  int last_tableau_index = first_tableau_index + 6;
+
   if (selected_pile_ == -1) {
     // Start with stock pile (index 0)
     selected_pile_ = 0;
@@ -225,8 +232,8 @@ void SolitaireGame::selectNextPile() {
     // Move to the next pile
     selected_pile_++;
 
-    // Wrap around if we're past the last tableau pile (index 12)
-    if (selected_pile_ > 12) {
+    // Wrap around if we're past the last tableau pile
+    if (selected_pile_ > last_tableau_index) {
       selected_pile_ = 0;
     }
 
@@ -235,15 +242,34 @@ void SolitaireGame::selectNextPile() {
       selected_card_idx_ = stock_.empty() ? -1 : 0;
     } else if (selected_pile_ == 1) {
       selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
-    } else if (selected_pile_ >= 2 && selected_pile_ <= 5) {
+    } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
       int foundation_idx = selected_pile_ - 2;
-      selected_card_idx_ = foundation_[foundation_idx].empty()
-                               ? -1
-                               : foundation_[foundation_idx].size() - 1;
-    } else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
-      int tableau_idx = selected_pile_ - 6;
-      selected_card_idx_ =
-          tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
+      if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+        selected_card_idx_ = foundation_[foundation_idx].empty()
+                              ? -1
+                              : foundation_[foundation_idx].size() - 1;
+      } else {
+        selected_card_idx_ = -1;
+      }
+    } else if (selected_pile_ >= first_tableau_index && selected_pile_ <= last_tableau_index) {
+      int tableau_idx = selected_pile_ - first_tableau_index;
+      if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+        // Find the bottom-most face-up card
+        int highest_face_up = -1;
+        for (int i = 0; i < tableau_[tableau_idx].size(); i++) {
+          if (tableau_[tableau_idx][i].face_up) {
+            highest_face_up = i;
+          }
+        }
+        
+        selected_card_idx_ = tableau_[tableau_idx].empty() 
+                               ? -1 
+                               : (highest_face_up >= 0 
+                                 ? tableau_[tableau_idx].size() - 1 
+                                 : highest_face_up);
+      } else {
+        selected_card_idx_ = -1;
+      }
     }
   }
 
@@ -252,17 +278,28 @@ void SolitaireGame::selectNextPile() {
 
 // Select the previous (left) pile
 void SolitaireGame::selectPreviousPile() {
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+  // Calculate last tableau index
+  int last_tableau_index = first_tableau_index + 6;
+
   if (selected_pile_ == -1) {
-    // Start with the last tableau pile (index 12)
-    selected_pile_ = 12;
-    selected_card_idx_ = tableau_[6].empty() ? -1 : tableau_[6].size() - 1;
+    // Start with the last tableau pile
+    selected_pile_ = last_tableau_index;
+    if (tableau_.size() > 6) {
+      selected_card_idx_ = tableau_[6].empty() ? -1 : tableau_[6].size() - 1;
+    } else {
+      selected_card_idx_ = -1;
+    }
   } else {
     // Move to the previous pile
     selected_pile_--;
 
     // Wrap around if we're before the stock pile (index 0)
     if (selected_pile_ < 0) {
-      selected_pile_ = 12;
+      selected_pile_ = last_tableau_index;
     }
 
     // Set card index based on the selected pile
@@ -270,15 +307,34 @@ void SolitaireGame::selectPreviousPile() {
       selected_card_idx_ = stock_.empty() ? -1 : 0;
     } else if (selected_pile_ == 1) {
       selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
-    } else if (selected_pile_ >= 2 && selected_pile_ <= 5) {
+    } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
       int foundation_idx = selected_pile_ - 2;
-      selected_card_idx_ = foundation_[foundation_idx].empty()
-                               ? -1
-                               : foundation_[foundation_idx].size() - 1;
-    } else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
-      int tableau_idx = selected_pile_ - 6;
-      selected_card_idx_ =
-          tableau_[tableau_idx].empty() ? -1 : tableau_[tableau_idx].size() - 1;
+      if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+        selected_card_idx_ = foundation_[foundation_idx].empty()
+                                ? -1
+                                : foundation_[foundation_idx].size() - 1;
+      } else {
+        selected_card_idx_ = -1;
+      }
+    } else if (selected_pile_ >= first_tableau_index && selected_pile_ <= last_tableau_index) {
+      int tableau_idx = selected_pile_ - first_tableau_index;
+      if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+        // Find the bottom-most face-up card
+        int highest_face_up = -1;
+        for (int i = 0; i < tableau_[tableau_idx].size(); i++) {
+          if (tableau_[tableau_idx][i].face_up) {
+            highest_face_up = i;
+          }
+        }
+        
+        selected_card_idx_ = tableau_[tableau_idx].empty() 
+                               ? -1 
+                               : (highest_face_up == -1 
+                                 ? tableau_[tableau_idx].size() - 1 
+                                 : tableau_[tableau_idx].size() - 1);
+      } else {
+        selected_card_idx_ = -1;
+      }
     }
   }
 
@@ -287,11 +343,18 @@ void SolitaireGame::selectPreviousPile() {
 
 // Move selection up in a tableau pile
 void SolitaireGame::selectCardUp() {
-  if (selected_pile_ < 6 || selected_pile_ > 12) {
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+  // Calculate last tableau index
+  int last_tableau_index = first_tableau_index + 6;
+
+  if (selected_pile_ < first_tableau_index || selected_pile_ > last_tableau_index) {
     return;
   }
 
-  int tableau_idx = selected_pile_ - 6;
+  int tableau_idx = selected_pile_ - first_tableau_index;
   if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
     return;
   }
@@ -309,7 +372,7 @@ void SolitaireGame::selectCardUp() {
     } else if (tableau_idx >= 2) {
       // Other piles go to corresponding foundation (if available)
       int foundation_idx = tableau_idx - 2;
-      if (foundation_idx < foundation_.size()) {
+      if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
         selected_pile_ = 2 + foundation_idx;
         selected_card_idx_ = foundation_[foundation_idx].empty()
                                 ? -1
@@ -323,46 +386,42 @@ void SolitaireGame::selectCardUp() {
   // Ensure selected_card_idx_ is valid
   if (selected_card_idx_ < 0 ||
       selected_card_idx_ >= static_cast<int>(tableau_[tableau_idx].size())) {
-    // Reset to a valid state
+    // Reset to a valid state - select the top card
     selected_card_idx_ = tableau_[tableau_idx].size() - 1;
+    refreshDisplay();
     return;
   }
 
-  if (selected_pile_ >= 6 && selected_pile_ <= 12) {
-    int tableau_idx = selected_pile_ - 6;
-
-    // If we're looking at a tableau pile
-    if (!tableau_[tableau_idx].empty() && selected_card_idx_ > 0) {
-      // Try to navigate up within the tableau pile
-      for (int i = selected_card_idx_ - 1; i >= 0; i--) {
-        if (tableau_[tableau_idx][i].face_up) {
-          selected_card_idx_ = i;
-          refreshDisplay();
-          return;
-        }
+  // If we're looking at a tableau pile
+  if (!tableau_[tableau_idx].empty() && selected_card_idx_ > 0) {
+    // Try to navigate up within the tableau pile
+    for (int i = selected_card_idx_ - 1; i >= 0; i--) {
+      if (tableau_[tableau_idx][i].face_up) {
+        selected_card_idx_ = i;
+        refreshDisplay();
+        return;
       }
     }
+  }
 
-    // If we couldn't navigate up or we're at the top card,
-    // move to the corresponding pile in the top row
-    if (tableau_idx == 0) {
-      // Pile 0 goes to stock pile
-      selected_pile_ = 0;
-      selected_card_idx_ = stock_.empty() ? -1 : 0;
-    } else if (tableau_idx == 1) {
-      // Pile 1 goes to waste pile
-      selected_pile_ = 1;
-      selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
-    } else if (tableau_idx >= 2) {
-      // Other piles go to corresponding foundation (if available) or empty
-      // space
-      int foundation_idx = tableau_idx - 2;
-      if (foundation_idx < foundation_.size()) {
-        selected_pile_ = 2 + foundation_idx;
-        selected_card_idx_ = foundation_[foundation_idx].empty()
-                                ? -1
-                                : foundation_[foundation_idx].size() - 1;
-      }
+  // If we couldn't navigate up or we're at the top card,
+  // move to the corresponding pile in the top row
+  if (tableau_idx == 0) {
+    // Pile 0 goes to stock pile
+    selected_pile_ = 0;
+    selected_card_idx_ = stock_.empty() ? -1 : 0;
+  } else if (tableau_idx == 1) {
+    // Pile 1 goes to waste pile
+    selected_pile_ = 1;
+    selected_card_idx_ = waste_.empty() ? -1 : waste_.size() - 1;
+  } else if (tableau_idx >= 2) {
+    // Other piles go to corresponding foundation (if available) or empty space
+    int foundation_idx = tableau_idx - 2;
+    if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+      selected_pile_ = 2 + foundation_idx;
+      selected_card_idx_ = foundation_[foundation_idx].empty()
+                             ? -1
+                             : foundation_[foundation_idx].size() - 1;
     }
   }
 
@@ -371,8 +430,15 @@ void SolitaireGame::selectCardUp() {
 
 // Move selection down in a tableau pile
 void SolitaireGame::selectCardDown() {
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+  // Calculate last tableau index
+  int last_tableau_index = first_tableau_index + 6;
+
   // If we're in the top row, move down to the corresponding tableau pile
-  if (selected_pile_ >= 0 && selected_pile_ <= 5) {
+  if (selected_pile_ >= 0 && selected_pile_ <= max_foundation_index) {
     int target_tableau;
 
     if (selected_pile_ == 0) {
@@ -382,24 +448,49 @@ void SolitaireGame::selectCardDown() {
       // Waste pile goes to tableau pile 1
       target_tableau = 1;
     } else {
-      // Foundation piles go to corresponding tableau piles (2-5 -> 2-5)
-      target_tableau = selected_pile_;
+      // Foundation piles go to corresponding tableau piles
+      target_tableau = selected_pile_ - 2;
     }
 
-    // Check if the target_tableau is within range
-    if (target_tableau < tableau_.size()) {
-      selected_pile_ = 6 + target_tableau;
-      selected_card_idx_ = tableau_[target_tableau].empty()
-                               ? -1
-                               : tableau_[target_tableau].size() - 1;
+    // Check if the target_tableau is within range and valid
+    if (target_tableau >= 0 && target_tableau < tableau_.size()) {
+      selected_pile_ = first_tableau_index + target_tableau;
+      
+      // Always select the bottom-most (highest) face-up card
+      int highest_face_up = -1;
+      for (int i = 0; i < tableau_[target_tableau].size(); i++) {
+        if (tableau_[target_tableau][i].face_up) {
+          highest_face_up = i;
+        }
+      }
+      
+      // If no face-up cards, use -1 (empty) or the last card index
+      selected_card_idx_ = tableau_[target_tableau].empty() ? 
+                           -1 : 
+                           (highest_face_up == -1 ? 
+                           0 : 
+                           tableau_[target_tableau].size() - 1);
     }
   }
   // If we're already in the tableau, try to move down
-  else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
-    int tableau_idx = selected_pile_ - 6;
-    if (!tableau_[tableau_idx].empty() && selected_card_idx_ >= 0) {
-      if (static_cast<size_t>(selected_card_idx_) <
-          tableau_[tableau_idx].size() - 1) {
+  else if (selected_pile_ >= first_tableau_index && selected_pile_ <= last_tableau_index) {
+    int tableau_idx = selected_pile_ - first_tableau_index;
+    if (tableau_idx >= 0 && tableau_idx < tableau_.size() && !tableau_[tableau_idx].empty()) {
+      // If no card selected yet, select the topmost face-up card
+      if (selected_card_idx_ < 0) {
+        for (int i = 0; i < tableau_[tableau_idx].size(); i++) {
+          if (tableau_[tableau_idx][i].face_up) {
+            selected_card_idx_ = i;
+            break;
+          }
+        }
+        // If still no card found, select the top card (even if face down)
+        if (selected_card_idx_ < 0) {
+          selected_card_idx_ = 0;
+        }
+      }
+      // Try to move down to next face-up card
+      else if (selected_card_idx_ < tableau_[tableau_idx].size() - 1) {
         selected_card_idx_++;
       }
     }
@@ -718,6 +809,8 @@ bool SolitaireGame::tryMoveSelectedCard() {
 }
 
 // Highlight the selected card in the onDraw method
+// Highlight the selected card in the onDraw method
+// Highlight the selected card in the onDraw method
 void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
   int x = 0, y = 0;
 
@@ -725,11 +818,32 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     return;
   }
 
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+  
   // Validate keyboard selection
   if (keyboard_selection_active_) {
-    if (source_pile_ < 0 ||
-        (source_pile_ >= 6 && source_pile_ - 6 >= tableau_.size()) ||
-        (source_pile_ == 1 && waste_.empty())) {
+    bool invalid_source = false;
+    
+    if (source_pile_ < 0) {
+      invalid_source = true;
+    } else if (source_pile_ >= first_tableau_index) {
+      int tableau_idx = source_pile_ - first_tableau_index;
+      if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
+        invalid_source = true;
+      }
+    } else if (source_pile_ == 1 && waste_.empty()) {
+      invalid_source = true;
+    } else if (source_pile_ >= 2 && source_pile_ <= max_foundation_index) {
+      int foundation_idx = source_pile_ - 2;
+      if (foundation_idx < 0 || foundation_idx >= foundation_.size()) {
+        invalid_source = true;
+      }
+    }
+    
+    if (invalid_source) {
       // Invalid source pile, reset selection state
       keyboard_selection_active_ = false;
       source_pile_ = -1;
@@ -747,23 +861,37 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     // Waste pile
     x = 2 * current_card_spacing_ + current_card_width_;
     y = current_card_spacing_;
-  } else if (selected_pile_ >= 2 && selected_pile_ <= 5) {
-    // Foundation piles
-    x = (3 + selected_pile_ - 2) *
-        (current_card_width_ + current_card_spacing_);
-    y = current_card_spacing_;
-  } else if (selected_pile_ >= 6 && selected_pile_ <= 12) {
+  } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
+    // Foundation piles - critical fix here
+    int foundation_idx = selected_pile_ - 2;
+    
+    // Make sure foundation_idx is valid
+    if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+      // Match the exact calculation from drawFoundationPiles()
+      x = 3 * (current_card_width_ + current_card_spacing_) + 
+          foundation_idx * (current_card_width_ + current_card_spacing_);
+      y = current_card_spacing_;
+    }
+  } else if (selected_pile_ >= first_tableau_index) {
     // Tableau piles
-    int tableau_idx = selected_pile_ - 6;
-    x = current_card_spacing_ +
-        tableau_idx * (current_card_width_ + current_card_spacing_);
+    int tableau_idx = selected_pile_ - first_tableau_index;
+    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+      x = current_card_spacing_ +
+          tableau_idx * (current_card_width_ + current_card_spacing_);
 
-    // For empty tableau piles, highlight the empty space
-    if (selected_card_idx_ == -1) {
-      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-    } else {
-      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-          selected_card_idx_ * current_vert_spacing_;
+      // For empty tableau piles, highlight the empty space
+      const auto &tableau_pile = tableau_[tableau_idx];
+      if (tableau_pile.empty()) {
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+      } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
+        // If no card is selected or the index is invalid, highlight the top card
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            (tableau_pile.size() - 1) * current_vert_spacing_;
+      } else {
+        // Highlight the specific selected card
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            selected_card_idx_ * current_vert_spacing_;
+      }
     }
   }
 
@@ -784,29 +912,30 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
 
   // If we have a card selected for movement, highlight all cards below it in a
   // tableau pile
-  if (keyboard_selection_active_ && source_pile_ >= 6 && source_pile_ <= 12 &&
-      source_card_idx_ >= 0) {
-    int tableau_idx = source_pile_ - 6;
-    auto &tableau_pile = tableau_[tableau_idx];
+  if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_card_idx_ >= 0) {
+    int tableau_idx = source_pile_ - first_tableau_index;
+    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+      auto &tableau_pile = tableau_[tableau_idx];
 
-    if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
-      // Highlight all cards from the selected one to the bottom
-      cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
+      if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
+        // Highlight all cards from the selected one to the bottom
+        cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
 
-      x = current_card_spacing_ +
-          tableau_idx * (current_card_width_ + current_card_spacing_);
-      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-          source_card_idx_ * current_vert_spacing_;
+        x = current_card_spacing_ +
+            tableau_idx * (current_card_width_ + current_card_spacing_);
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            source_card_idx_ * current_vert_spacing_;
 
-      // Draw a single rectangle that covers all cards in the stack
-      int stack_height =
-          (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ +
-          current_card_height_;
+        // Draw a single rectangle that covers all cards in the stack
+        int stack_height =
+            (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ +
+            current_card_height_;
 
-      if (stack_height > 0) {
-        cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
-                        stack_height + 4);
-        cairo_stroke(cr);
+        if (stack_height > 0) {
+          cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
+                          stack_height + 4);
+          cairo_stroke(cr);
+        }
       }
     }
   }
