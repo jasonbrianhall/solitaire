@@ -24,10 +24,11 @@ SolitaireGame::SolitaireGame()
       sounds_zip_path_("sound.zip"),
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
+  initializeAudio();
+  sleep(0.1);
   current_seed_ = rand();  // Generate random seed
   initializeGame();
   initializeSettingsDir();
-  initializeAudio();
   loadSettings();
 }
 
@@ -836,6 +837,57 @@ void SolitaireGame::setupMenuBar() {
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
 
+GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
+GtkWidget *gameModeMenu = gtk_menu_new();
+gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
+
+// Standard Klondike option (1 deck)
+GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "One Deck");
+GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
+g_signal_connect(
+    G_OBJECT(standardItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::STANDARD_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
+
+// Double Klondike option (2 decks)
+GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Two Decks");
+g_signal_connect(
+    G_OBJECT(doubleItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::DOUBLE_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
+
+// Triple Klondike option (3 decks)
+GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Three Decks");
+g_signal_connect(
+    G_OBJECT(tripleItem), "activate",
+    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
+      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
+        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::TRIPLE_KLONDIKE);
+      }
+    }),
+    this);
+gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
+
+// Set initial state based on current mode
+gtk_check_menu_item_set_active(
+    GTK_CHECK_MENU_ITEM(
+        current_game_mode_ == GameMode::STANDARD_KLONDIKE ? standardItem :
+        current_game_mode_ == GameMode::DOUBLE_KLONDIKE ? doubleItem : tripleItem),
+    TRUE);
+
+// Add the game mode submenu to the options menu
+gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
+
 
   // Add separator before Quit
   GtkWidget *sep = gtk_separator_menu_item_new();
@@ -993,57 +1045,6 @@ void SolitaireGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), soundItem);
 
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), optionsMenuItem);
-
-GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
-GtkWidget *gameModeMenu = gtk_menu_new();
-gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
-
-// Standard Klondike option (1 deck)
-GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "Standard Klondike");
-GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
-g_signal_connect(
-    G_OBJECT(standardItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::STANDARD_KLONDIKE);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
-
-// Double Klondike option (2 decks)
-GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Double Klondike");
-g_signal_connect(
-    G_OBJECT(doubleItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::DOUBLE_KLONDIKE);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
-
-// Triple Klondike option (3 decks)
-GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Tripe Klondike");
-g_signal_connect(
-    G_OBJECT(tripleItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::TRIPLE_KLONDIKE);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
-
-// Set initial state based on current mode
-gtk_check_menu_item_set_active(
-    GTK_CHECK_MENU_ITEM(
-        current_game_mode_ == GameMode::STANDARD_KLONDIKE ? standardItem :
-        current_game_mode_ == GameMode::DOUBLE_KLONDIKE ? doubleItem : tripleItem),
-    TRUE);
-
-// Add the game mode submenu to the options menu
-gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), gameModeItem);
 
   // ==================== HELP MENU ====================
   GtkWidget *helpMenu = gtk_menu_new();
