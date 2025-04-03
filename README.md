@@ -250,6 +250,7 @@ Bored? Let me rescue you from the depths of monotony with these digital delights
 - 📄 MS-Word Magic: Generate professional puzzle documents
 - 🚀 Extreme Solver: Crack instantaneously the most mind-bending Sudoku puzzles
 - 🎮 Bonus Game Mode: Check out the playable version hidden in python_generated_puzzles
+- 🧩 **GTK Tetrimone**: [Tetrimone](https://github.com/jasonbrianhall/tetrimone) - A pulse-pounding reimagining of the classic block-dropping puzzle game with multiple themes and difficulty levels!
 
 Numbers have never been this exciting! Prepare for a Sudoku adventure that'll make your brain cells do a happy dance! 🕺
 
