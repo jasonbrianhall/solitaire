@@ -8,6 +8,7 @@ on:
       - '**.h'
       - 'Makefile'
       - '**/Makefile'
+      - '**.yml'
   pull_request:
     branches: [ master ]
     paths:
@@ -15,14 +16,14 @@ on:
       - '**.h'
       - 'Makefile'
       - '**/Makefile'
-
+      - '**.yml'
   workflow_dispatch:
 
 jobs:
   build-mingw-gtk:
     runs-on: ubuntu-latest
     container: 
-      image: fedora:latest
+      image: fedora:41
     permissions:
       contents: write
 
