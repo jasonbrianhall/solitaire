@@ -30,7 +30,8 @@ SolitaireGame::SolitaireGame()
   initializeAudio();
 #ifndef _WIN32
    usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second); timing issue; doesn't initialize the sound before the game is loaded.
-#endif  current_seed_ = rand();  // Generate random seed
+#endif  
+  current_seed_ = rand();  // Generate random seed - THIS LINE WAS MISSING A SEMICOLON!
   initializeGame();
   initializeSettingsDir();
   loadSettings();
@@ -516,7 +517,7 @@ void SolitaireGame::switchGameMode(GameMode mode) {
   GtkAllocation allocation;
   gtk_widget_get_allocation(game_area_, &allocation);
   updateCardDimensions(allocation.width, allocation.height);
-  
+  updateWindowTitle();
   refreshDisplay();
 }
 
@@ -716,11 +717,11 @@ cairo_surface_t *SolitaireGame::getCardBackSurface() {
 
 void SolitaireGame::setupWindow() {
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
+  //gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
   gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
   g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit),
                    NULL);
-
+  updateWindowTitle();
   gtk_widget_add_events(window_, GDK_KEY_PRESS_MASK);
   g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress),
                    this);
@@ -1111,8 +1112,8 @@ void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
   }
 
   game->current_seed_ = rand();
-
   game->initializeGame();
+  game->updateWindowTitle();
   game->refreshDisplay();
 }
 
@@ -1129,6 +1130,13 @@ void SolitaireGame::restartGame() {
 
 void SolitaireGame::onQuit(GtkWidget *widget, gpointer data) {
   gtk_main_quit();
+}
+
+void SolitaireGame::updateWindowTitle() {
+  if (window_) {
+    std::string title = "Solitaire - Seed: " + std::to_string(current_seed_);
+    gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
+  }
 }
 
 void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
@@ -1775,6 +1783,7 @@ void SolitaireGame::promptForSeed() {
       current_seed_ = std::stoul(text);
       initializeGame();
       refreshDisplay();
+      updateWindowTitle();
     } catch (...) {
       // Invalid input, show an error message
       GtkWidget *error_dialog = gtk_message_dialog_new(
