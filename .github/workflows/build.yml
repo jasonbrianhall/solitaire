@@ -329,7 +329,7 @@ jobs:
                                Name="FreecellDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
                 
-                <Component Id="SpiderDesktopShortcut" Guid="B8F4A352-D6E8-4F94-9B2C-G75D9G0E1DA6">
+                <Component Id="SpiderDesktopShortcut" Guid="B8F4A352-D6E8-4F94-9B2C-C75D9C0E1DA6">
                   <Condition>DESKTOP_SHORTCUT</Condition>
                   <Shortcut Id="SpiderDesktopShortcut" 
                            Name="Spider Solitaire" 
