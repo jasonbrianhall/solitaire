@@ -2,151 +2,326 @@ name: Build Solitaire
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, dev ]
     paths:
       - '**.cpp'
       - '**.h'
       - 'Makefile'
       - '**/Makefile'
       - '**.yml'
+      - '**.yaml'
   pull_request:
-    branches: [ master ]
+    branches: [ master, dev ]
     paths:
       - '**.cpp'
       - '**.h'
       - 'Makefile'
       - '**/Makefile'
       - '**.yml'
+      - '**.yaml'
   workflow_dispatch:
 
+env:
+  PRODUCT_VERSION: "1.0.${{ github.run_number }}"
+  UPGRADE_CODE: "D7E94C12-7B38-42F6-9E1A-BB952F7D5801"
+
 jobs:
-  build-mingw-gtk:
+  build-linux:
     runs-on: ubuntu-latest
     container: 
       image: fedora:41
+    outputs:
+      version: ${{ env.PRODUCT_VERSION }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Cross-Compilation Dependencies
+      run: |
+        dnf -y install \
+          mingw64-gcc mingw64-gcc-c++ \
+          mingw64-gtk3 mingw64-gtkmm30 \
+          mingw64-libzip \
+          wine wine-devel \
+          binutils make zip unzip libzip-devel
+
+    - name: Build Windows GTK Version
+      run: |
+        make windows
+
+    - name: Prepare Build Artifacts
+      working-directory: build/windows
+      run: |
+        # Copy resources
+        cp ../../icon.ico .
+        cp ../../README.md .
+        cp ../../LICENSE.md .
+        
+        # Create file list for MSI
+        echo "Creating file inventory..."
+        find . -name "*.dll" -type f | sort > dll_list.txt
+        find . -name "*.exe" -type f | sort > exe_list.txt
+        
+        # Create portable ZIP
+        zip -r ../../Solitaire-GTK-Portable.zip ./*
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: solitaire-build
+        path: |
+          build/windows/**/*
+          Solitaire-GTK-Portable.zip
+        retention-days: 7
+
+  build-msi-windows:
+    needs: build-linux
+    runs-on: windows-latest
     permissions:
       contents: write
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Dependencies
-      run: |
-        dnf -y install mingw64-gcc mingw64-gcc-c++ mingw64-gtk3 mingw64-gtkmm30 wine wine-devel wixl binutils make zip unzip libzip-devel mingw64-libzip
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: solitaire-build
+        path: artifacts
 
-    - name: Build GTK Version
+    - name: Setup WiX Toolset
       run: |
-        make windows
+        # Download and install WiX Toolset v3
+        Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix.zip"
+        Expand-Archive -Path "wix.zip" -DestinationPath "wix"
+        echo "$env:GITHUB_WORKSPACE\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Copy Resources and Collect DLLs
-      working-directory: build/windows
+    - name: Create MIT License File
       run: |
-        cp ../../icon.ico .
+        @"
+        MIT License
+        
+        Copyright (c) 2025 Jason Hall
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        "@ | Out-File -FilePath "artifacts\build\windows\LICENSE.txt" -Encoding UTF8
 
-    - name: Create ZIP Archive
-      working-directory: build/windows
+    - name: Generate Advanced MSI Installer
+      working-directory: artifacts/build/windows
       run: |
-        zip -r ../../Solitaire-GTK.zip ./*
-
-    - name: Create GTK MSI Installer
-      working-directory: build/windows
-      run: |
-        # Generate the DLL entries
-        DLL_ENTRIES=$(for f in *.dll; do 
-          if [ -f "$f" ]; then
-            # Create a safe ID by removing invalid characters
-            SAFE_ID=$(echo "$f" | sed 's/[^a-zA-Z0-9]/_/g')
-            echo "<File Id=\"$SAFE_ID\" Name=\"$f\" Source=\"$f\"/>"
-          fi
-        done)
-
-        # Create the WXS file with the generated DLL entries
-        cat > installer.wxs << 'EOL'
+        # Generate component entries for all DLLs
+        $dllEntries = Get-ChildItem -Name "*.dll" | ForEach-Object {
+          $safeId = $_ -replace '[^a-zA-Z0-9]', '_'
+          "          <File Id=`"$safeId`" Name=`"$_`" Source=`"$_`"/>"
+        }
+        
+        # Create advanced WXS installer
+        @"
         <?xml version="1.0" encoding="UTF-8"?>
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-          <Product Id="*" Name="Solitaire collection" Language="1033" Version="1.0.${{ github.run_number }}" Manufacturer="Jason Hall" UpgradeCode="D7E94C12-7B38-42F6-9E1A-BB952F7D5801"> 
-            <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
-            <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
-            <MediaTemplate EmbedCab="yes" />
+          
+          <Product Id="*" 
+                   Name="Solitaire Collection" 
+                   Language="1033" 
+                   Version="${{ needs.build-linux.outputs.version }}" 
+                   Manufacturer="Jason Hall" 
+                   UpgradeCode="${{ env.UPGRADE_CODE }}"> 
+            
+            <Package InstallerVersion="500" 
+                     Compressed="yes" 
+                     InstallScope="perMachine" 
+                     Description="Solitaire Collection GTK - Classic Card Games"
+                     Comments="Built with GitHub Actions"
+                     Manufacturer="Jason Hall" />
+            
+            <!-- Major upgrade configuration -->
+            <MajorUpgrade 
+              DowngradeErrorMessage="A newer version of Solitaire Collection is already installed. Please uninstall it first." 
+              Schedule="afterInstallInitialize" />
+            
+            <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+            
+            <!-- License agreement -->
+            <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+            
+            <!-- Custom properties -->
+            <Property Id="ARPPRODUCTICON" Value="SolitaireIcon" />
+            <Property Id="ARPURLINFOABOUT" Value="https://github.com/yourusername/solitaire" />
+            <Property Id="ARPNOREPAIR" Value="yes" />
+            <Property Id="ARPNOMODIFY" Value="yes" />
+            <Property Id="ARPHELPLINK" Value="https://github.com/yourusername/solitaire/issues" />
+            
+            <!-- Installation scope choice -->
+            <Property Id="ApplicationFolderName" Value="Solitaire Collection" />
+            <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
+            <WixVariable Id="WixUISupportPerUser" Value="1" />
+            <WixVariable Id="WixUISupportPerMachine" Value="1" />
+            
             <Directory Id="TARGETDIR" Name="SourceDir">
+              <!-- Program Files installation -->
               <Directory Id="ProgramFilesFolder">
-                <Directory Id="INSTALLFOLDER" Name="Solitaire GTK">
-                  <Component Id="MainExecutable" Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23">
-                    <File Id="MainEXE" Name="solitaire.exe" Source="solitaire.exe" KeyPath="yes"/>
+                <Directory Id="INSTALLFOLDER" Name="!(bind.Property.ApplicationFolderName)">
+                  
+                  <!-- Main application component -->
+                  <Component Id="MainExecutable" 
+                           Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23"
+                           Win64="no">
+                    <File Id="MainEXE" 
+                          Name="solitaire.exe" 
+                          Source="solitaire.exe" 
+                          KeyPath="yes">
+                      <!-- File associations could go here -->
+                    </File>
+                    
+                    <!-- Game executables -->
                     <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe"/>
                     <File Id="SpiderEXE" Name="spider.exe" Source="spider.exe"/>
+                    
+                    <!-- Application files -->
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
-                   <File Id="SoundsZIP" Name="sound.zip" Source="sound.zip"/>
+                    <File Id="SoundsZIP" Name="sound.zip" Source="sound.zip"/>
                     <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
                     <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
-        EOL
-
-        # Add the generated DLL entries
-        echo "$DLL_ENTRIES" >> installer.wxs
-
-        # Complete the WXS file
-        cat >> installer.wxs << 'EOL'
-                    <File Id="README" Name="README.md" Source="../../README.md"/>
-                    <File Id="LICENSE" Name="LICENSE.md" Source="../../LICENSE.md"/>
+                    <File Id="README" Name="README.md" Source="README.md"/>
+                    <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
+                    <File Id="LICENSE_TXT" Name="LICENSE.txt" Source="LICENSE.txt"/>
+                    
+                    <!-- DLL files -->
+        $($dllEntries -join "`r`n")
+                    
+                    <!-- Registry entries for uninstall info -->
+                    <RegistryKey Root="HKLM" Key="SOFTWARE\Solitaire Collection">
+                      <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
+                      <RegistryValue Type="string" Name="Version" Value="${{ needs.build-linux.outputs.version }}" />
+                      <RegistryValue Type="string" Name="Publisher" Value="Jason Hall" />
+                    </RegistryKey>
                   </Component>
+                  
+                  <!-- GTK Runtime directories -->
                   <Directory Id="LibDir" Name="lib">
                     <Directory Id="GdkPixbuf" Name="gdk-pixbuf-2.0">
                       <Component Id="GdkPixbufDir" Guid="E5F7B982-D93A-4A42-A3B2-642D3F9E3F48">
                         <CreateFolder />
+                        <RemoveFolder Id="RemoveGdkPixbuf" On="uninstall" />
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
+                                     Type="integer" Name="GdkPixbuf" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
                     <Directory Id="Gtk3" Name="gtk-3.0">
                       <Component Id="Gtk3Dir" Guid="F8D4C159-8E2B-4B47-B9A3-753D2F9E4F59">
                         <CreateFolder />
+                        <RemoveFolder Id="RemoveGtk3" On="uninstall" />
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
+                                     Type="integer" Name="Gtk3" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
                   </Directory>
+                  
                   <Directory Id="ShareDir" Name="share">
                     <Directory Id="GLib2" Name="glib-2.0">
                       <Directory Id="Schemas" Name="schemas">
                         <Component Id="GtkSchemas" Guid="A7C3D845-B6E1-4C53-8D1E-864F2F9E5F60">
-                          <File Id="GSchemas" Name="gschemas.compiled" Source="share/glib-2.0/schemas/gschemas.compiled"/>
+                          <File Id="GSchemas" Name="gschemas.compiled" 
+                                Source="share/glib-2.0/schemas/gschemas.compiled"/>
+                          <RemoveFolder Id="RemoveSchemas" On="uninstall" />
+                          <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
+                                       Type="integer" Name="Schemas" Value="1" KeyPath="yes"/>
                         </Component>
                       </Directory>
                     </Directory>
                     <Directory Id="Icons" Name="icons">
                       <Component Id="IconsDir" Guid="B9E5F371-A4C2-4D64-92F4-975E3F9E6F71">
                         <CreateFolder />
+                        <RemoveFolder Id="RemoveIcons" On="uninstall" />
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
+                                     Type="integer" Name="Icons" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
                     <Directory Id="Themes" Name="themes">
                       <Component Id="ThemesDir" Guid="C2F6G482-B5D3-4E75-A3F5-086G4F9E7F82">
                         <CreateFolder />
+                        <RemoveFolder Id="RemoveThemes" On="uninstall" />
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
+                                     Type="integer" Name="Themes" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
                   </Directory>
                 </Directory>
               </Directory>
+              
+              <!-- Start Menu shortcuts -->
               <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="Solitaire GTK">
+                <Directory Id="ApplicationProgramsFolder" Name="Solitaire Collection">
                   <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
                     <Shortcut Id="ApplicationStartMenuKlondike" 
-                             Name="Solitaire GTK" 
+                             Name="Solitaire" 
                              Target="[INSTALLFOLDER]solitaire.exe" 
                              WorkingDirectory="INSTALLFOLDER"
+                             Description="Play Classic Solitaire (Klondike)"
                              Icon="SolitaireIcon"/>
                     <Shortcut Id="ApplicationStartMenuFreeCell" 
-                             Name="Freecell GTK" 
+                             Name="FreeCell" 
                              Target="[INSTALLFOLDER]freecell.exe" 
                              WorkingDirectory="INSTALLFOLDER"
+                             Description="Play FreeCell Solitaire"
                              Icon="SolitaireIcon"/>
                     <Shortcut Id="ApplicationStartMenuSpider"
-                             Name="Spider GTK"
+                             Name="Spider Solitaire"
                              Target="[INSTALLFOLDER]spider.exe"
                              WorkingDirectory="INSTALLFOLDER"
+                             Description="Play Spider Solitaire"
                              Icon="SolitaireIcon"/>
+                    <Shortcut Id="UninstallShortcut"
+                             Name="Uninstall Solitaire Collection"
+                             Target="[SystemFolder]msiexec.exe"
+                             Arguments="/x [ProductCode]"
+                             Description="Uninstall Solitaire Collection" />
                     <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
-                    <RegistryValue Root="HKCU" Key="Software\SolitaireGTK" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                    <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                                 Name="StartMenu" Type="integer" Value="1" KeyPath="yes"/>
                   </Component>
                 </Directory>
               </Directory>
+              
+              <!-- Desktop shortcut (optional) -->
+              <Directory Id="DesktopFolder" Name="Desktop">
+                <Component Id="DesktopShortcut" Guid="D7F8E432-F9C8-4D79-9F2A-E53F7F9F9B84">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="DesktopShortcut" 
+                           Name="Solitaire Collection" 
+                           Target="[INSTALLFOLDER]solitaire.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play Classic Card Games"
+                           Icon="SolitaireIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="Desktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+              </Directory>
             </Directory>
-            <Feature Id="ProductFeature" Title="Solitaire GTK" Level="1">
+            
+            <!-- Feature definitions -->
+            <Feature Id="ProductFeature" 
+                     Title="Solitaire Collection" 
+                     Description="Classic card games including Klondike, FreeCell, and Spider Solitaire with GTK runtime."
+                     Level="1" 
+                     ConfigurableDirectory="INSTALLFOLDER"
+                     AllowAdvertise="no">
               <ComponentRef Id="MainExecutable" />
               <ComponentRef Id="ApplicationShortcuts" />
               <ComponentRef Id="GtkSchemas" />
@@ -155,50 +330,182 @@ jobs:
               <ComponentRef Id="IconsDir" />
               <ComponentRef Id="ThemesDir" />
             </Feature>
+            
+            <Feature Id="DesktopShortcutFeature" 
+                     Title="Desktop Shortcut" 
+                     Description="Create a shortcut on the desktop."
+                     Level="1000">
+              <ComponentRef Id="DesktopShortcut" />
+            </Feature>
+            
+            <!-- Application icon -->
             <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
+            
+            <!-- Custom actions for cleanup -->
+            <CustomAction Id="CleanupRegistryOnUninstall" 
+                         Script="vbscript"
+                         Execute="deferred"
+                         Impersonate="no">
+              <![CDATA[
+                On Error Resume Next
+                Set shell = CreateObject("WScript.Shell")
+                shell.RegDelete "HKLM\SOFTWARE\Solitaire Collection\"
+                shell.RegDelete "HKCU\Software\SolitaireCollection\"
+              ]]>
+            </CustomAction>
+            
+            <InstallExecuteSequence>
+              <Custom Action="CleanupRegistryOnUninstall" Before="RemoveFiles">
+                REMOVE="ALL"
+              </Custom>
+            </InstallExecuteSequence>
+            
+            <!-- UI Configuration -->
+            <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+            <Property Id="DESKTOP_SHORTCUT" Value="1" />
+            
+            <UIRef Id="WixUI_FeatureTree" />
+            <UIRef Id="WixUI_ErrorProgressText" />
+            
           </Product>
         </Wix>
-        EOL
+        "@ | Out-File -FilePath "installer.wxs" -Encoding UTF8
 
-        wixl -v installer.wxs -o ../../Solitaire-GTK.msi
-    - name: Upload Artifacts
+    - name: Create License RTF for Installer
+      working-directory: artifacts/build/windows
+      run: |
+        @"
+        {\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
+        \f0\fs24
+        MIT License\par
+        \par
+        Copyright (c) 2025 Jason Hall\par
+        \par
+        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\par
+        \par
+        The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\par
+        \par
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\par
+        }
+        "@ | Out-File -FilePath "License.rtf" -Encoding UTF8
+
+    - name: Build MSI Installer
+      working-directory: artifacts/build/windows
+      run: |
+        # Debug: Show current directory and files
+        Write-Host "=== DEBUG: Current directory ==="
+        Get-Location
+        Write-Host "=== DEBUG: Files in current directory ==="
+        Get-ChildItem
+        
+        # Compile the installer
+        Write-Host "=== Building MSI installer ==="
+        & candle.exe installer.wxs
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Candle compilation failed with exit code $LASTEXITCODE"
+          exit 1
+        }
+        
+        Write-Host "=== DEBUG: Files after candle ==="
+        Get-ChildItem
+        
+        & light.exe -ext WixUIExtension installer.wixobj -o "Solitaire-GTK.msi"
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Light linking failed with exit code $LASTEXITCODE"
+          exit 1
+        }
+        
+        Write-Host "=== DEBUG: Files after light ==="
+        Get-ChildItem
+        
+        # Verify MSI was created
+        if (Test-Path "Solitaire-GTK.msi") {
+          Write-Host "✅ MSI installer created successfully: Solitaire-GTK.msi"
+          $msiSize = (Get-Item "Solitaire-GTK.msi").Length
+          Write-Host "MSI file size: $msiSize bytes"
+        } else {
+          Write-Error "❌ MSI file was not created!"
+          exit 1
+        }
+
+    - name: Upload MSI Installer
       uses: actions/upload-artifact@v4
       with:
-        name: solitaire-artifacts
-        path: |
-          Solitaire-GTK.msi
-          Solitaire-GTK.zip
+        name: Solitaire-GTK.msi
+        path: artifacts/build/windows/Solitaire-GTK.msi
+
+    - name: Upload Portable ZIP
+      uses: actions/upload-artifact@v4
+      with:
+        name: Solitaire-GTK-Portable.zip
+        path: artifacts/Solitaire-GTK-Portable.zip
 
   create-release:
-    needs: [build-mingw-gtk]
+    needs: [build-linux, build-msi-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: github.event_name == 'push'
     
     steps:
-    - name: Download Artifacts
+    - name: Download MSI Artifact
       uses: actions/download-artifact@v4
       with:
-        name: solitaire-artifacts
-        path: artifacts
+        name: Solitaire-GTK.msi
+        path: release
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
+    - name: Download Portable Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Solitaire-GTK-Portable.zip
+        path: release
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
       with:
         files: |
-          artifacts/Solitaire-GTK.msi
-          artifacts/Solitaire-GTK.zip
-        tag_name: ${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('bleedingedge-v{0}', github.run_number) }}
-        name: ${{ github.ref == 'refs/heads/master' && format('Release {0}', github.run_number) || format('Dev Build {0}', github.run_number) }}
+          release/Solitaire-GTK.msi
+          release/Solitaire-GTK-Portable.zip
+        tag_name: ${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('dev-v{0}', github.run_number) }}
+        name: ${{ github.ref == 'refs/heads/master' && format('Release v{0}', github.run_number) || format('Dev Build v{0}', github.run_number) }}
         draft: false
         prerelease: ${{ github.ref != 'refs/heads/master' }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+        make_latest: ${{ github.ref == 'refs/heads/master' }}
         body: |
-          ${{ github.ref == 'refs/heads/master' && 'Release build' || 'Development build' }}
-          Commit: ${{ github.sha }}
-          Build number: ${{ github.run_number }}
+          ## ${{ github.ref == 'refs/heads/master' && 'Stable Release' || 'Development Build' }}
           
-          This release includes:
-          - Windows GTK installer (Solitaire-GTK.msi)
-          - Windows GTK portable version (Solitaire-GTK.zip)
+          **Version:** ${{ needs.build-linux.outputs.version }}  
+          **Commit:** ${{ github.sha }}  
+          **Build:** #${{ github.run_number }}  
+          
+          ### 🃏 Solitaire Collection
+          Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface.
+          
+          ### 📦 Downloads
+          - **Solitaire-GTK.msi** - Windows installer with uninstall support
+          - **Solitaire-GTK-Portable.zip** - Portable version (no installation required)
+          
+          ### 🎮 Games Included
+          - 🂡 **Klondike Solitaire** - The classic card game
+          - 🃏 **FreeCell** - Strategic card sorting
+          - 🕷️ **Spider Solitaire** - Multi-deck challenge
+          
+          ### ✨ Installer Features
+          - ✅ User/Machine installation scope choice
+          - ✅ Custom installation directory
+          - ✅ Start menu shortcuts for all games
+          - ✅ Optional desktop shortcut
+          - ✅ Proper uninstall support with registry cleanup
+          - ✅ MIT License agreement
+          - ✅ Add/Remove Programs integration
+          - ✅ Uninstall shortcut in Start Menu
+          
+          ### 🛠️ Technical Details
+          - Built on: Linux (Fedora 41 container)
+          - MSI compiled on: Windows Latest
+          - GTK3 runtime included
+          - All dependencies bundled
+          - Sound effects and card graphics included
+          
+          ---
+          *Built with ❤️ using GitHub Actions*
