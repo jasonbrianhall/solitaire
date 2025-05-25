@@ -254,7 +254,7 @@ jobs:
                       </Component>
                     </Directory>
                     <Directory Id="Themes" Name="themes">
-                      <Component Id="ThemesDir" Guid="C2F6G482-B5D3-4E75-A3F5-086G4F9E7F82">
+                      <Component Id="ThemesDir" Guid="C2F6A482-B5D3-4E75-A3F5-086A4F9E7F82">
                         <CreateFolder />
                         <RemoveFolder Id="RemoveThemes" On="uninstall" />
                         <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
