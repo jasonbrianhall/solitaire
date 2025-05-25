@@ -333,7 +333,7 @@ void showKeyboardShortcuts();
   void dealMultiDeck();
   // Game mode (number of decks)
   GameMode current_game_mode_ = GameMode::STANDARD_KLONDIKE;
-  
+  void updateWindowTitle();
   // Replace the single deck with a MultiDeck
   cardlib::MultiDeck multi_deck_;
   

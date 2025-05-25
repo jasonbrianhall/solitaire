@@ -53,7 +53,9 @@ jobs:
       working-directory: build/windows
       run: |
         # Copy resources
-        cp ../../icon.ico .
+        cp ../../solitaire.ico .
+        cp ../../freecell.ico .
+        cp ../../spider.ico .
         cp ../../README.md .
         cp ../../LICENSE.md .
         
@@ -196,7 +198,9 @@ jobs:
                     <!-- Application files -->
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
                     <File Id="SoundsZIP" Name="sound.zip" Source="sound.zip"/>
-                    <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
+                    <File Id="SolitaireIconFile" Name="solitaire.ico" Source="solitaire.ico"/>
+                    <File Id="FreecellIconFile" Name="freecell.ico" Source="freecell.ico"/>
+                    <File Id="SpiderIconFile" Name="spider.ico" Source="spider.ico"/>
                     <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
                     <File Id="README" Name="README.md" Source="README.md"/>
                     <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
@@ -280,13 +284,13 @@ jobs:
                              Target="[INSTALLFOLDER]freecell.exe" 
                              WorkingDirectory="INSTALLFOLDER"
                              Description="Play FreeCell Solitaire"
-                             Icon="SolitaireIcon"/>
+                             Icon="FreecellIcon"/>
                     <Shortcut Id="ApplicationStartMenuSpider"
                              Name="Spider Solitaire"
                              Target="[INSTALLFOLDER]spider.exe"
                              WorkingDirectory="INSTALLFOLDER"
                              Description="Play Spider Solitaire"
-                             Icon="SolitaireIcon"/>
+                             Icon="SpiderIcon"/>
                     <Shortcut Id="UninstallShortcut"
                              Name="Uninstall Solitaire Collection"
                              Target="[SystemFolder]msiexec.exe"
@@ -299,18 +303,42 @@ jobs:
                 </Directory>
               </Directory>
               
-              <!-- Desktop shortcut (optional) -->
+              <!-- Desktop shortcuts (optional) -->
               <Directory Id="DesktopFolder" Name="Desktop">
-                <Component Id="DesktopShortcut" Guid="D7F8E432-F9C8-4D79-9F2A-E53F7F9F9B84">
+                <Component Id="SolitaireDesktopShortcut" Guid="D7F8E432-F9C8-4D79-9F2A-E53F7F9F9B84">
                   <Condition>DESKTOP_SHORTCUT</Condition>
-                  <Shortcut Id="DesktopShortcut" 
-                           Name="Solitaire Collection" 
+                  <Shortcut Id="SolitaireDesktopShortcut" 
+                           Name="Solitaire" 
                            Target="[INSTALLFOLDER]solitaire.exe"
                            WorkingDirectory="INSTALLFOLDER"
-                           Description="Play Classic Card Games"
+                           Description="Play Classic Solitaire (Klondike)"
                            Icon="SolitaireIcon"/>
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
-                               Name="Desktop" Type="integer" Value="1" KeyPath="yes"/>
+                               Name="SolitaireDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+                
+                <Component Id="FreecellDesktopShortcut" Guid="A3E9B241-C5D7-4E83-8A1B-F64C8F9D0C95">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="FreecellDesktopShortcut" 
+                           Name="FreeCell" 
+                           Target="[INSTALLFOLDER]freecell.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play FreeCell Solitaire"
+                           Icon="FreecellIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="FreecellDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+                
+                <Component Id="SpiderDesktopShortcut" Guid="B8F4A352-D6E8-4F94-9B2C-G75D9G0E1DA6">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="SpiderDesktopShortcut" 
+                           Name="Spider Solitaire" 
+                           Target="[INSTALLFOLDER]spider.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play Spider Solitaire"
+                           Icon="SpiderIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="SpiderDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
               </Directory>
             </Directory>
@@ -332,14 +360,18 @@ jobs:
             </Feature>
             
             <Feature Id="DesktopShortcutFeature" 
-                     Title="Desktop Shortcut" 
-                     Description="Create a shortcut on the desktop."
+                     Title="Desktop Shortcuts" 
+                     Description="Create shortcuts on the desktop for all games."
                      Level="1000">
-              <ComponentRef Id="DesktopShortcut" />
+              <ComponentRef Id="SolitaireDesktopShortcut" />
+              <ComponentRef Id="FreecellDesktopShortcut" />
+              <ComponentRef Id="SpiderDesktopShortcut" />
             </Feature>
             
-            <!-- Application icon -->
-            <Icon Id="SolitaireIcon" SourceFile="icon.ico"/>
+            <!-- Application icons -->
+            <Icon Id="SolitaireIcon" SourceFile="solitaire.ico"/>
+            <Icon Id="FreecellIcon" SourceFile="freecell.ico"/>
+            <Icon Id="SpiderIcon" SourceFile="spider.ico"/>
             
             <!-- Custom actions for cleanup -->
             <CustomAction Id="CleanupRegistryOnUninstall" 
@@ -493,8 +525,8 @@ jobs:
           ### ✨ Installer Features
           - ✅ User/Machine installation scope choice
           - ✅ Custom installation directory
-          - ✅ Start menu shortcuts for all games
-          - ✅ Optional desktop shortcut
+          - ✅ Start menu shortcuts for all games with individual icons
+          - ✅ Optional desktop shortcuts for each game with their specific icons
           - ✅ Proper uninstall support with registry cleanup
           - ✅ MIT License agreement
           - ✅ Add/Remove Programs integration
@@ -506,6 +538,7 @@ jobs:
           - GTK3 runtime included
           - All dependencies bundled
           - Sound effects and card graphics included
+          - Individual game icons for better visual identification
           
           ---
           *Built with ❤️ using GitHub Actions*
