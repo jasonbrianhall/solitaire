@@ -37,6 +37,8 @@ Currently includes three games
 
 ## 🛠️ Building
 
+    <iframe width="560" height="315" src="https://youtu.be/sSD1e1tdAkw" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 ### Prerequisites
 
 - GTK+ 3.0 development libraries
