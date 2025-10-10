@@ -43,7 +43,26 @@ jobs:
           mingw64-gtk3 mingw64-gtkmm30 \
           mingw64-libzip \
           wine wine-devel \
-          binutils make zip unzip libzip-devel
+          binutils make zip unzip libzip-devel \
+          ImageMagick
+
+    - name: Convert Icons to PNG
+      run: |
+        # Convert ICO files to PNG for MSIX if they don't already exist
+        if [ -f "solitaire.ico" ] && [ ! -f "solitaire.png" ]; then
+          convert solitaire.ico[0] -resize 256x256 solitaire.png
+        fi
+        if [ -f "freecell.ico" ] && [ ! -f "freecell.png" ]; then
+          convert freecell.ico[0] -resize 256x256 freecell.png
+        fi
+        if [ -f "spider.ico" ] && [ ! -f "spider.png" ]; then
+          convert spider.ico[0] -resize 256x256 spider.png
+        fi
+        
+        # Use solitaire icon as main app icon if available
+        if [ -f "solitaire.png" ]; then
+          cp solitaire.png icon.png
+        fi
 
     - name: Build Windows GTK Version
       run: |
@@ -58,6 +77,12 @@ jobs:
         cp ../../spider.ico .
         cp ../../README.md .
         cp ../../LICENSE.md .
+        
+        # Copy PNG files for MSIX
+        cp ../../solitaire.png . 2>/dev/null || true
+        cp ../../freecell.png . 2>/dev/null || true
+        cp ../../spider.png . 2>/dev/null || true
+        cp ../../icon.png . 2>/dev/null || true
         
         # Create file list for MSI
         echo "Creating file inventory..."
@@ -472,8 +497,239 @@ jobs:
         name: Solitaire-GTK-Portable.zip
         path: artifacts/Solitaire-GTK-Portable.zip
 
+  build-msix-windows:
+    needs: build-linux
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: solitaire-build
+        path: artifacts
+
+    - name: Create Microsoft Store Assets
+      run: |
+        # Create package structure
+        New-Item -ItemType Directory -Path "msix-package" -Force
+        New-Item -ItemType Directory -Path "msix-package/Files" -Force
+        New-Item -ItemType Directory -Path "msix-package/Assets" -Force
+        
+        # Copy application files
+        Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
+        
+        # Define icon paths for each game
+        $solitaireIcon = "artifacts/build/windows/solitaire.png"
+        $freecellIcon = "artifacts/build/windows/freecell.png"
+        $spiderIcon = "artifacts/build/windows/spider.png"
+        
+        # Fallback if PNGs don't exist
+        if (-not (Test-Path $solitaireIcon)) {
+          $solitaireIcon = "artifacts/build/windows/icon.png"
+        }
+        
+        # Verify at least one icon exists
+        if (-not (Test-Path $solitaireIcon)) {
+          Write-Error "No solitaire icon found"
+          exit 1
+        }
+        
+        Write-Host "Creating Microsoft Store compliant assets..."
+        
+        # Store Logo (50x50) - use main solitaire icon
+        & magick "$solitaireIcon" -resize 50x50 "msix-package/Assets/StoreLogo.scale-100.png"
+        & magick "$solitaireIcon" -resize 63x63 "msix-package/Assets/StoreLogo.scale-125.png"
+        & magick "$solitaireIcon" -resize 75x75 "msix-package/Assets/StoreLogo.scale-150.png"
+        & magick "$solitaireIcon" -resize 100x100 "msix-package/Assets/StoreLogo.scale-200.png"
+        
+        # Function to create assets for each game
+        function Create-GameAssets {
+          param($IconPath, $GameName)
+          
+          Write-Host "Creating assets for $GameName..."
+          
+          # Square 44x44 Logo
+          & magick "$IconPath" -resize 44x44 "msix-package/Assets/${GameName}44x44.scale-100.png"
+          & magick "$IconPath" -resize 55x55 "msix-package/Assets/${GameName}44x44.scale-125.png"
+          & magick "$IconPath" -resize 66x66 "msix-package/Assets/${GameName}44x44.scale-150.png"
+          & magick "$IconPath" -resize 88x88 "msix-package/Assets/${GameName}44x44.scale-200.png"
+          
+          # Square 150x150 Logo (main tile)
+          & magick "$IconPath" -resize 150x150 "msix-package/Assets/${GameName}Logo.scale-100.png"
+          & magick "$IconPath" -resize 188x188 "msix-package/Assets/${GameName}Logo.scale-125.png"
+          & magick "$IconPath" -resize 225x225 "msix-package/Assets/${GameName}Logo.scale-150.png"
+          & magick "$IconPath" -resize 300x300 "msix-package/Assets/${GameName}Logo.scale-200.png"
+          
+          # Wide 310x150 Logo (wide tile)
+          & magick "$IconPath" -resize 150x150 -background "#0a5a2d" -gravity center -extent 310x150 "msix-package/Assets/${GameName}Wide.scale-100.png"
+          & magick "$IconPath" -resize 188x188 -background "#0a5a2d" -gravity center -extent 388x188 "msix-package/Assets/${GameName}Wide.scale-125.png"
+          & magick "$IconPath" -resize 225x225 -background "#0a5a2d" -gravity center -extent 465x225 "msix-package/Assets/${GameName}Wide.scale-150.png"
+          & magick "$IconPath" -resize 300x300 -background "#0a5a2d" -gravity center -extent 620x300 "msix-package/Assets/${GameName}Wide.scale-200.png"
+        }
+        
+        # Create assets for Solitaire
+        Create-GameAssets -IconPath $solitaireIcon -GameName "Solitaire"
+        
+        # Create assets for FreeCell (use freecell icon if available, otherwise solitaire)
+        if (Test-Path $freecellIcon) {
+          Create-GameAssets -IconPath $freecellIcon -GameName "FreeCell"
+        } else {
+          Write-Host "FreeCell icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "FreeCell"
+        }
+        
+        # Create assets for Spider (use spider icon if available, otherwise solitaire)
+        if (Test-Path $spiderIcon) {
+          Create-GameAssets -IconPath $spiderIcon -GameName "Spider"
+        } else {
+          Write-Host "Spider icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "Spider"
+        }
+        
+        Write-Host "All Microsoft Store assets created successfully"
+
+    - name: Create Package Manifest
+      run: |
+        @"
+        <?xml version="1.0" encoding="utf-8"?>
+        <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+                 xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+                 xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
+          <Identity Name="JasonHall.SolitaireCollection"
+                    Version="${{ needs.build-linux.outputs.version }}.0"
+                    Publisher="CN=YOUR-PUBLISHER-ID-HERE"
+                    ProcessorArchitecture="x86" />
+          
+          <Properties>
+            <DisplayName>Solitaire Collection</DisplayName>
+            <PublisherDisplayName>Jason Hall</PublisherDisplayName>
+            <Description>Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface</Description>
+            <Logo>Assets\StoreLogo.scale-100.png</Logo>
+          </Properties>
+          
+          <Dependencies>
+            <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22000.0" />
+          </Dependencies>
+          
+          <Resources>
+            <Resource Language="en-US"/>
+          </Resources>
+          
+          <Capabilities>
+            <!-- Required for desktop bridge apps -->
+            <rescap:Capability Name="runFullTrust" />
+          </Capabilities>
+          
+          <Applications>
+            <Application Id="Solitaire" Executable="Files\solitaire.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Solitaire"
+                                  Description="Classic Klondike Solitaire card game"
+                                  Square150x150Logo="Assets\SolitaireLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Solitaire44x44.scale-100.png"
+                                  BackgroundColor="#0a5a2d">
+                <uap:DefaultTile Wide310x150Logo="Assets\SolitaireWide.scale-100.png"
+                                ShortName="Solitaire">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\SolitaireLogo.scale-100.png" />
+              </uap:VisualElements>
+            </Application>
+            
+            <Application Id="FreeCell" Executable="Files\freecell.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="FreeCell"
+                                  Description="Strategic FreeCell Solitaire card game"
+                                  Square150x150Logo="Assets\FreeCellLogo.scale-100.png"
+                                  Square44x44Logo="Assets\FreeCell44x44.scale-100.png"
+                                  BackgroundColor="#0a5a2d">
+                <uap:DefaultTile Wide310x150Logo="Assets\FreeCellWide.scale-100.png"
+                                ShortName="FreeCell">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\FreeCellLogo.scale-100.png" />
+              </uap:VisualElements>
+            </Application>
+            
+            <Application Id="Spider" Executable="Files\spider.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Spider Solitaire"
+                                  Description="Multi-deck Spider Solitaire challenge"
+                                  Square150x150Logo="Assets\SpiderLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Spider44x44.scale-100.png"
+                                  BackgroundColor="#0a5a2d">
+                <uap:DefaultTile Wide310x150Logo="Assets\SpiderWide.scale-100.png"
+                                ShortName="Spider">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\SpiderLogo.scale-100.png" />
+              </uap:VisualElements>
+            </Application>
+          </Applications>
+        </Package>
+        "@ | Out-File -FilePath "msix-package/AppxManifest.xml" -Encoding UTF8
+
+    - name: Build MSIX Package
+      run: |
+        # Use Windows SDK MakeAppx tool to create MSIX
+        $makeAppxPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe"
+        
+        # Try different SDK versions if the specific one doesn't exist
+        if (-not (Test-Path $makeAppxPath)) {
+          $sdkVersions = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\" | Where-Object { $_.Name -match "10\.0\.\d+\.\d+" } | Sort-Object Name -Descending
+          foreach ($version in $sdkVersions) {
+            $testPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\$($version.Name)\x64\makeappx.exe"
+            if (Test-Path $testPath) {
+              $makeAppxPath = $testPath
+              break
+            }
+          }
+        }
+        
+        if (-not (Test-Path $makeAppxPath)) {
+          Write-Error "MakeAppx.exe not found. Windows SDK may not be installed."
+          exit 1
+        }
+        
+        Write-Host "Using MakeAppx at: $makeAppxPath"
+        
+        # Create the MSIX package (unsigned for Store submission)
+        & "$makeAppxPath" pack /d "msix-package" /p "Solitaire-GTK.msix" /o
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "MSIX package creation failed with exit code $LASTEXITCODE"
+          exit 1
+        }
+        
+        # Verify MSIX was created
+        if (Test-Path "Solitaire-GTK.msix") {
+          Write-Host "✅ MSIX package created successfully: Solitaire-GTK.msix"
+          $msixSize = (Get-Item "Solitaire-GTK.msix").Length
+          Write-Host "MSIX file size: $msixSize bytes"
+          Write-Host "Package is unsigned and ready for Microsoft Store submission"
+        } else {
+          Write-Error "❌ MSIX file was not created!"
+          exit 1
+        }
+
+    - name: Upload MSIX Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: Solitaire-GTK.msix
+        path: Solitaire-GTK.msix
+
   create-release:
-    needs: [build-linux, build-msi-windows]
+    needs: [build-linux, build-msi-windows, build-msix-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -484,6 +740,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: Solitaire-GTK.msi
+        path: release
+
+    - name: Download MSIX Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Solitaire-GTK.msix
         path: release
 
     - name: Download Portable Artifact
@@ -497,6 +759,7 @@ jobs:
       with:
         files: |
           release/Solitaire-GTK.msi
+          release/Solitaire-GTK.msix
           release/Solitaire-GTK-Portable.zip
         tag_name: ${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('dev-v{0}', github.run_number) }}
         name: ${{ github.ref == 'refs/heads/master' && format('Release v{0}', github.run_number) || format('Dev Build v{0}', github.run_number) }}
@@ -515,6 +778,7 @@ jobs:
           
           ### 📦 Downloads
           - **Solitaire-GTK.msi** - Windows installer with uninstall support
+          - **Solitaire-GTK.msix** - Unsigned package ready for Microsoft Store submission
           - **Solitaire-GTK-Portable.zip** - Portable version (no installation required)
           
           ### 🎮 Games Included
@@ -522,7 +786,7 @@ jobs:
           - 🃏 **FreeCell** - Strategic card sorting
           - 🕷️ **Spider Solitaire** - Multi-deck challenge
           
-          ### ✨ Installer Features
+          ### ✨ Installer Features (MSI)
           - ✅ User/Machine installation scope choice
           - ✅ Custom installation directory
           - ✅ Start menu shortcuts for all games with individual icons
@@ -532,13 +796,49 @@ jobs:
           - ✅ Add/Remove Programs integration
           - ✅ Uninstall shortcut in Start Menu
           
+          ### 🏪 Microsoft Store Submission
+          The MSIX package in this release is **unsigned** and ready for Microsoft Store submission through Partner Center. Before uploading:
+          1. Update the Identity Name and Publisher in the manifest with values from Partner Center
+          2. Upload the unsigned MSIX file - Microsoft handles signing during certification
+          
+          ### 📦 Package Comparison
+          | Feature | MSI | MSIX | Portable |
+          |---------|-----|------|----------|
+          | Installation Required | Yes | Yes | No |
+          | Start Menu Integration | ✅ | ✅ | ❌ |
+          | Auto-Update Support | ❌ | ✅ | ❌ |
+          | Microsoft Store Ready | ❌ | ✅ | ❌ |
+          | Enterprise Deployment | ✅ | ✅ | ✅ |
+          | Sandboxed | ❌ | ✅ | ❌ |
+          | Traditional Uninstall | ✅ | ✅ | ❌ |
+          | Code Signing Required | ✅ | Store | ❌ |
+          
           ### 🛠️ Technical Details
           - Built on: Linux (Fedora 41 container)
           - MSI compiled on: Windows Latest
+          - MSIX compiled on: Windows Latest
+          - **Store-Compliant Assets**: Multiple scale factors (100%, 125%, 150%, 200%)
           - GTK3 runtime included
           - All dependencies bundled
           - Sound effects and card graphics included
           - Individual game icons for better visual identification
+          
+          ### 🎯 Silent Installation (MSI only)
+          **For enterprise and automated deployments:**
+          ```cmd
+          # Silent install with desktop shortcuts
+          msiexec /i Solitaire-GTK.msi /quiet /norestart DESKTOP_SHORTCUT=1
+          
+          # Silent install without desktop shortcuts
+          msiexec /i Solitaire-GTK.msi /quiet /norestart DESKTOP_SHORTCUT=0
+          
+          # Silent uninstall
+          msiexec /x Solitaire-GTK.msi /quiet /norestart
+          ```
+          
+          **Command-line Properties:**
+          - `DESKTOP_SHORTCUT=1` - Create desktop shortcuts (default: 1)
+          - `INSTALLFOLDER="C:\Program Files\Solitaire Collection"` - Custom install path
           
           ---
           *Built with ❤️ using GitHub Actions*
