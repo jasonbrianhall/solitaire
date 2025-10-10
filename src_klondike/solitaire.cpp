@@ -1591,8 +1591,20 @@ void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
   initializeCardCache();
 }
 
-double SolitaireGame::getScaleFactor(int window_width,
-                                     int window_height) const {
+double SolitaireGame::getScaleFactor(int window_width, int window_height) const {
+  // Get the display scale factor (1.0 for 100%, 2.0 for 200%, etc.)
+  double display_scale = 1.0;
+  if (window_) {
+    GdkWindow *gdk_window = gtk_widget_get_window(window_);
+    if (gdk_window) {
+      display_scale = gdk_window_get_scale_factor(gdk_window);
+    }
+  }
+  
+  // Adjust window dimensions to logical pixels (divide by display scale)
+  int logical_width = static_cast<int>(window_width / display_scale);
+  int logical_height = static_cast<int>(window_height / display_scale);
+  
   // Define optimal widths for each game mode based on testing
   const int OPTIMAL_WIDTH_STANDARD = 800;
   const int OPTIMAL_WIDTH_DOUBLE = 1300;
@@ -1613,10 +1625,10 @@ double SolitaireGame::getScaleFactor(int window_width,
       break;
   }
   
-  // Calculate scale factors for both dimensions
-  double width_scale = static_cast<double>(window_width) / optimal_width;
-  double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
-
+  // Calculate scale factors using logical dimensions
+  double width_scale = static_cast<double>(logical_width) / optimal_width;
+  double height_scale = static_cast<double>(logical_height) / BASE_WINDOW_HEIGHT;
+  
   // Use the smaller scale to ensure everything fits
   return std::min(width_scale, height_scale);
 }
