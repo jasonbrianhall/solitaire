@@ -446,6 +446,15 @@ void FreecellGame::setupWindow() {
   gtk_widget_add_events(window_, GDK_KEY_PRESS_MASK);
   g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress), this);
 
+  // Make sure the window is realized before calculating scale
+  gtk_widget_realize(window_);
+    
+  // Now get the initial dimensions with correct scale factor
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(window_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
+
+
   // Create vertical box
   vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window_), vbox_);
@@ -1054,39 +1063,83 @@ void FreecellGame::updateCardDimensions(int window_width, int window_height) {
 }
 
 double FreecellGame::getScaleFactor(int window_width, int window_height) const {
-  // Calculate scale factors for both dimensions
-  double width_scale = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
-  double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
-
+  // Get the display scale factor (1.0 for 100%, 2.0 for 200%, etc.)
+  double display_scale = 1.0;
+  if (window_) {
+    GdkWindow *gdk_window = gtk_widget_get_window(window_);
+    if (gdk_window) {
+      display_scale = gdk_window_get_scale_factor(gdk_window);
+    } else {
+      // Window not realized yet, try to get scale from display
+      GdkDisplay *display = gdk_display_get_default();
+      if (display) {
+        GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
+        if (monitor) {
+          display_scale = gdk_monitor_get_scale_factor(monitor);
+        }
+      }
+    }
+  }
+  
+  // Adjust window dimensions to logical pixels
+  int logical_width = static_cast<int>(window_width / display_scale);
+  int logical_height = static_cast<int>(window_height / display_scale);
+  
+  // Calculate scale factors for both dimensions using logical pixels
+  double width_scale = static_cast<double>(logical_width) / BASE_WINDOW_WIDTH;
+  double height_scale = static_cast<double>(logical_height) / BASE_WINDOW_HEIGHT;
+  
   // Use the smaller scale to ensure everything fits
   return std::min(width_scale, height_scale);
 }
 
 void FreecellGame::initializeCardCache() {
+  // Get display scale factor
+  double display_scale = 1.0;
+  if (window_) {
+    GdkWindow *gdk_window = gtk_widget_get_window(window_);
+    if (gdk_window) {
+      display_scale = gdk_window_get_scale_factor(gdk_window);
+    } else {
+      // Window not realized yet, try to get scale from display
+      GdkDisplay *display = gdk_display_get_default();
+      if (display) {
+        GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
+        if (monitor) {
+          display_scale = gdk_monitor_get_scale_factor(monitor);
+        }
+      }
+    }
+  }
+  
+  // Calculate actual pixel dimensions needed for the surface
+  // (Cairo surfaces need physical pixels, not logical pixels)
+  int surface_width = static_cast<int>(current_card_width_ * display_scale);
+  int surface_height = static_cast<int>(current_card_height_ * display_scale);
+  
   // Pre-load all card images into cairo surfaces with current dimensions
   cleanupCardCache();
-
   for (const auto &card : deck_.getAllCards()) {
     if (auto img = deck_.getCardImage(card)) {
       GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
       gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(), nullptr);
       gdk_pixbuf_loader_close(loader, nullptr);
-
       GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
       GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-          pixbuf, current_card_width_, current_card_height_, GDK_INTERP_BILINEAR);
-
+          pixbuf, surface_width, surface_height, GDK_INTERP_BILINEAR);
       cairo_surface_t *surface = cairo_image_surface_create(
-          CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+          CAIRO_FORMAT_ARGB32, surface_width, surface_height);
+      
+      // Set the device scale on the surface so Cairo knows about the scaling
+      cairo_surface_set_device_scale(surface, display_scale, display_scale);
+      
       cairo_t *cr = cairo_create(surface);
       gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
       cairo_paint(cr);
       cairo_destroy(cr);
-
       std::string key = std::to_string(static_cast<int>(card.suit)) +
                         std::to_string(static_cast<int>(card.rank));
       card_surface_cache_[key] = surface;
-
       g_object_unref(scaled);
       g_object_unref(loader);
     }
