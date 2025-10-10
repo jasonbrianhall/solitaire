@@ -891,6 +891,14 @@ void SolitaireGame::setupWindow() {
   g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress),
                    this);
 
+  // Make sure the window is realized before calculating scale
+  gtk_widget_realize(window_);
+    
+  // Now get the initial dimensions with correct scale factor
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(window_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
+
   // Create vertical box
   vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window_), vbox_);
@@ -1919,12 +1927,33 @@ void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
   initializeCardCache();
 }
 
-double SolitaireGame::getScaleFactor(int window_width,
-                                     int window_height) const {
-  // Calculate scale factors for both dimensions
-  double width_scale = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
-  double height_scale = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
-
+double SolitaireGame::getScaleFactor(int window_width, int window_height) const {
+  // Get the display scale factor (1.0 for 100%, 2.0 for 200%, etc.)
+  double display_scale = 1.0;
+  if (window_) {
+    GdkWindow *gdk_window = gtk_widget_get_window(window_);
+    if (gdk_window) {
+      display_scale = gdk_window_get_scale_factor(gdk_window);
+    } else {
+      // Window not realized yet, try to get scale from display
+      GdkDisplay *display = gdk_display_get_default();
+      if (display) {
+        GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
+        if (monitor) {
+          display_scale = gdk_monitor_get_scale_factor(monitor);
+        }
+      }
+    }
+  }
+  
+  // Adjust window dimensions to logical pixels
+  int logical_width = static_cast<int>(window_width / display_scale);
+  int logical_height = static_cast<int>(window_height / display_scale);
+  
+  // Calculate scale factors for both dimensions using logical pixels
+  double width_scale = static_cast<double>(logical_width) / BASE_WINDOW_WIDTH;
+  double height_scale = static_cast<double>(logical_height) / BASE_WINDOW_HEIGHT;
+  
   // Use the smaller scale to ensure everything fits
   return std::min(width_scale, height_scale);
 }
