@@ -726,6 +726,14 @@ void SolitaireGame::setupWindow() {
   g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress),
                    this);
 
+  // Make sure the window is realized before calculating scale
+  gtk_widget_realize(window_);
+    
+  // Now get the initial dimensions with correct scale factor
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(window_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
+
   // Create vertical box
   vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window_), vbox_);
