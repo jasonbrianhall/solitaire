@@ -308,7 +308,7 @@ void SolitaireGame::deal() {
   // First 4 piles get 6 cards each
   // Last 6 piles get 5 cards each
   for (int i = 0; i < 10; i++) {
-    int cards_to_deal = (i < 4) ? 6 : 5;
+    int cards_to_deal = (i < 6) ? 6 : 5;
     
     for (int j = 0; j < cards_to_deal; j++) {
       if (auto card = spider_deck.drawCard()) {
