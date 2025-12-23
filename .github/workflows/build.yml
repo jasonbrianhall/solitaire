@@ -1,281 +1,104 @@
-name: Build Zenamp
+name: Build Solitaire
 
 on:
   push:
-    branches: [ master, main, dev ]
+    branches: [ master, dev ]
     paths:
-      - 'gtk3/**.cpp'
-      - 'gtk3/**.h'
-      - 'gtk3/**.c'
       - '**.cpp'
       - '**.h'
-      - 'gtk3/Makefile'
+      - 'Makefile'
+      - '**/Makefile'
       - '**.yml'
       - '**.yaml'
-      - '!gtk3/comet_busters/**'
   pull_request:
-    branches: [ master, main, dev ]
+    branches: [ master, dev ]
     paths:
-      - 'gtk3/**.cpp'
-      - 'gtk3/**.h'
-      - 'gtk3/**.c'
       - '**.cpp'
       - '**.h'
-      - 'gtk3/Makefile'
+      - 'Makefile'
+      - '**/Makefile'
       - '**.yml'
       - '**.yaml'
-      - '!gtk3/comet_busters/**'
   workflow_dispatch:
 
 env:
   PRODUCT_VERSION: "1.0.${{ github.run_number }}"
-  UPGRADE_CODE: "A8F5B321-9D73-4E2A-B8F6-D425E9A7C841"
+  UPGRADE_CODE: "D7E94C12-7B38-42F6-9E1A-BB952F7D5801"
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     container: 
-      image: fedora:43
+      image: fedora:41
     outputs:
       version: ${{ env.PRODUCT_VERSION }}
 
     steps:
-    - name: Install Git
-      run: |
-        dnf install -y git
-
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Fetch all history
-        submodules: recursive
 
-    - name: Install Dependencies
+    - name: Install Cross-Compilation Dependencies
       run: |
-        # Enable RPM Fusion repositories
         dnf -y install \
-          https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
-          https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
-
-        # Install packages
-        dnf -y install \
-          gcc gcc-c++ make \
-          gtk3-devel gtkmm30-devel \
-          SDL2-devel SDL2_mixer-devel \
-          libvorbis-devel flac-devel \
-          gstreamer1-devel gstreamer1-plugins-base-devel \
-          pkg-config \
           mingw64-gcc mingw64-gcc-c++ \
           mingw64-gtk3 mingw64-gtkmm30 \
-          mingw64-SDL2 mingw64-SDL2_mixer \
-          mingw64-libvorbis mingw64-flac \
-          mingw64-opus mingw64-opusfile \
-          mingw64-taglib.noarch \
+          mingw64-libzip \
           wine wine-devel \
-          zip unzip \
-          opus-devel opusfile-devel \
-          ImageMagick \
-          ffmpeg-devel \
-          taglib-devel \
-          rpm-build rpmdevtools
-          
-    - name: Convert Icon
-      working-directory: gtk3
+          binutils make zip unzip libzip-devel \
+          ImageMagick
+
+    - name: Convert Icons to PNG
       run: |
-        # Convert PNG to ICO if icon.png exists
-        if [ -f "../icon.png" ]; then
-          echo "Converting icon.png to icon.ico..."
-          convert ../icon.png -resize 256x256 -compress zip icon.ico
-          echo "Icon conversion successful"
-          ls -la icon.ico
-        elif [ -f "icon.png" ]; then
-          echo "Converting local icon.png to icon.ico..."
-          convert icon.png -resize 256x256 -compress zip icon.ico
-          echo "Icon conversion successful"
-          ls -la icon.ico
-        else
-          echo "No icon.png found, creating placeholder icon.ico"
-          # Create a simple colored square as fallback
-          convert -size 256x256 xc:'#1a73e8' -fill white -gravity center \
-                  -pointsize 32 -annotate +0+0 'Zenamp' icon.ico
+        # Convert ICO files to PNG for MSIX if they don't already exist
+        if [ -f "solitaire.ico" ] && [ ! -f "solitaire.png" ]; then
+          convert solitaire.ico[0] -resize 256x256 solitaire.png
+        fi
+        if [ -f "freecell.ico" ] && [ ! -f "freecell.png" ]; then
+          convert freecell.ico[0] -resize 256x256 freecell.png
+        fi
+        if [ -f "spider.ico" ] && [ ! -f "spider.png" ]; then
+          convert spider.ico[0] -resize 256x256 spider.png
+        fi
+        
+        # Use solitaire icon as main app icon if available
+        if [ -f "solitaire.png" ]; then
+          cp solitaire.png icon.png
         fi
 
-    - name: Create Windows Resource File
-      working-directory: gtk3
+    - name: Build Windows GTK Version
       run: |
-        # Create resource file to embed icon and version info
-        cat > icon.rc << 'EOF'
-        #include <windows.h>
-        
-        // Icon resource
-        1 ICON "icon.ico"
-        
-        // Version information
-        VS_VERSION_INFO VERSIONINFO
-        FILEVERSION 1,0,${{ github.run_number }},0
-        PRODUCTVERSION 1,0,${{ github.run_number }},0
-        FILEFLAGSMASK 0x3fL
-        FILEFLAGS 0x0L
-        FILEOS 0x40004L
-        FILETYPE 0x1L
-        FILESUBTYPE 0x0L
-        BEGIN
-            BLOCK "StringFileInfo"
-            BEGIN
-                BLOCK "040904b0"
-                BEGIN
-                    VALUE "CompanyName", "Jason Brian Hall"
-                    VALUE "FileDescription", "Zenamp - Retro-Modern Music Player"
-                    VALUE "FileVersion", "1.0.${{ github.run_number }}.0"
-                    VALUE "InternalName", "zenamp"
-                    VALUE "LegalCopyright", "Copyright (c) 2025 Jason Brian Hall"
-                    VALUE "OriginalFilename", "zenamp.exe"
-                    VALUE "ProductName", "Zenamp"
-                    VALUE "ProductVersion", "1.0.${{ github.run_number }}.0"
-                END
-            END
-            BLOCK "VarFileInfo"
-            BEGIN
-                VALUE "Translation", 0x409, 1200
-            END
-        END
-        EOF
-        
-        echo "Resource file created successfully"
-        cat icon.rc
-
-    - name: Build Linux Version
-      working-directory: gtk3
-      run: |
-        make linux VERSION=1.0.${{ github.run_number }}
-        make rpm VERSION=1.0.${{ github.run_number }}
-        
-        # Copy RPM from rpmbuild directory to expected location
-        mkdir -p build/rpm
-        cp ~/rpmbuild/RPMS/x86_64/*.rpm build/rpm/
-        
-        # Verify the build
-        if [ -f "build/linux/zenamp" ]; then
-          echo "Linux build successful"
-          ls -la build/linux/
-        else
-          echo "Linux build failed"
-          exit 1
-        fi
-
-    - name: Build Windows Version
-      working-directory: gtk3
-      run: |
-        # Compile resource file first
-        x86_64-w64-mingw32-windres icon.rc -o icon.o
-        echo "Resource file compiled successfully"
-        
-        # Build with embedded icon and version info
-        make windows EXTRA_OBJS=icon.o VERSION=1.0.${{ github.run_number }}
-        
-        # Verify the build
-        if [ -f "build/windows/zenamp.exe" ]; then
-          echo "Windows build successful"
-          ls -la build/windows/
-        else
-          echo "Windows build failed"
-          exit 1
-        fi
+        make windows
 
     - name: Prepare Build Artifacts
-      working-directory: gtk3
+      working-directory: build/windows
       run: |
-        # Copy resources to both builds
-        cp ../README.md build/linux/ 2>/dev/null || true
-        cp ../README.md build/windows/ 2>/dev/null || true
-        cp icon.ico build/windows/ 2>/dev/null || true
+        # Copy resources
+        cp ../../solitaire.ico .
+        cp ../../freecell.ico .
+        cp ../../spider.ico .
+        cp ../../README.md .
+        cp ../../LICENSE.md .
         
-        # Copy PNG assets for MSIX
-        cp icon.png build/windows/ 2>/dev/null || true
-        cp poster.png build/windows/ 2>/dev/null || true
+        # Copy PNG files for MSIX
+        cp ../../solitaire.png . 2>/dev/null || true
+        cp ../../freecell.png . 2>/dev/null || true
+        cp ../../spider.png . 2>/dev/null || true
+        cp ../../icon.png . 2>/dev/null || true
         
-        # For Windows build, collect required DLLs
-        cd build/windows
-        
-        # Find and copy essential DLLs
-        DLL_SOURCE="/usr/x86_64-w64-mingw32/sys-root/mingw/bin"
-        
-        # Core runtime DLLs
-        for dll in \
-          libgcc_s_seh-1.dll \
-          libstdc++-6.dll \
-          libwinpthread-1.dll \
-          SDL2.dll \
-          SDL2_mixer.dll \
-          libvorbis-0.dll \
-          libvorbisfile-3.dll \
-          libogg-0.dll \
-          libFLAC-12.dll \
-          libgtk-3-0.dll \
-          libgdk-3-0.dll \
-          libglib-2.0-0.dll \
-          libgobject-2.0-0.dll \
-          libgio-2.0-0.dll \
-          libcairo-2.dll \
-          libpango-1.0-0.dll \
-          libpangocairo-1.0-0.dll \
-          libgdk_pixbuf-2.0-0.dll \
-          libatk-1.0-0.dll \
-          libharfbuzz-0.dll \
-          libfontconfig-1.dll \
-          libfreetype-6.dll \
-          libexpat-1.dll \
-          libbz2-1.dll \
-          libpng16-16.dll \
-          zlib1.dll \
-          libiconv-2.dll \
-          libintl-8.dll \
-          libffi-8.dll \
-          libpcre2-8-0.dll; do
-          if [ -f "$DLL_SOURCE/$dll" ]; then
-            cp "$DLL_SOURCE/$dll" .
-            echo "Copied: $dll"
-          else
-            echo "Missing: $dll"
-          fi
-        done
-        
-        # Create GTK runtime directories
-        mkdir -p lib/gdk-pixbuf-2.0
-        mkdir -p lib/gtk-3.0
-        mkdir -p share/glib-2.0/schemas
-        mkdir -p share/icons
-        mkdir -p share/themes
-        
-        # Copy GTK schemas if available
-        if [ -d "/usr/x86_64-w64-mingw32/sys-root/mingw/share/glib-2.0/schemas" ]; then
-          cp -r /usr/x86_64-w64-mingw32/sys-root/mingw/share/glib-2.0/schemas/* share/glib-2.0/schemas/ 2>/dev/null || true
-        fi
-        
-        # List all files for verification
-        echo "=== Windows build contents ==="
-        find . -type f | sort
+        # Create file list for MSI
+        echo "Creating file inventory..."
+        find . -name "*.dll" -type f | sort > dll_list.txt
+        find . -name "*.exe" -type f | sort > exe_list.txt
         
         # Create portable ZIP
-        cd ../..
-        zip -r "Zenamp-Portable.zip" build/windows/*
-
-    - name: Test Linux Build
-      working-directory: gtk3
-      run: |
-        # Test if the binary can at least show version/help
-        cd build/linux
-        ./zenamp --help || echo "Help not available, but binary runs"
-        echo "Linux binary test completed"
+        zip -r ../../Solitaire-GTK-Portable.zip ./*
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zenamp-builds
+        name: solitaire-build
         path: |
-          gtk3/build/linux/**/*
-          gtk3/build/windows/**/*
-          gtk3/build/rpm/**/*
-          gtk3/Zenamp-Portable.zip
+          build/windows/**/*
+          Solitaire-GTK-Portable.zip
         retention-days: 7
 
   build-msi-windows:
@@ -286,13 +109,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
     - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: zenamp-builds
+        name: solitaire-build
         path: artifacts
 
     - name: Setup WiX Toolset
@@ -302,9 +123,8 @@ jobs:
         Expand-Archive -Path "wix.zip" -DestinationPath "wix"
         echo "$env:GITHUB_WORKSPACE\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Create License Files
+    - name: Create MIT License File
       run: |
-        # Create MIT License text file
         @"
         MIT License
         
@@ -329,23 +149,7 @@ jobs:
         SOFTWARE.
         "@ | Out-File -FilePath "artifacts\build\windows\LICENSE.txt" -Encoding UTF8
 
-        # Create License RTF for installer
-        @"
-        {\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
-        \f0\fs24
-        MIT License\par
-        \par
-        Copyright (c) 2025 Jason Brian Hall\par
-        \par
-        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\par
-        \par
-        The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\par
-        \par
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\par
-        }
-        "@ | Out-File -FilePath "artifacts\build\windows\License.rtf" -Encoding UTF8
-
-    - name: Generate MSI Installer
+    - name: Generate Advanced MSI Installer
       working-directory: artifacts/build/windows
       run: |
         # Generate component entries for all DLLs
@@ -354,13 +158,13 @@ jobs:
           "          <File Id=`"$safeId`" Name=`"$_`" Source=`"$_`"/>"
         }
         
-        # Create WXS installer definition with file associations
+        # Create advanced WXS installer
         @"
         <?xml version="1.0" encoding="UTF-8"?>
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
           
           <Product Id="*" 
-                   Name="Zenamp" 
+                   Name="Solitaire Essentials" 
                    Language="1033" 
                    Version="${{ needs.build-linux.outputs.version }}" 
                    Manufacturer="Jason Brian Hall" 
@@ -369,13 +173,13 @@ jobs:
             <Package InstallerVersion="500" 
                      Compressed="yes" 
                      InstallScope="perMachine" 
-                     Description="Zenamp - Retro-Modern Music Player"
+                     Description="Solitaire Essentials GTK - Classic Card Games"
                      Comments="Built with GitHub Actions"
                      Manufacturer="Jason Brian Hall" />
             
             <!-- Major upgrade configuration -->
             <MajorUpgrade 
-              DowngradeErrorMessage="A newer version of Zenamp is already installed. Please uninstall it first." 
+              DowngradeErrorMessage="A newer version of Solitaire Essentials is already installed. Please uninstall it first." 
               Schedule="afterInstallInitialize" />
             
             <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
@@ -384,17 +188,14 @@ jobs:
             <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
             
             <!-- Custom properties -->
-            <Property Id="ARPPRODUCTICON" Value="zenampIcon" />
-            <Property Id="ARPURLINFOABOUT" Value="https://github.com/jasonbrianhall/midi_msdos" />
+            <Property Id="ARPPRODUCTICON" Value="SolitaireIcon" />
+            <Property Id="ARPURLINFOABOUT" Value="https://github.com/yourusername/solitaire" />
             <Property Id="ARPNOREPAIR" Value="yes" />
             <Property Id="ARPNOMODIFY" Value="yes" />
-            <Property Id="ARPHELPLINK" Value="https://github.com/jasonbrianhall/midi_msdos/issues" />
-            
-            <!-- File association properties -->
-            <Property Id="ASSOCIATE_FILES" Value="1" />
+            <Property Id="ARPHELPLINK" Value="https://github.com/yourusername/solitaire/issues" />
             
             <!-- Installation scope choice -->
-            <Property Id="ApplicationFolderName" Value="Zenamp" />
+            <Property Id="ApplicationFolderName" Value="Solitaire Essentials" />
             <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
             <WixVariable Id="WixUISupportPerUser" Value="1" />
             <WixVariable Id="WixUISupportPerMachine" Value="1" />
@@ -406,157 +207,56 @@ jobs:
                   
                   <!-- Main application component -->
                   <Component Id="MainExecutable" 
-                           Guid="B58E73D9-4A96-49B7-C36E-2E7D0E5B9A45"
+                           Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23"
                            Win64="no">
                     <File Id="MainEXE" 
-                          Name="zenamp.exe" 
-                          Source="zenamp.exe" 
-                          KeyPath="yes" />
+                          Name="solitaire.exe" 
+                          Source="solitaire.exe" 
+                          KeyPath="yes">
+                      <!-- File associations could go here -->
+                    </File>
+                    
+                    <!-- Game executables -->
+                    <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe"/>
+                    <File Id="SpiderEXE" Name="spider.exe" Source="spider.exe"/>
                     
                     <!-- Application files -->
+                    <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
+                    <File Id="SoundsZIP" Name="sound.zip" Source="sound.zip"/>
+                    <File Id="SolitaireIconFile" Name="solitaire.ico" Source="solitaire.ico"/>
+                    <File Id="FreecellIconFile" Name="freecell.ico" Source="freecell.ico"/>
+                    <File Id="SpiderIconFile" Name="spider.ico" Source="spider.ico"/>
+                    <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
                     <File Id="README" Name="README.md" Source="README.md"/>
+                    <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
                     <File Id="LICENSE_TXT" Name="LICENSE.txt" Source="LICENSE.txt"/>
-                    <File Id="IconFile" Name="icon.ico" Source="icon.ico"/>
                     
                     <!-- DLL files -->
         $($dllEntries -join "`r`n")
                     
-                    <!-- Registry entries -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Zenamp">
+                    <!-- Registry entries for uninstall info -->
+                    <RegistryKey Root="HKLM" Key="SOFTWARE\Solitaire Essentials">
                       <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
                       <RegistryValue Type="string" Name="Version" Value="${{ needs.build-linux.outputs.version }}" />
                       <RegistryValue Type="string" Name="Publisher" Value="Jason Brian Hall" />
                     </RegistryKey>
                   </Component>
                   
-                  <!-- File Association Component -->
-                  <Component Id="FileAssociations" Guid="C3F4E765-B8D2-4E91-A7C8-F64A8A9E2B73">
-                    <Condition>ASSOCIATE_FILES</Condition>
-                    
-                    <!-- Program registration -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\Applications\zenamp.exe">
-                      <RegistryValue Type="string" Name="FriendlyAppName" Value="Zenamp" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                      <RegistryValue Type="string" Key="shell\play\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                      <RegistryValue Type="string" Key="shell\play" Value="Play with Zenamp" />
-                    </RegistryKey>
-                    
-                    <!-- WAV Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.wav\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampWAV" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampWAV">
-                      <RegistryValue Type="string" Value="WAV Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- MP3 Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.mp3\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampMP3" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampMP3">
-                      <RegistryValue Type="string" Value="MP3 Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- OGG Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.ogg\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampOGG" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampOGG">
-                      <RegistryValue Type="string" Value="OGG Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- FLAC Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.flac\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampFLAC" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampFLAC">
-                      <RegistryValue Type="string" Value="FLAC Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- MIDI Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.mid\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampMIDI" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.midi\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampMIDI" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampMIDI">
-                      <RegistryValue Type="string" Value="MIDI Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- AIFF Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.aiff\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampAIFF" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.aif\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampAIFF" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampAIFF">
-                      <RegistryValue Type="string" Value="AIFF Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- OPUS Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.opus\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampOPUS" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampOPUS">
-                      <RegistryValue Type="string" Value="OPUS Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- M4A Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.m4a\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampM4A" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampM4A">
-                      <RegistryValue Type="string" Value="M4A Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <!-- WMA Files -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.wma\OpenWithProgids">
-                      <RegistryValue Type="string" Name="ZenampWMA" Value="" />
-                    </RegistryKey>
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\ZenampWMA">
-                      <RegistryValue Type="string" Value="WMA Audio File" />
-                      <RegistryValue Type="string" Key="DefaultIcon" Value="[INSTALLFOLDER]zenamp.exe,0" />
-                      <RegistryValue Type="string" Key="shell\open\command" Value="&quot;[INSTALLFOLDER]zenamp.exe&quot; &quot;%1&quot;" />
-                    </RegistryKey>
-                    
-                    <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Components" 
-                                 Type="integer" Name="FileAssociations" Value="1" KeyPath="yes"/>
-                  </Component>
-                  
                   <!-- GTK Runtime directories -->
                   <Directory Id="LibDir" Name="lib">
                     <Directory Id="GdkPixbuf" Name="gdk-pixbuf-2.0">
-                      <Component Id="GdkPixbufDir" Guid="A9A4C725-E83A-4D68-B9D3-752E4A9E6E40">
+                      <Component Id="GdkPixbufDir" Guid="E5F7B982-D93A-4A42-A3B2-642D3F9E3F48">
                         <CreateFolder />
                         <RemoveFolder Id="RemoveGdkPixbuf" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Components" 
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
                                      Type="integer" Name="GdkPixbuf" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
                     <Directory Id="Gtk3" Name="gtk-3.0">
-                      <Component Id="Gtk3Dir" Guid="C2E5D951-A6B2-4E79-C7E4-864A3A9E7A51">
+                      <Component Id="Gtk3Dir" Guid="F8D4C159-8E2B-4B47-B9A3-753D2F9E4F59">
                         <CreateFolder />
                         <RemoveFolder Id="RemoveGtk3" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Components" 
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
                                      Type="integer" Name="Gtk3" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
@@ -565,27 +265,28 @@ jobs:
                   <Directory Id="ShareDir" Name="share">
                     <Directory Id="GLib2" Name="glib-2.0">
                       <Directory Id="Schemas" Name="schemas">
-                        <Component Id="GtkSchemas" Guid="D8A6E372-C7A3-4A83-D2A5-975A4A9E8A62">
-                          <CreateFolder />
+                        <Component Id="GtkSchemas" Guid="A7C3D845-B6E1-4C53-8D1E-864F2F9E5F60">
+                          <File Id="GSchemas" Name="gschemas.compiled" 
+                                Source="share/glib-2.0/schemas/gschemas.compiled"/>
                           <RemoveFolder Id="RemoveSchemas" On="uninstall" />
-                          <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Components" 
+                          <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
                                        Type="integer" Name="Schemas" Value="1" KeyPath="yes"/>
                         </Component>
                       </Directory>
                     </Directory>
                     <Directory Id="Icons" Name="icons">
-                      <Component Id="IconsDir" Guid="E7A8A483-D4E4-4A94-E3A6-086A5A9E9A73">
+                      <Component Id="IconsDir" Guid="B9E5F371-A4C2-4D64-92F4-975E3F9E6F71">
                         <CreateFolder />
                         <RemoveFolder Id="RemoveIcons" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Components" 
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
                                      Type="integer" Name="Icons" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
                     <Directory Id="Themes" Name="themes">
-                      <Component Id="ThemesDir" Guid="A9B9A594-E5A5-4AA5-A4B7-197B6A9E0B84">
+                      <Component Id="ThemesDir" Guid="C2F6A482-B5D3-4E75-A3F5-086A4F9E7F82">
                         <CreateFolder />
                         <RemoveFolder Id="RemoveThemes" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Components" 
+                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
                                      Type="integer" Name="Themes" Value="1" KeyPath="yes"/>
                       </Component>
                     </Directory>
@@ -595,46 +296,82 @@ jobs:
               
               <!-- Start Menu shortcuts -->
               <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="Zenamp">
-                  <Component Id="ApplicationShortcuts" Guid="A0C3E560-A7B2-4C64-AD83-A42E9AE63E80">
-                    <Shortcut Id="ApplicationStartMenu" 
-                             Name="Zenamp" 
-                             Target="[INSTALLFOLDER]zenamp.exe" 
+                <Directory Id="ApplicationProgramsFolder" Name="Solitaire Essentials">
+                  <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
+                    <Shortcut Id="ApplicationStartMenuKlondike" 
+                             Name="Solitaire" 
+                             Target="[INSTALLFOLDER]solitaire.exe" 
                              WorkingDirectory="INSTALLFOLDER"
-                             Description="Launch Zenamp"
-                             Icon="zenampIcon"/>
+                             Description="Play Classic Solitaire (Klondike)"
+                             Icon="SolitaireIcon"/>
+                    <Shortcut Id="ApplicationStartMenuFreeCell" 
+                             Name="FreeCell" 
+                             Target="[INSTALLFOLDER]freecell.exe" 
+                             WorkingDirectory="INSTALLFOLDER"
+                             Description="Play FreeCell Solitaire"
+                             Icon="FreecellIcon"/>
+                    <Shortcut Id="ApplicationStartMenuSpider"
+                             Name="Spider Solitaire"
+                             Target="[INSTALLFOLDER]spider.exe"
+                             WorkingDirectory="INSTALLFOLDER"
+                             Description="Play Spider Solitaire"
+                             Icon="SpiderIcon"/>
                     <Shortcut Id="UninstallShortcut"
-                             Name="Uninstall Zenamp"
+                             Name="Uninstall Solitaire Essentials"
                              Target="[SystemFolder]msiexec.exe"
                              Arguments="/x [ProductCode]"
-                             Description="Uninstall Zenamp" />
+                             Description="Uninstall Solitaire Essentials" />
                     <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
-                    <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Shortcuts" 
+                    <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                  Name="StartMenu" Type="integer" Value="1" KeyPath="yes"/>
                   </Component>
                 </Directory>
               </Directory>
               
-              <!-- Desktop shortcut (optional) -->
+              <!-- Desktop shortcuts (optional) -->
               <Directory Id="DesktopFolder" Name="Desktop">
-                <Component Id="DesktopShortcut" Guid="B1D4A671-AAC8-4D75-BE94-E53A7A9E1C91">
+                <Component Id="SolitaireDesktopShortcut" Guid="D7F8E432-F9C8-4D79-9F2A-E53F7F9F9B84">
                   <Condition>DESKTOP_SHORTCUT</Condition>
-                  <Shortcut Id="DesktopShortcut" 
-                           Name="Zenamp" 
-                           Target="[INSTALLFOLDER]zenamp.exe"
+                  <Shortcut Id="SolitaireDesktopShortcut" 
+                           Name="Solitaire" 
+                           Target="[INSTALLFOLDER]solitaire.exe"
                            WorkingDirectory="INSTALLFOLDER"
-                           Description="Launch Zenamp"
-                           Icon="zenampIcon"/>
-                  <RegistryValue Root="HKCU" Key="Software\GTKzenamp\Shortcuts" 
-                               Name="Desktop" Type="integer" Value="1" KeyPath="yes"/>
+                           Description="Play Classic Solitaire (Klondike)"
+                           Icon="SolitaireIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="SolitaireDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+                
+                <Component Id="FreecellDesktopShortcut" Guid="A3E9B241-C5D7-4E83-8A1B-F64C8F9D0C95">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="FreecellDesktopShortcut" 
+                           Name="FreeCell" 
+                           Target="[INSTALLFOLDER]freecell.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play FreeCell Solitaire"
+                           Icon="FreecellIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="FreecellDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+                
+                <Component Id="SpiderDesktopShortcut" Guid="B8F4A352-D6E8-4F94-9B2C-C75D9C0E1DA6">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="SpiderDesktopShortcut" 
+                           Name="Spider Solitaire" 
+                           Target="[INSTALLFOLDER]spider.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play Spider Solitaire"
+                           Icon="SpiderIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="SpiderDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
               </Directory>
             </Directory>
             
             <!-- Feature definitions -->
             <Feature Id="ProductFeature" 
-                     Title="Zenamp" 
-                     Description="The main Zenamp application and required runtime files."
+                     Title="Solitaire Essentials" 
+                     Description="Classic card games including Klondike, FreeCell, and Spider Solitaire with GTK runtime."
                      Level="1" 
                      ConfigurableDirectory="INSTALLFOLDER"
                      AllowAdvertise="no">
@@ -648,21 +385,18 @@ jobs:
             </Feature>
             
             <Feature Id="DesktopShortcutFeature" 
-                     Title="Desktop Shortcut" 
-                     Description="Create a shortcut on the desktop."
+                     Title="Desktop Shortcuts" 
+                     Description="Create shortcuts on the desktop for all games."
                      Level="1000">
-              <ComponentRef Id="DesktopShortcut" />
+              <ComponentRef Id="SolitaireDesktopShortcut" />
+              <ComponentRef Id="FreecellDesktopShortcut" />
+              <ComponentRef Id="SpiderDesktopShortcut" />
             </Feature>
             
-            <Feature Id="FileAssociationFeature" 
-                     Title="File Associations" 
-                     Description="Associate audio files with Zenamp (WAV, MP3, OGG, FLAC, MIDI, AIFF, OPUS, M4A, WMA)."
-                     Level="1">
-              <ComponentRef Id="FileAssociations" />
-            </Feature>
-            
-            <!-- Application icon -->
-            <Icon Id="zenampIcon" SourceFile="icon.ico"/>
+            <!-- Application icons -->
+            <Icon Id="SolitaireIcon" SourceFile="solitaire.ico"/>
+            <Icon Id="FreecellIcon" SourceFile="freecell.ico"/>
+            <Icon Id="SpiderIcon" SourceFile="spider.ico"/>
             
             <!-- Custom actions for cleanup -->
             <CustomAction Id="CleanupRegistryOnUninstall" 
@@ -672,19 +406,8 @@ jobs:
               <![CDATA[
                 On Error Resume Next
                 Set shell = CreateObject("WScript.Shell")
-                shell.RegDelete "HKLM\SOFTWARE\Zenamp\"
-                shell.RegDelete "HKCU\Software\GTKzenamp\"
-                ' Clean up file associations
-                shell.RegDelete "HKLM\SOFTWARE\Classes\Applications\zenamp.exe\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampWAV\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampMP3\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampOGG\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampFLAC\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampMIDI\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampAIFF\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampOPUS\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampM4A\"
-                shell.RegDelete "HKLM\SOFTWARE\Classes\ZenampWMA\"
+                shell.RegDelete "HKLM\SOFTWARE\Solitaire Essentials\"
+                shell.RegDelete "HKCU\Software\SolitaireCollection\"
               ]]>
             </CustomAction>
             
@@ -705,6 +428,24 @@ jobs:
         </Wix>
         "@ | Out-File -FilePath "installer.wxs" -Encoding UTF8
 
+    - name: Create License RTF for Installer
+      working-directory: artifacts/build/windows
+      run: |
+        @"
+        {\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
+        \f0\fs24
+        MIT License\par
+        \par
+        Copyright (c) 2025 Jason Brian Hall\par
+        \par
+        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\par
+        \par
+        The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\par
+        \par
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\par
+        }
+        "@ | Out-File -FilePath "License.rtf" -Encoding UTF8
+
     - name: Build MSI Installer
       working-directory: artifacts/build/windows
       run: |
@@ -722,33 +463,39 @@ jobs:
           exit 1
         }
         
-        & light.exe -ext WixUIExtension installer.wixobj -o "Zenamp.msi"
+        Write-Host "=== DEBUG: Files after candle ==="
+        Get-ChildItem
+        
+        & light.exe -ext WixUIExtension installer.wixobj -o "Solitaire-GTK.msi"
         if ($LASTEXITCODE -ne 0) {
           Write-Error "Light linking failed with exit code $LASTEXITCODE"
           exit 1
         }
         
+        Write-Host "=== DEBUG: Files after light ==="
+        Get-ChildItem
+        
         # Verify MSI was created
-        if (Test-Path "Zenamp.msi") {
-          Write-Host "MSI installer created successfully: Zenamp.msi"
-          $msiSize = (Get-Item "Zenamp.msi").Length
+        if (Test-Path "Solitaire-GTK.msi") {
+          Write-Host "✅ MSI installer created successfully: Solitaire-GTK.msi"
+          $msiSize = (Get-Item "Solitaire-GTK.msi").Length
           Write-Host "MSI file size: $msiSize bytes"
         } else {
-          Write-Error "MSI file was not created!"
+          Write-Error "❌ MSI file was not created!"
           exit 1
         }
 
     - name: Upload MSI Installer
       uses: actions/upload-artifact@v4
       with:
-        name: Zenamp.msi
-        path: artifacts/build/windows/Zenamp.msi
+        name: Solitaire-GTK.msi
+        path: artifacts/build/windows/Solitaire-GTK.msi
 
     - name: Upload Portable ZIP
       uses: actions/upload-artifact@v4
       with:
-        name: Zenamp-Portable.zip
-        path: artifacts/Zenamp-Portable.zip
+        name: Solitaire-GTK-Portable.zip
+        path: artifacts/Solitaire-GTK-Portable.zip
 
   build-msix-windows:
     needs: build-linux
@@ -758,13 +505,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Fetch all history
-        submodules: recursive
+
     - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: zenamp-builds
+        name: solitaire-build
         path: artifacts
 
     - name: Create Microsoft Store Assets
@@ -777,53 +522,72 @@ jobs:
         # Copy application files
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
         
-        $iconPath = "artifacts/build/windows/icon.png"
-        $posterPath = "artifacts/build/windows/poster.png"
+        # Define icon paths for each game
+        $solitaireIcon = "artifacts/build/windows/solitaire.png"
+        $freecellIcon = "artifacts/build/windows/freecell.png"
+        $spiderIcon = "artifacts/build/windows/spider.png"
         
-        if (-not (Test-Path $iconPath)) {
-          Write-Error "icon.png not found in artifacts"
+        # Fallback if PNGs don't exist
+        if (-not (Test-Path $solitaireIcon)) {
+          $solitaireIcon = "artifacts/build/windows/icon.png"
+        }
+        
+        # Verify at least one icon exists
+        if (-not (Test-Path $solitaireIcon)) {
+          Write-Error "No solitaire icon found"
           exit 1
         }
         
         Write-Host "Creating Microsoft Store compliant assets..."
         
-        # Store Logo (50x50)
-        & magick "$iconPath" -resize 50x50 "msix-package/Assets/StoreLogo.scale-100.png"
-        & magick "$iconPath" -resize 63x63 "msix-package/Assets/StoreLogo.scale-125.png"
-        & magick "$iconPath" -resize 75x75 "msix-package/Assets/StoreLogo.scale-150.png"
-        & magick "$iconPath" -resize 100x100 "msix-package/Assets/StoreLogo.scale-200.png"
+        # Store Logo (50x50) - use main solitaire icon
+        & magick "$solitaireIcon" -resize 50x50 "msix-package/Assets/StoreLogo.scale-100.png"
+        & magick "$solitaireIcon" -resize 63x63 "msix-package/Assets/StoreLogo.scale-125.png"
+        & magick "$solitaireIcon" -resize 75x75 "msix-package/Assets/StoreLogo.scale-150.png"
+        & magick "$solitaireIcon" -resize 100x100 "msix-package/Assets/StoreLogo.scale-200.png"
         
-        # Square 44x44 Logo (for taskbar, start menu)
-        & magick "$iconPath" -resize 44x44 "msix-package/Assets/Square44x44Logo.scale-100.png"
-        & magick "$iconPath" -resize 55x55 "msix-package/Assets/Square44x44Logo.scale-125.png"
-        & magick "$iconPath" -resize 66x66 "msix-package/Assets/Square44x44Logo.scale-150.png"
-        & magick "$iconPath" -resize 88x88 "msix-package/Assets/Square44x44Logo.scale-200.png"
+        # Function to create assets for each game
+        function Create-GameAssets {
+          param($IconPath, $GameName)
+          
+          Write-Host "Creating assets for $GameName..."
+          
+          # Square 44x44 Logo
+          & magick "$IconPath" -resize 44x44 "msix-package/Assets/${GameName}44x44.scale-100.png"
+          & magick "$IconPath" -resize 55x55 "msix-package/Assets/${GameName}44x44.scale-125.png"
+          & magick "$IconPath" -resize 66x66 "msix-package/Assets/${GameName}44x44.scale-150.png"
+          & magick "$IconPath" -resize 88x88 "msix-package/Assets/${GameName}44x44.scale-200.png"
+          
+          # Square 150x150 Logo (main tile)
+          & magick "$IconPath" -resize 150x150 "msix-package/Assets/${GameName}Logo.scale-100.png"
+          & magick "$IconPath" -resize 188x188 "msix-package/Assets/${GameName}Logo.scale-125.png"
+          & magick "$IconPath" -resize 225x225 "msix-package/Assets/${GameName}Logo.scale-150.png"
+          & magick "$IconPath" -resize 300x300 "msix-package/Assets/${GameName}Logo.scale-200.png"
+          
+          # Wide 310x150 Logo (wide tile)
+          & magick "$IconPath" -resize 150x150 -background "#0a5a2d" -gravity center -extent 310x150 "msix-package/Assets/${GameName}Wide.scale-100.png"
+          & magick "$IconPath" -resize 188x188 -background "#0a5a2d" -gravity center -extent 388x188 "msix-package/Assets/${GameName}Wide.scale-125.png"
+          & magick "$IconPath" -resize 225x225 -background "#0a5a2d" -gravity center -extent 465x225 "msix-package/Assets/${GameName}Wide.scale-150.png"
+          & magick "$IconPath" -resize 300x300 -background "#0a5a2d" -gravity center -extent 620x300 "msix-package/Assets/${GameName}Wide.scale-200.png"
+        }
         
-        # Target size variants (unplated, for file associations)
-        & magick "$iconPath" -resize 16x16 "msix-package/Assets/Square44x44Logo.targetsize-16_altform-unplated.png"
-        & magick "$iconPath" -resize 24x24 "msix-package/Assets/Square44x44Logo.targetsize-24_altform-unplated.png"
-        & magick "$iconPath" -resize 32x32 "msix-package/Assets/Square44x44Logo.targetsize-32_altform-unplated.png"
-        & magick "$iconPath" -resize 48x48 "msix-package/Assets/Square44x44Logo.targetsize-48_altform-unplated.png"
-        & magick "$iconPath" -resize 256x256 "msix-package/Assets/Square44x44Logo.targetsize-256_altform-unplated.png"
+        # Create assets for Solitaire
+        Create-GameAssets -IconPath $solitaireIcon -GameName "Solitaire"
         
-        # Square 150x150 Logo (main tile)
-        & magick "$iconPath" -resize 150x150 "msix-package/Assets/Square150x150Logo.scale-100.png"
-        & magick "$iconPath" -resize 188x188 "msix-package/Assets/Square150x150Logo.scale-125.png"
-        & magick "$iconPath" -resize 225x225 "msix-package/Assets/Square150x150Logo.scale-150.png"
-        & magick "$iconPath" -resize 300x300 "msix-package/Assets/Square150x150Logo.scale-200.png"
-        
-        # Wide 310x150 Logo (wide tile) - from poster if available
-        if (Test-Path $posterPath) {
-          & magick "$posterPath" -resize 310x150^ -gravity center -extent 310x150 "msix-package/Assets/Wide310x150Logo.scale-100.png"
-          & magick "$posterPath" -resize 388x188^ -gravity center -extent 388x188 "msix-package/Assets/Wide310x150Logo.scale-125.png"
-          & magick "$posterPath" -resize 465x225^ -gravity center -extent 465x225 "msix-package/Assets/Wide310x150Logo.scale-150.png"
-          & magick "$posterPath" -resize 620x300^ -gravity center -extent 620x300 "msix-package/Assets/Wide310x150Logo.scale-200.png"
+        # Create assets for FreeCell (use freecell icon if available, otherwise solitaire)
+        if (Test-Path $freecellIcon) {
+          Create-GameAssets -IconPath $freecellIcon -GameName "FreeCell"
         } else {
-          # Create wide logos from square icon with padding
-          & magick "$iconPath" -resize 150x150 -background "#1a73e8" -gravity center -extent 310x150 "msix-package/Assets/Wide310x150Logo.scale-100.png"
-          & magick "$iconPath" -resize 188x188 -background "#1a73e8" -gravity center -extent 388x188 "msix-package/Assets/Wide310x150Logo.scale-125.png"
-          & magick "$iconPath" -resize 225x225 -background "#1a73e8" -gravity center -extent 465x225 "msix-package/Assets/Wide310x150Logo.scale-150.png"
-          & magick "$iconPath" -resize 300x300 -background "#1a73e8" -gravity center -extent 620x300 "msix-package/Assets/Wide310x150Logo.scale-200.png"
+          Write-Host "FreeCell icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "FreeCell"
+        }
+        
+        # Create assets for Spider (use spider icon if available, otherwise solitaire)
+        if (Test-Path $spiderIcon) {
+          Create-GameAssets -IconPath $spiderIcon -GameName "Spider"
+        } else {
+          Write-Host "Spider icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "Spider"
         }
         
         Write-Host "All Microsoft Store assets created successfully"
@@ -835,15 +599,15 @@ jobs:
         <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
                  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
                  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
-          <Identity Name="JasonBrianHall.Zenamp"
+          <Identity Name="JasonBrianHall.SolitaireEssentials"
                     Version="${{ needs.build-linux.outputs.version }}.0"
                     Publisher="CN=7A3CF65F-504C-42F2-BABD-6A0512A0A017"
                     ProcessorArchitecture="x86" />
           
           <Properties>
-            <DisplayName>Zenamp</DisplayName>
+            <DisplayName>Solitaire Essentials</DisplayName>
             <PublisherDisplayName>Jason Brian Hall</PublisherDisplayName>
-            <Description>Zenamp - Multi-format audio player with retro MIDI synthesis and OPL3 sound</Description>
+            <Description>Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface</Description>
             <Logo>Assets\StoreLogo.scale-100.png</Logo>
           </Properties>
           
@@ -856,52 +620,60 @@ jobs:
           </Resources>
           
           <Capabilities>
-            <!-- Standard capabilities for media player -->
-            <Capability Name="internetClient" />
-            <uap:Capability Name="musicLibrary" />
-            <uap:Capability Name="videosLibrary" />
-            <uap:Capability Name="removableStorage" />
-            
             <!-- Required for desktop bridge apps -->
             <rescap:Capability Name="runFullTrust" />
           </Capabilities>
           
           <Applications>
-            <Application Id="Zenamp" Executable="Files\zenamp.exe" EntryPoint="Windows.FullTrustApplication">
-              <uap:VisualElements DisplayName="Zenamp"
-                                  Description="Multi-format audio player with retro MIDI synthesis"
-                                  Square150x150Logo="Assets\Square150x150Logo.scale-100.png"
-                                  Square44x44Logo="Assets\Square44x44Logo.scale-100.png"
-                                  BackgroundColor="#1a73e8">
-                <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.scale-100.png"
-                                ShortName="Zenamp">
+            <Application Id="Solitaire" Executable="Files\solitaire.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Solitaire"
+                                  Description="Classic Klondike Solitaire card game"
+                                  Square150x150Logo="Assets\SolitaireLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Solitaire44x44.scale-100.png"
+                                  BackgroundColor="#0a5a2d">
+                <uap:DefaultTile Wide310x150Logo="Assets\SolitaireWide.scale-100.png"
+                                ShortName="Solitaire">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\Square150x150Logo.scale-100.png" />
+                <uap:SplashScreen Image="Assets\SolitaireLogo.scale-100.png" />
               </uap:VisualElements>
-              
-              <Extensions>
-                <uap:Extension Category="windows.fileTypeAssociation">
-                  <uap:FileTypeAssociation Name="zenamp-audio">
-                    <uap:DisplayName>Audio Files</uap:DisplayName>
-                    <uap:Logo>Assets\Square44x44Logo.targetsize-24_altform-unplated.png</uap:Logo>
-                    <uap:SupportedFileTypes>
-                      <uap:FileType ContentType="audio/wav">.wav</uap:FileType>
-                      <uap:FileType ContentType="audio/mpeg">.mp3</uap:FileType>
-                      <uap:FileType ContentType="audio/ogg">.ogg</uap:FileType>
-                      <uap:FileType ContentType="audio/flac">.flac</uap:FileType>
-                      <uap:FileType ContentType="audio/midi">.mid</uap:FileType>
-                      <uap:FileType ContentType="audio/midi">.midi</uap:FileType>
-                      <uap:FileType ContentType="audio/aiff">.aiff</uap:FileType>
-                      <uap:FileType ContentType="audio/aiff">.aif</uap:FileType>
-                      <uap:FileType ContentType="audio/opus">.opus</uap:FileType>
-                      <uap:FileType ContentType="audio/mp4">.m4a</uap:FileType>
-                      <uap:FileType ContentType="audio/x-ms-wma">.wma</uap:FileType>
-                      <uap:FileType ContentType="audio/x-mpegurl">.m3u</uap:FileType>
-                      <uap:FileType ContentType="audio/x-mpegurl">.m3u8</uap:FileType>
-                    </uap:SupportedFileTypes>
-                  </uap:FileTypeAssociation>
-                </uap:Extension>
-              </Extensions>
+            </Application>
+            
+            <Application Id="FreeCell" Executable="Files\freecell.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="FreeCell"
+                                  Description="Strategic FreeCell Solitaire card game"
+                                  Square150x150Logo="Assets\FreeCellLogo.scale-100.png"
+                                  Square44x44Logo="Assets\FreeCell44x44.scale-100.png"
+                                  BackgroundColor="#0a5a2d">
+                <uap:DefaultTile Wide310x150Logo="Assets\FreeCellWide.scale-100.png"
+                                ShortName="FreeCell">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\FreeCellLogo.scale-100.png" />
+              </uap:VisualElements>
+            </Application>
+            
+            <Application Id="Spider" Executable="Files\spider.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Spider Solitaire"
+                                  Description="Multi-deck Spider Solitaire challenge"
+                                  Square150x150Logo="Assets\SpiderLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Spider44x44.scale-100.png"
+                                  BackgroundColor="#0a5a2d">
+                <uap:DefaultTile Wide310x150Logo="Assets\SpiderWide.scale-100.png"
+                                ShortName="Spider">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\SpiderLogo.scale-100.png" />
+              </uap:VisualElements>
             </Application>
           </Applications>
         </Package>
@@ -932,7 +704,7 @@ jobs:
         Write-Host "Using MakeAppx at: $makeAppxPath"
         
         # Create the MSIX package (unsigned for Store submission)
-        & "$makeAppxPath" pack /d "msix-package" /p "Zenamp.msix" /o
+        & "$makeAppxPath" pack /d "msix-package" /p "Solitaire-GTK.msix" /o
         
         if ($LASTEXITCODE -ne 0) {
           Write-Error "MSIX package creation failed with exit code $LASTEXITCODE"
@@ -940,21 +712,21 @@ jobs:
         }
         
         # Verify MSIX was created
-        if (Test-Path "Zenamp.msix") {
-          Write-Host "MSIX package created successfully: Zenamp.msix"
-          $msixSize = (Get-Item "Zenamp.msix").Length
+        if (Test-Path "Solitaire-GTK.msix") {
+          Write-Host "✅ MSIX package created successfully: Solitaire-GTK.msix"
+          $msixSize = (Get-Item "Solitaire-GTK.msix").Length
           Write-Host "MSIX file size: $msixSize bytes"
           Write-Host "Package is unsigned and ready for Microsoft Store submission"
         } else {
-          Write-Error "MSIX file was not created!"
+          Write-Error "❌ MSIX file was not created!"
           exit 1
         }
 
     - name: Upload MSIX Package
       uses: actions/upload-artifact@v4
       with:
-        name: Zenamp.msix
-        path: Zenamp.msix
+        name: Solitaire-GTK.msix
+        path: Solitaire-GTK.msix
 
   create-release:
     needs: [build-linux, build-msi-windows, build-msix-windows]
@@ -967,94 +739,72 @@ jobs:
     - name: Download MSI Artifact
       uses: actions/download-artifact@v4
       with:
-        name: Zenamp.msi
+        name: Solitaire-GTK.msi
         path: release
 
     - name: Download MSIX Artifact
       uses: actions/download-artifact@v4
       with:
-        name: Zenamp.msix
+        name: Solitaire-GTK.msix
         path: release
 
     - name: Download Portable Artifact
       uses: actions/download-artifact@v4
       with:
-        name: Zenamp-Portable.zip
+        name: Solitaire-GTK-Portable.zip
         path: release
-
-    - name: Download Build Artifacts for RPM
-      uses: actions/download-artifact@v4
-      with:
-        name: zenamp-builds
-        path: artifacts
-
-    - name: Copy RPM to Release
-      run: |
-        # Find and copy the RPM file
-        find artifacts/build/rpm -name "*.rpm" -exec cp {} release/ \;
-        ls -la release/
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          release/Zenamp.msi
-          release/Zenamp.msix
-          release/Zenamp-Portable.zip
-          release/*.rpm
-        tag_name: ${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || github.ref == 'refs/heads/main' && format('v{0}', github.run_number) || format('dev-v{0}', github.run_number) }}
-        name: ${{ (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') && format('Release v{0}', github.run_number) || format('Dev Build v{0}', github.run_number) }}
+          release/Solitaire-GTK.msi
+          release/Solitaire-GTK.msix
+          release/Solitaire-GTK-Portable.zip
+        tag_name: ${{ github.ref == 'refs/heads/master' && format('v{0}', github.run_number) || format('dev-v{0}', github.run_number) }}
+        name: ${{ github.ref == 'refs/heads/master' && format('Release v{0}', github.run_number) || format('Dev Build v{0}', github.run_number) }}
         draft: false
-        prerelease: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main' }}
-        make_latest: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+        prerelease: ${{ github.ref != 'refs/heads/master' }}
+        make_latest: ${{ github.ref == 'refs/heads/master' }}
         body: |
-          ## ${{ (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') && 'Stable Release' || 'Development Build' }}
+          ## ${{ github.ref == 'refs/heads/master' && 'Stable Release' || 'Development Build' }}
           
           **Version:** ${{ needs.build-linux.outputs.version }}  
           **Commit:** ${{ github.sha }}  
           **Build:** #${{ github.run_number }}  
           
-          ### Downloads
-          - **Zenamp.msi** - Windows installer with uninstall support and file associations
-          - **Zenamp.msix** - Unsigned package ready for Microsoft Store submission
-          - **Zenamp-Portable.zip** - Portable version (no installation required)
+          ### 🃏 Solitaire Essentials
+          Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface.
           
-          ### What's Inside
-          - Multi-format playback: WAV, MP3, OGG, FLAC, MIDI, AIFF, OPUS, M4A, WMA, CD+G (.zip files with music and graphics)
-          - OPL3 MIDI synthesis for authentic retro sound
-          - Complete playback controls with queue management
-          - Volume control (10% to 500%) and speed control (0.1x to 4.0x)
-          - Progress tracking with timestamps
-          - GTK3 interface for modern desktop integration
+          ### 📦 Downloads
+          - **Solitaire-GTK.msi** - Windows installer with uninstall support
+          - **Solitaire-GTK.msix** - Unsigned package ready for Microsoft Store submission
+          - **Solitaire-GTK-Portable.zip** - Portable version (no installation required)
           
-          ### Microsoft Store Submission
+          ### 🎮 Games Included
+          - 🂡 **Klondike Solitaire** - The classic card game
+          - 🃏 **FreeCell** - Strategic card sorting
+          - 🕷️ **Spider Solitaire** - Multi-deck challenge
+          
+          ### ✨ Installer Features (MSI)
+          - ✅ User/Machine installation scope choice
+          - ✅ Custom installation directory
+          - ✅ Start menu shortcuts for all games with individual icons
+          - ✅ Optional desktop shortcuts for each game with their specific icons
+          - ✅ Proper uninstall support with registry cleanup
+          - ✅ MIT License agreement
+          - ✅ Add/Remove Programs integration
+          - ✅ Uninstall shortcut in Start Menu
+          
+          ### 🏪 Microsoft Store Submission
           The MSIX package in this release is **unsigned** and ready for Microsoft Store submission through Partner Center. Before uploading:
           1. Update the Identity Name and Publisher in the manifest with values from Partner Center
           2. Upload the unsigned MSIX file - Microsoft handles signing during certification
           
-          ### Silent Installation Support
-          **For enterprise and automated deployments:**
-          ```cmd
-          # Silent install with all features (MSI)
-          msiexec /i Zenamp.msi /quiet /norestart ASSOCIATE_FILES=1 DESKTOP_SHORTCUT=1
-          
-          # Silent install without file associations (MSI)
-          msiexec /i Zenamp.msi /quiet /norestart ASSOCIATE_FILES=0 DESKTOP_SHORTCUT=0
-          
-          # Silent uninstall (MSI)
-          msiexec /x Zenamp.msi /quiet /norestart
-          ```
-          
-          **Command-line Properties (MSI only):**
-          - `ASSOCIATE_FILES=1` - Enable file associations (default: 1)
-          - `DESKTOP_SHORTCUT=1` - Create desktop shortcut (default: 1)
-          - `INSTALLFOLDER="C:\Program Files\Zenamp"` - Custom install path
-          
-          ### Package Comparison
+          ### 📦 Package Comparison
           | Feature | MSI | MSIX | Portable |
           |---------|-----|------|----------|
           | Installation Required | Yes | Yes | No |
-          | File Associations | ✅ | ✅ | ❌ |
           | Start Menu Integration | ✅ | ✅ | ❌ |
           | Auto-Update Support | ❌ | ✅ | ❌ |
           | Microsoft Store Ready | ❌ | ✅ | ❌ |
@@ -1063,31 +813,32 @@ jobs:
           | Traditional Uninstall | ✅ | ✅ | ❌ |
           | Code Signing Required | ✅ | Store | ❌ |
           
-          ### Technical Details
+          ### 🛠️ Technical Details
           - Built on: Linux (Fedora 41 container)
           - MSI compiled on: Windows Latest
           - MSIX compiled on: Windows Latest
-          - **Embedded Icon**: Icon properly embedded in executable
-          - **Version Information**: Full version details embedded
           - **Store-Compliant Assets**: Multiple scale factors (100%, 125%, 150%, 200%)
           - GTK3 runtime included
           - All dependencies bundled
-          - Cross-compiled with MinGW
+          - Sound effects and card graphics included
+          - Individual game icons for better visual identification
           
-          ### File Association Support
-          When file associations are enabled during installation:
-          - **WAV** - Windows Audio files
-          - **MP3** - MPEG Audio Layer 3
-          - **OGG** - Ogg Vorbis files
-          - **FLAC** - Free Lossless Audio Codec
-          - **MIDI** - Musical Instrument Digital Interface (.mid/.midi)
-          - **AIFF** - Audio Interchange File Format (.aiff/.aif)
-          - **OPUS** - Royalty-free lossy audio codec
-          - **M4A** - MPEG-4 Audio files
-          - **WMA** - Windows Media Audio files
-          - **M3U** - Audio playlist files
-
-          Right-click any supported audio file or playlist and select "Open with Zenamp" or "Play with Zenamp"!
+          ### 🎯 Silent Installation (MSI only)
+          **For enterprise and automated deployments:**
+          ```cmd
+          # Silent install with desktop shortcuts
+          msiexec /i Solitaire-GTK.msi /quiet /norestart DESKTOP_SHORTCUT=1
+          
+          # Silent install without desktop shortcuts
+          msiexec /i Solitaire-GTK.msi /quiet /norestart DESKTOP_SHORTCUT=0
+          
+          # Silent uninstall
+          msiexec /x Solitaire-GTK.msi /quiet /norestart
+          ```
+          
+          **Command-line Properties:**
+          - `DESKTOP_SHORTCUT=1` - Create desktop shortcuts (default: 1)
+          - `INSTALLFOLDER="C:\Program Files\Solitaire Essentials"` - Custom install path
           
           ---
-          *Built with GitHub Actions*
+          *Built with ❤️ using GitHub Actions*
