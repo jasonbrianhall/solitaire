@@ -164,7 +164,7 @@ jobs:
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
           
           <Product Id="*" 
-                   Name="Solitaire Collection" 
+                   Name="Solitaire Essentials" 
                    Language="1033" 
                    Version="${{ needs.build-linux.outputs.version }}" 
                    Manufacturer="Jason Brian Hall" 
@@ -195,7 +195,7 @@ jobs:
             <Property Id="ARPHELPLINK" Value="https://github.com/yourusername/solitaire/issues" />
             
             <!-- Installation scope choice -->
-            <Property Id="ApplicationFolderName" Value="Solitaire Collection" />
+            <Property Id="ApplicationFolderName" Value="Solitaire Essentials" />
             <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
             <WixVariable Id="WixUISupportPerUser" Value="1" />
             <WixVariable Id="WixUISupportPerMachine" Value="1" />
@@ -599,13 +599,13 @@ jobs:
         <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
                  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
                  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
-          <Identity Name="JasonHall.SolitaireCollection"
+          <Identity Name="JasonBrianHall.SolitaireEssentials"
                     Version="${{ needs.build-linux.outputs.version }}.0"
-                    Publisher="CN=YOUR-PUBLISHER-ID-HERE"
+                    Publisher="CN=7A3CF65F-504C-42F2-BABD-6A0512A0AD17"
                     ProcessorArchitecture="x86" />
           
           <Properties>
-            <DisplayName>Solitaire Collection</DisplayName>
+            <DisplayName>Solitaire Essentials</DisplayName>
             <PublisherDisplayName>Jason Brian Hall</PublisherDisplayName>
             <Description>Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface</Description>
             <Logo>Assets\StoreLogo.scale-100.png</Logo>
