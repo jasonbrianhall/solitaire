@@ -128,7 +128,7 @@ jobs:
         @"
         MIT License
         
-        Copyright (c) 2025 Jason Hall
+        Copyright (c) 2025 Jason Brian Hall
         
         Permission is hereby granted, free of charge, to any person obtaining a copy
         of this software and associated documentation files (the "Software"), to deal
@@ -167,7 +167,7 @@ jobs:
                    Name="Solitaire Collection" 
                    Language="1033" 
                    Version="${{ needs.build-linux.outputs.version }}" 
-                   Manufacturer="Jason Hall" 
+                   Manufacturer="Jason Brian Hall" 
                    UpgradeCode="${{ env.UPGRADE_CODE }}"> 
             
             <Package InstallerVersion="500" 
@@ -175,7 +175,7 @@ jobs:
                      InstallScope="perMachine" 
                      Description="Solitaire Collection GTK - Classic Card Games"
                      Comments="Built with GitHub Actions"
-                     Manufacturer="Jason Hall" />
+                     Manufacturer="Jason Brian Hall" />
             
             <!-- Major upgrade configuration -->
             <MajorUpgrade 
@@ -238,7 +238,7 @@ jobs:
                     <RegistryKey Root="HKLM" Key="SOFTWARE\Solitaire Collection">
                       <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
                       <RegistryValue Type="string" Name="Version" Value="${{ needs.build-linux.outputs.version }}" />
-                      <RegistryValue Type="string" Name="Publisher" Value="Jason Hall" />
+                      <RegistryValue Type="string" Name="Publisher" Value="Jason Brian Hall" />
                     </RegistryKey>
                   </Component>
                   
@@ -436,7 +436,7 @@ jobs:
         \f0\fs24
         MIT License\par
         \par
-        Copyright (c) 2025 Jason Hall\par
+        Copyright (c) 2025 Jason Brian Hall\par
         \par
         Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\par
         \par
@@ -606,7 +606,7 @@ jobs:
           
           <Properties>
             <DisplayName>Solitaire Collection</DisplayName>
-            <PublisherDisplayName>Jason Hall</PublisherDisplayName>
+            <PublisherDisplayName>Jason Brian Hall</PublisherDisplayName>
             <Description>Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface</Description>
             <Logo>Assets\StoreLogo.scale-100.png</Logo>
           </Properties>
