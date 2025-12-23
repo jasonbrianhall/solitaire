@@ -561,10 +561,6 @@ jobs:
         $files | Where-Object {$_.Name -like "*+*"} | ForEach-Object {
           Write-Host "  ✓ $($_.Name)"
         }
-        Write-Host "Files with %2B in name (CORRUPTED):"
-        $files | Where-Object {$_.Name -like "*%2B*"} | ForEach-Object {
-          Write-Host "  ✗ $($_.Name)"
-        }
         
         
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
