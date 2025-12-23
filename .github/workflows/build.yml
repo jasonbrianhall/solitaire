@@ -547,10 +547,8 @@ jobs:
         Write-Host "=== Files to copy from $exePath ==="
         Get-ChildItem -Path $exePath | Select-Object Name
         
-        # Copy application files (using same simple approach as Zenamp)
-        Write-Host "=== Copying files to msix-package/Files ==="
+        # Copy application files
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
-        Write-Host "Files copied successfully"
         
         Write-Host "=== Verifying files in msix-package/Files ==="
         $files = Get-ChildItem -Path "msix-package/Files" -Recurse -File
