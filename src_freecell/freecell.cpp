@@ -1156,33 +1156,22 @@ void FreecellGame::cleanupCardCache() {
 }
 
 void FreecellGame::initializeSettingsDir() {
-  const char *home_dir = nullptr;
-  std::string app_dir;
-
 #ifdef _WIN32
-  home_dir = getenv("USERPROFILE");
-  if (home_dir) {
-    app_dir = std::string(home_dir) + "\\AppData\\Local\\Freecell";
-  }
+    char app_data[MAX_PATH];
+    if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data) != S_OK) {
+        settings_dir_ = "./";
+        return;
+    }
+    settings_dir_ = std::string(app_data) + "\\Solitaire";
+    CreateDirectoryA(settings_dir_.c_str(), NULL);
 #else
-  home_dir = getenv("HOME");
-  if (home_dir) {
-    app_dir = std::string(home_dir) + "/.config/freecell";
-  }
-#endif
-
-  if (!home_dir) {
-    std::cerr << "Could not determine home directory" << std::endl;
-    return;
-  }
-
-  settings_dir_ = app_dir;
-
-  // Create directory if it doesn't exist
-#ifdef _WIN32
-  _mkdir(app_dir.c_str());
-#else
-  mkdir(app_dir.c_str(), 0755);
+    const char *home = getenv("HOME");
+    if (!home) {
+        settings_dir_ = "./";
+        return;
+    }
+    settings_dir_ = std::string(home) + "/.solitaire";
+    mkdir(settings_dir_.c_str(), 0755);
 #endif
 }
 
