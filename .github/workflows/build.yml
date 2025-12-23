@@ -598,6 +598,7 @@ jobs:
         <?xml version="1.0" encoding="utf-8"?>
         <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
                  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+                 xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
                  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
           <Identity Name="JasonBrianHall.SolitaireEssentials"
                     Version="${{ needs.build-linux.outputs.version }}.0"
@@ -640,6 +641,11 @@ jobs:
                 </uap:DefaultTile>
                 <uap:SplashScreen Image="Assets\SolitaireLogo.scale-100.png" />
               </uap:VisualElements>
+              <Extensions>
+                <desktop:Extension Category="windows.protocol">
+                  <desktop:Protocol Name="solitaire" Parameters="&quot;%1&quot;" />
+                </desktop:Extension>
+              </Extensions>
             </Application>
             
             <Application Id="FreeCell" Executable="Files\freecell.exe" EntryPoint="Windows.FullTrustApplication">
@@ -657,6 +663,11 @@ jobs:
                 </uap:DefaultTile>
                 <uap:SplashScreen Image="Assets\FreeCellLogo.scale-100.png" />
               </uap:VisualElements>
+              <Extensions>
+                <desktop:Extension Category="windows.protocol">
+                  <desktop:Protocol Name="freecell" Parameters="&quot;%1&quot;" />
+                </desktop:Extension>
+              </Extensions>
             </Application>
             
             <Application Id="Spider" Executable="Files\spider.exe" EntryPoint="Windows.FullTrustApplication">
@@ -674,6 +685,11 @@ jobs:
                 </uap:DefaultTile>
                 <uap:SplashScreen Image="Assets\SpiderLogo.scale-100.png" />
               </uap:VisualElements>
+              <Extensions>
+                <desktop:Extension Category="windows.protocol">
+                  <desktop:Protocol Name="spider" Parameters="&quot;%1&quot;" />
+                </desktop:Extension>
+              </Extensions>
             </Application>
           </Applications>
         </Package>
