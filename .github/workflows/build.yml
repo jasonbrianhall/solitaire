@@ -728,7 +728,7 @@ jobs:
         "@ | Out-File -FilePath "msix-package/AppxManifest.xml" -Encoding UTF8
 
     - name: Sign MSI
-      user: sigstore/gh-action-sigstore-python@2
+      uses: sigstore/gh-action-sigstore-python@2
       with:
         inputs: artifacts/build/windows/Solitaire-GTK.msi
 
