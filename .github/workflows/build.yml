@@ -519,54 +519,10 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # DEBUG: Show what we have
-        Write-Host "=== Checking artifact structure ==="
-        Get-ChildItem -Path "artifacts" -Recurse -File | Select-Object FullName | Head -20
-        
-        # Find the actual location of the executable files
-        $exePath = $null
-        if (Test-Path "artifacts/build/windows") {
-          Write-Host "Found: artifacts/build/windows"
-          $exePath = "artifacts/build/windows"
-        } elseif (Test-Path "artifacts/windows") {
-          Write-Host "Found: artifacts/windows"
-          $exePath = "artifacts/windows"
-        } elseif (Test-Path "artifacts") {
-          $exeTest = Get-ChildItem "artifacts" -Filter "*.exe" -Recurse | Select-Object -First 1
-          if ($exeTest) {
-            Write-Host "Found exe files in artifacts: $($exeTest.DirectoryName)"
-            $exePath = $exeTest.DirectoryName
-          }
-        }
-        
-        if (-not $exePath) {
-          Write-Error "Could not find solitaire.exe in artifacts!"
-          Exit 1
-        }
-        
-        Write-Host "=== Files to copy from $exePath ==="
-        Get-ChildItem -Path $exePath | Select-Object Name
-        
         # Copy application files
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
         
-        # Check what's actually there
-        Write-Host "Files in msix-package/Files with 'stdc' in name:"
-        Get-ChildItem "msix-package/Files" -Recurse -File | Where-Object {$_.Name -like "*stdc*"}
-        
-        Write-Host "=== Verifying files in msix-package/Files ==="
-        $files = Get-ChildItem -Path "msix-package/Files" -Recurse -File
-        Write-Host "Total files: $($files.Count)"
-        Write-Host "Files with + in name:"
-        $files | Where-Object {$_.Name -like "*+*"} | ForEach-Object {
-          Write-Host "  ✓ $($_.Name)"
-        }
-        Write-Host "Files with %2B in name (CORRUPTED):"
-        $files | Where-Object {$_.Name -like "*%2B*"} | ForEach-Object {
-          Write-Host "  ✗ $($_.Name)"
-        }
-        
-        
+        # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
         $freecellIcon = "artifacts/build/windows/freecell.png"
         $spiderIcon = "artifacts/build/windows/spider.png"
@@ -664,10 +620,6 @@ jobs:
           </Resources>
           
           <Capabilities>
-            <!-- Standard capabilities -->
-            <Capability Name="internetClient" />
-            <uap:Capability Name="removableStorage" />
-            
             <!-- Required for desktop bridge apps -->
             <rescap:Capability Name="runFullTrust" />
           </Capabilities>
