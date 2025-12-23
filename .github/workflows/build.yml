@@ -550,6 +550,10 @@ jobs:
         # Copy application files
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
         
+        # Check what's actually there
+        Write-Host "Files in msix-package/Files with 'stdc' in name:"
+        Get-ChildItem "msix-package/Files" -Recurse -File | Where-Object {$_.Name -like "*stdc*"}
+        
         Write-Host "=== Verifying files in msix-package/Files ==="
         $files = Get-ChildItem -Path "msix-package/Files" -Recurse -File
         Write-Host "Total files: $($files.Count)"
@@ -561,6 +565,7 @@ jobs:
         $files | Where-Object {$_.Name -like "*%2B*"} | ForEach-Object {
           Write-Host "  ✗ $($_.Name)"
         }
+        
         
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
         $freecellIcon = "artifacts/build/windows/freecell.png"
@@ -659,6 +664,10 @@ jobs:
           </Resources>
           
           <Capabilities>
+            <!-- Standard capabilities -->
+            <Capability Name="internetClient" />
+            <uap:Capability Name="removableStorage" />
+            
             <!-- Required for desktop bridge apps -->
             <rescap:Capability Name="runFullTrust" />
           </Capabilities>
