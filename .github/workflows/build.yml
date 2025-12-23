@@ -601,7 +601,7 @@ jobs:
                  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
           <Identity Name="JasonBrianHall.SolitaireEssentials"
                     Version="${{ needs.build-linux.outputs.version }}.0"
-                    Publisher="CN=7A3CF65F-504C-42F2-BABD-6A0512A0AD17"
+                    Publisher="CN=7A3CF65F-504C-42F2-BABD-6A0512A0A017"
                     ProcessorArchitecture="x86" />
           
           <Properties>
