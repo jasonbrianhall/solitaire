@@ -84,6 +84,18 @@ jobs:
         cp ../../spider.png . 2>/dev/null || true
         cp ../../icon.png . 2>/dev/null || true
         
+        # Copy DLLs explicitly
+        DLL_SOURCE="/usr/x86_64-w64-mingw32/sys-root/mingw/bin"
+        
+        for dll in \
+          libgcc_s_seh-1.dll \
+          libstdc++-6.dll \
+          libwinpthread-1.dll; do
+          if [ -f "$DLL_SOURCE/$dll" ]; then
+            cp "$DLL_SOURCE/$dll" .
+          fi
+        done
+        
         # Create file list for MSI
         echo "Creating file inventory..."
         find . -name "*.dll" -type f | sort > dll_list.txt
