@@ -562,9 +562,6 @@ jobs:
           Write-Host "  ✗ $($_.Name)"
         }
         
-        # WORKAROUND: Rename files with plus signs to avoid ZIP URL-encoding
-        # This is a known issue where ZIP encodes + as %2B, breaking MSIX
-        Write-Host "Renamed files to remove plus signs"
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
         $freecellIcon = "artifacts/build/windows/freecell.png"
         $spiderIcon = "artifacts/build/windows/spider.png"
