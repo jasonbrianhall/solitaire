@@ -547,18 +547,37 @@ jobs:
         Write-Host "=== Files to copy from $exePath ==="
         Get-ChildItem -Path $exePath | Select-Object Name
         
-        # Copy using native PowerShell to avoid filename mangling
+        # Copy using .NET API which handles special characters better
         Write-Host "=== Copying files to msix-package/Files ==="
-        try {
-          Copy-Item -Path "$exePath\*" -Destination "msix-package/Files" -Recurse -Force -ErrorAction Stop
-          Write-Host "Copy succeeded"
-        } catch {
-          Write-Error "Copy failed: $_"
-          Exit 1
+        $source = (Resolve-Path $exePath).Path
+        $dest = (Resolve-Path "msix-package/Files").Path
+        
+        Get-ChildItem -Path $source -Recurse | ForEach-Object {
+          $rel = $_.FullName.Substring($source.Length + 1)
+          $target = Join-Path $dest $rel
+          
+          if ($_ -is [System.IO.DirectoryInfo]) {
+            if (-not (Test-Path $target)) {
+              [System.IO.Directory]::CreateDirectory($target) | Out-Null
+            }
+          } else {
+            # Use .NET API to copy - preserves special characters
+            [System.IO.File]::Copy($_.FullName, $target, $true)
+            Write-Host "  Copied: $($_.Name)"
+          }
         }
         
         Write-Host "=== Verifying files in msix-package/Files ==="
-        Get-ChildItem -Path "msix-package/Files" -Recurse -File | Select-Object Name | Measure-Object
+        $files = Get-ChildItem -Path "msix-package/Files" -Recurse -File
+        Write-Host "Total files: $($files.Count)"
+        Write-Host "Files with + in name:"
+        $files | Where-Object {$_.Name -like "*+*"} | ForEach-Object {
+          Write-Host "  ✓ $($_.Name)"
+        }
+        Write-Host "Files with %2B in name (CORRUPTED):"
+        $files | Where-Object {$_.Name -like "*%2B*"} | ForEach-Object {
+          Write-Host "  ✗ $($_.Name)"
+        }
         
         # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
@@ -755,6 +774,24 @@ jobs:
           $msixSize = (Get-Item "Solitaire-GTK.msix").Length
           Write-Host "MSIX file size: $msixSize bytes"
           Write-Host "Package is unsigned and ready for Microsoft Store submission"
+          
+          # DIAGNOSTIC: Check if filenames are corrupted in the MSIX
+          Write-Host ""
+          Write-Host "=== DIAGNOSTIC: Checking filenames in MSIX ==="
+          Write-Host "Extracting MSIX to check filenames..."
+          Expand-Archive "Solitaire-GTK.msix" -DestinationPath "msix-check" -Force
+          
+          Write-Host "Files with + in name (CORRECT):"
+          Get-ChildItem "msix-check/Files" -Recurse -File | Where-Object {$_.Name -like "*+*"} | ForEach-Object {
+            Write-Host "  ✓ $($_.Name)"
+          }
+          
+          Write-Host "Files with %2B in name (CORRUPTED BY MAKEAPPX):"
+          Get-ChildItem "msix-check/Files" -Recurse -File | Where-Object {$_.Name -like "*%2B*"} | ForEach-Object {
+            Write-Host "  ✗ CORRUPTED: $($_.Name)"
+          }
+          
+          Remove-Item "msix-check" -Recurse -Force
         } else {
           Write-Error "❌ MSIX file was not created!"
           exit 1
