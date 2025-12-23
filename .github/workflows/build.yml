@@ -519,23 +519,48 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # Copy all application files (using same technique as working MSI build)
-        # List what we're copying
-        Write-Host "Files to copy from artifacts/build/windows:"
-        Get-ChildItem -Path "artifacts/build/windows" -Recurse | Select-Object Name
+        # DEBUG: Show what we have
+        Write-Host "=== Checking artifact structure ==="
+        Get-ChildItem -Path "artifacts" -Recurse -File | Select-Object FullName | Head -20
         
-        # Copy all files and directories recursively
-        $source = "artifacts/build/windows"
-        $dest = "msix-package/Files"
-        Get-ChildItem -Path $source -Recurse | ForEach-Object {
-          $rel = $_.FullName.Substring($source.Length + 1)
-          $target = Join-Path $dest $rel
-          if ($_ -is [System.IO.DirectoryInfo]) {
-            New-Item -ItemType Directory -Path $target -Force | Out-Null
-          } else {
-            Copy-Item $_.FullName -Destination $target -Force
+        # Find the actual location of the executable files
+        $exePath = $null
+        if (Test-Path "artifacts/build/windows") {
+          Write-Host "Found: artifacts/build/windows"
+          $exePath = "artifacts/build/windows"
+        } elseif (Test-Path "artifacts/windows") {
+          Write-Host "Found: artifacts/windows"
+          $exePath = "artifacts/windows"
+        } elseif (Test-Path "artifacts") {
+          $exeTest = Get-ChildItem "artifacts" -Filter "*.exe" -Recurse | Select-Object -First 1
+          if ($exeTest) {
+            Write-Host "Found exe files in artifacts: $($exeTest.DirectoryName)"
+            $exePath = $exeTest.DirectoryName
           }
         }
+        
+        if (-not $exePath) {
+          Write-Error "Could not find solitaire.exe in artifacts!"
+          Exit 1
+        }
+        
+        Write-Host "=== Files to copy from $exePath ==="
+        Get-ChildItem -Path $exePath | Select-Object Name
+        
+        # Copy using robocopy (more reliable)
+        Write-Host "=== Copying files to msix-package/Files ==="
+        robocopy "$exePath" "msix-package/Files" /E /Y /XO
+        $robocopyResult = $LASTEXITCODE
+        Write-Host "Robocopy exit code: $robocopyResult"
+        
+        # robocopy returns 0 or 1 for success, so we only fail on 8+
+        if ($robocopyResult -ge 8) {
+          Write-Error "Robocopy failed with code $robocopyResult"
+          Exit 1
+        }
+        
+        Write-Host "=== Verifying files in msix-package/Files ==="
+        Get-ChildItem -Path "msix-package/Files" -Recurse -File | Select-Object Name | Measure-Object
         
         # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
