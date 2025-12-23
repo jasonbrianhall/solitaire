@@ -519,8 +519,23 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # Copy application files
-        Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
+        # Copy all application files (using same technique as working MSI build)
+        # List what we're copying
+        Write-Host "Files to copy from artifacts/build/windows:"
+        Get-ChildItem -Path "artifacts/build/windows" -Recurse | Select-Object Name
+        
+        # Copy all files and directories recursively
+        $source = "artifacts/build/windows"
+        $dest = "msix-package/Files"
+        Get-ChildItem -Path $source -Recurse | ForEach-Object {
+          $rel = $_.FullName.Substring($source.Length + 1)
+          $target = Join-Path $dest $rel
+          if ($_ -is [System.IO.DirectoryInfo]) {
+            New-Item -ItemType Directory -Path $target -Force | Out-Null
+          } else {
+            Copy-Item $_.FullName -Destination $target -Force
+          }
+        }
         
         # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
