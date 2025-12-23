@@ -108,9 +108,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: solitaire-build
-        path: |
-          build/windows/**/*
-          Solitaire-GTK-Portable.zip
+        path: Solitaire-GTK-Portable.zip
         retention-days: 7
 
   build-msi-windows:
@@ -126,7 +124,11 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: solitaire-build
-        path: artifacts
+        path: .
+
+    - name: Extract Build Files
+      run: |
+        Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
 
     - name: Setup WiX Toolset
       run: |
@@ -507,7 +509,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Solitaire-GTK-Portable.zip
-        path: artifacts/Solitaire-GTK-Portable.zip
+        path: Solitaire-GTK-Portable.zip
 
   build-msix-windows:
     needs: build-linux
@@ -522,7 +524,11 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: solitaire-build
-        path: artifacts
+        path: .
+
+    - name: Extract Build Files
+      run: |
+        Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
 
     - name: Create Microsoft Store Assets
       run: |
@@ -531,17 +537,17 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # Extract the zip directly into Files to preserve exact filenames
-        Expand-Archive -Path "artifacts/Solitaire-GTK-Portable.zip" -DestinationPath "msix-package/Files/" -Force
+        # Copy extracted files to msix package
+        Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
         
         # Define icon paths for each game
-        $solitaireIcon = "msix-package/Files/solitaire.png"
-        $freecellIcon = "msix-package/Files/freecell.png"
-        $spiderIcon = "msix-package/Files/spider.png"
+        $solitaireIcon = "artifacts/build/windows/solitaire.png"
+        $freecellIcon = "artifacts/build/windows/freecell.png"
+        $spiderIcon = "artifacts/build/windows/spider.png"
         
         # Fallback if PNGs don't exist
         if (-not (Test-Path $solitaireIcon)) {
-          $solitaireIcon = "msix-package/Files/icon.png"
+          $solitaireIcon = "artifacts/build/windows/icon.png"
         }
         
         # Verify at least one icon exists
