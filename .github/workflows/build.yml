@@ -549,15 +549,16 @@ jobs:
         
         # Copy using robocopy (more reliable)
         Write-Host "=== Copying files to msix-package/Files ==="
-        robocopy "$exePath" "msix-package/Files" /E /Y /XO
+        robocopy "$exePath" "msix-package/Files" /E /COPY:DAT /R:0 /W:0
         $robocopyResult = $LASTEXITCODE
         Write-Host "Robocopy exit code: $robocopyResult"
         
-        # robocopy returns 0 or 1 for success, so we only fail on 8+
+        # robocopy returns 0, 1, or 2 for success
         if ($robocopyResult -ge 8) {
           Write-Error "Robocopy failed with code $robocopyResult"
           Exit 1
         }
+        Write-Host "Robocopy succeeded (exit code $robocopyResult is normal)"
         
         Write-Host "=== Verifying files in msix-package/Files ==="
         Get-ChildItem -Path "msix-package/Files" -Recurse -File | Select-Object Name | Measure-Object
