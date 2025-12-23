@@ -103,6 +103,10 @@ jobs:
         
         # Create portable ZIP
         zip -r ../../Solitaire-GTK-Portable.zip ./*
+        
+        cd ../..
+        echo "=== DEBUG: Contents of created zip file ==="
+        unzip -l Solitaire-GTK-Portable.zip | grep -i "libstdc"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
@@ -128,9 +132,14 @@ jobs:
 
     - name: Extract Build Files
       run: |
+        Write-Host "=== DEBUG MSI: Files in downloaded artifact ==="
+        Get-ChildItem -Recurse
+        
+        Write-Host "=== DEBUG MSI: Extracting zip ==="
         Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
-
-    - name: Setup WiX Toolset
+        
+        Write-Host "=== DEBUG MSI: Files after extraction ==="
+        Get-ChildItem "artifacts/build/windows/" -Recurse | Select-Object FullName, Name | Format-Table
       run: |
         # Download and install WiX Toolset v3
         Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix.zip"
@@ -528,17 +537,30 @@ jobs:
 
     - name: Extract Build Files
       run: |
+        Write-Host "=== DEBUG MSIX: Files in downloaded artifact ==="
+        Get-ChildItem -Recurse
+        
+        Write-Host "=== DEBUG MSIX: Extracting zip ==="
         Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
+        
+        Write-Host "=== DEBUG MSIX: Files after extraction ==="
+        Get-ChildItem "artifacts/build/windows/" -Recurse | Select-Object FullName, Name | Format-Table
 
     - name: Create Microsoft Store Assets
       run: |
+        Write-Host "=== DEBUG MSIX: Before creating directories ==="
+        Get-ChildItem "artifacts/build/windows/" | Select-Object Name
+        
         # Create package structure
         New-Item -ItemType Directory -Path "msix-package" -Force
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # Copy extracted files to msix package
+        Write-Host "=== DEBUG MSIX: Copying files to msix-package/Files ==="
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
+        
+        Write-Host "=== DEBUG MSIX: Files in msix-package/Files after copy ==="
+        Get-ChildItem "msix-package/Files/" -Recurse | Select-Object FullName, Name | Format-Table
         
         # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
@@ -699,6 +721,12 @@ jobs:
 
     - name: Build MSIX Package
       run: |
+        Write-Host "=== DEBUG MSIX: Files in msix-package directory before packing ==="
+        Get-ChildItem "msix-package/" -Recurse | Select-Object FullName, Name | Format-Table
+        
+        Write-Host "=== DEBUG MSIX: Files specifically in msix-package/Files ==="
+        Get-ChildItem "msix-package/Files/" | Select-Object Name | Format-Table
+        
         # Use Windows SDK MakeAppx tool to create MSIX
         $makeAppxPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe"
         
@@ -735,6 +763,9 @@ jobs:
           $msixSize = (Get-Item "Solitaire-GTK.msix").Length
           Write-Host "MSIX file size: $msixSize bytes"
           Write-Host "Package is unsigned and ready for Microsoft Store submission"
+          
+          Write-Host "=== DEBUG MSIX: Contents of generated MSIX ==="
+          & tar -tf "Solitaire-GTK.msix" | grep -i "libstdc" | head -20
         } else {
           Write-Error "❌ MSIX file was not created!"
           exit 1
