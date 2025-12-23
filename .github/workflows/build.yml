@@ -140,6 +140,8 @@ jobs:
         
         Write-Host "=== DEBUG MSI: Files after extraction ==="
         Get-ChildItem "artifacts/build/windows/" -Recurse | Select-Object FullName, Name | Format-Table
+
+    - name: Setup WiX Toolset
       run: |
         # Download and install WiX Toolset v3
         Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix.zip"
