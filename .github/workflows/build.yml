@@ -173,13 +173,13 @@ jobs:
             <Package InstallerVersion="500" 
                      Compressed="yes" 
                      InstallScope="perMachine" 
-                     Description="Solitaire Collection GTK - Classic Card Games"
+                     Description="Solitaire Essentials GTK - Classic Card Games"
                      Comments="Built with GitHub Actions"
                      Manufacturer="Jason Brian Hall" />
             
             <!-- Major upgrade configuration -->
             <MajorUpgrade 
-              DowngradeErrorMessage="A newer version of Solitaire Collection is already installed. Please uninstall it first." 
+              DowngradeErrorMessage="A newer version of Solitaire Essentials is already installed. Please uninstall it first." 
               Schedule="afterInstallInitialize" />
             
             <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
@@ -235,7 +235,7 @@ jobs:
         $($dllEntries -join "`r`n")
                     
                     <!-- Registry entries for uninstall info -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Solitaire Collection">
+                    <RegistryKey Root="HKLM" Key="SOFTWARE\Solitaire Essentials">
                       <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
                       <RegistryValue Type="string" Name="Version" Value="${{ needs.build-linux.outputs.version }}" />
                       <RegistryValue Type="string" Name="Publisher" Value="Jason Brian Hall" />
@@ -296,7 +296,7 @@ jobs:
               
               <!-- Start Menu shortcuts -->
               <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="Solitaire Collection">
+                <Directory Id="ApplicationProgramsFolder" Name="Solitaire Essentials">
                   <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
                     <Shortcut Id="ApplicationStartMenuKlondike" 
                              Name="Solitaire" 
@@ -317,10 +317,10 @@ jobs:
                              Description="Play Spider Solitaire"
                              Icon="SpiderIcon"/>
                     <Shortcut Id="UninstallShortcut"
-                             Name="Uninstall Solitaire Collection"
+                             Name="Uninstall Solitaire Essentials"
                              Target="[SystemFolder]msiexec.exe"
                              Arguments="/x [ProductCode]"
-                             Description="Uninstall Solitaire Collection" />
+                             Description="Uninstall Solitaire Essentials" />
                     <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
                     <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                  Name="StartMenu" Type="integer" Value="1" KeyPath="yes"/>
@@ -370,7 +370,7 @@ jobs:
             
             <!-- Feature definitions -->
             <Feature Id="ProductFeature" 
-                     Title="Solitaire Collection" 
+                     Title="Solitaire Essentials" 
                      Description="Classic card games including Klondike, FreeCell, and Spider Solitaire with GTK runtime."
                      Level="1" 
                      ConfigurableDirectory="INSTALLFOLDER"
@@ -406,7 +406,7 @@ jobs:
               <![CDATA[
                 On Error Resume Next
                 Set shell = CreateObject("WScript.Shell")
-                shell.RegDelete "HKLM\SOFTWARE\Solitaire Collection\"
+                shell.RegDelete "HKLM\SOFTWARE\Solitaire Essentials\"
                 shell.RegDelete "HKCU\Software\SolitaireCollection\"
               ]]>
             </CustomAction>
@@ -773,7 +773,7 @@ jobs:
           **Commit:** ${{ github.sha }}  
           **Build:** #${{ github.run_number }}  
           
-          ### 🃏 Solitaire Collection
+          ### 🃏 Solitaire Essentials
           Classic card games including Klondike Solitaire, FreeCell, and Spider Solitaire with a modern GTK interface.
           
           ### 📦 Downloads
@@ -838,7 +838,7 @@ jobs:
           
           **Command-line Properties:**
           - `DESKTOP_SHORTCUT=1` - Create desktop shortcuts (default: 1)
-          - `INSTALLFOLDER="C:\Program Files\Solitaire Collection"` - Custom install path
+          - `INSTALLFOLDER="C:\Program Files\Solitaire Essentials"` - Custom install path
           
           ---
           *Built with ❤️ using GitHub Actions*
