@@ -103,10 +103,6 @@ jobs:
         
         # Create portable ZIP
         zip -r ../../Solitaire-GTK-Portable.zip ./*
-        
-        cd ../..
-        echo "=== DEBUG: Contents of created zip file ==="
-        unzip -l Solitaire-GTK-Portable.zip | grep -i "libstdc"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
@@ -132,14 +128,7 @@ jobs:
 
     - name: Extract Build Files
       run: |
-        Write-Host "=== DEBUG MSI: Files in downloaded artifact ==="
-        Get-ChildItem -Recurse
-        
-        Write-Host "=== DEBUG MSI: Extracting zip ==="
         Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
-        
-        Write-Host "=== DEBUG MSI: Files after extraction ==="
-        Get-ChildItem "artifacts/build/windows/" -Recurse | Select-Object FullName, Name | Format-Table
 
     - name: Setup WiX Toolset
       run: |
@@ -539,30 +528,17 @@ jobs:
 
     - name: Extract Build Files
       run: |
-        Write-Host "=== DEBUG MSIX: Files in downloaded artifact ==="
-        Get-ChildItem -Recurse
-        
-        Write-Host "=== DEBUG MSIX: Extracting zip ==="
         Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
-        
-        Write-Host "=== DEBUG MSIX: Files after extraction ==="
-        Get-ChildItem "artifacts/build/windows/" -Recurse | Select-Object FullName, Name | Format-Table
 
     - name: Create Microsoft Store Assets
       run: |
-        Write-Host "=== DEBUG MSIX: Before creating directories ==="
-        Get-ChildItem "artifacts/build/windows/" | Select-Object Name
-        
         # Create package structure
         New-Item -ItemType Directory -Path "msix-package" -Force
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        Write-Host "=== DEBUG MSIX: Copying files to msix-package/Files ==="
+        # Copy extracted files to msix package
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
-        
-        Write-Host "=== DEBUG MSIX: Files in msix-package/Files after copy ==="
-        Get-ChildItem "msix-package/Files/" -Recurse | Select-Object FullName, Name | Format-Table
         
         # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
@@ -723,10 +699,8 @@ jobs:
 
     - name: Build MSIX Package
       run: |
-        Write-Host "=== Building MSIX with makeappx ==="
-        
         # Use Windows SDK MakeAppx tool to create MSIX
-        $makeAppxPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
+        $makeAppxPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe"
         
         # Try different SDK versions if the specific one doesn't exist
         if (-not (Test-Path $makeAppxPath)) {
@@ -747,7 +721,7 @@ jobs:
         
         Write-Host "Using MakeAppx at: $makeAppxPath"
         
-        # Create the MSIX package
+        # Create the MSIX package (unsigned for Store submission)
         & "$makeAppxPath" pack /d "msix-package" /p "Solitaire-GTK.msix" /o
         
         if ($LASTEXITCODE -ne 0) {
@@ -755,39 +729,12 @@ jobs:
           exit 1
         }
         
-        Write-Host "MSIX created, fixing filename encoding..."
-        
-        # Extract MSIX to fix URL-encoded filenames
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $msixPath = (Get-Item "Solitaire-GTK.msix").FullName
-        $tempDir = "msix-temp-fix"
-        
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($msixPath, $tempDir)
-        
-        # Find and rename URL-encoded DLLs back to proper names
-        $encodedFiles = Get-ChildItem -Path "$tempDir/Files" -Recurse -Filter "*%2B*"
-        foreach ($file in $encodedFiles) {
-          $newName = $file.Name -replace '%2B', '+'
-          $newPath = Join-Path $file.DirectoryName $newName
-          Write-Host "Renaming: $($file.Name) -> $newName"
-          Rename-Item -Path $file.FullName -NewName $newPath
-        }
-        
-        # Remove old MSIX
-        Remove-Item $msixPath -Force
-        
-        # Recreate MSIX with corrected filenames
-        [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $msixPath)
-        Remove-Item $tempDir -Recurse -Force
-        
-        # Verify
+        # Verify MSIX was created
         if (Test-Path "Solitaire-GTK.msix") {
           Write-Host "✅ MSIX package created successfully: Solitaire-GTK.msix"
           $msixSize = (Get-Item "Solitaire-GTK.msix").Length
           Write-Host "MSIX file size: $msixSize bytes"
-          
-          Write-Host "=== DEBUG MSIX: Contents of generated MSIX ==="
-          & tar -tf "Solitaire-GTK.msix" | grep -i "libstdc"
+          Write-Host "Package is unsigned and ready for Microsoft Store submission"
         } else {
           Write-Error "❌ MSIX file was not created!"
           exit 1
