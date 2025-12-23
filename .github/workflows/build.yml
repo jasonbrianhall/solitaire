@@ -723,18 +723,68 @@ jobs:
 
     - name: Build MSIX Package
       run: |
-        Write-Host "=== Creating MSIX as ZIP (avoiding makeappx encoding issue) ==="
+        Write-Host "=== Building MSIX with makeappx ==="
         
-        # Create a proper MSIX by zipping the directory
-        # MSIX is just a ZIP file with specific structure
-        Compress-Archive -Path "msix-package\*" -DestinationPath "Solitaire-GTK.msix" -Force
+        # Use Windows SDK MakeAppx tool to create MSIX
+        $makeAppxPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
+        
+        # Try different SDK versions if the specific one doesn't exist
+        if (-not (Test-Path $makeAppxPath)) {
+          $sdkVersions = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\" | Where-Object { $_.Name -match "10\.0\.\d+\.\d+" } | Sort-Object Name -Descending
+          foreach ($version in $sdkVersions) {
+            $testPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\$($version.Name)\x64\makeappx.exe"
+            if (Test-Path $testPath) {
+              $makeAppxPath = $testPath
+              break
+            }
+          }
+        }
+        
+        if (-not (Test-Path $makeAppxPath)) {
+          Write-Error "MakeAppx.exe not found. Windows SDK may not be installed."
+          exit 1
+        }
+        
+        Write-Host "Using MakeAppx at: $makeAppxPath"
+        
+        # Create the MSIX package
+        & "$makeAppxPath" pack /d "msix-package" /p "Solitaire-GTK.msix" /o
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "MSIX package creation failed with exit code $LASTEXITCODE"
+          exit 1
+        }
+        
+        Write-Host "MSIX created, fixing filename encoding..."
+        
+        # Extract MSIX to fix URL-encoded filenames
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $msixPath = (Get-Item "Solitaire-GTK.msix").FullName
+        $tempDir = "msix-temp-fix"
+        
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($msixPath, $tempDir)
+        
+        # Find and rename URL-encoded DLLs back to proper names
+        $encodedFiles = Get-ChildItem -Path "$tempDir/Files" -Recurse -Filter "*%2B*"
+        foreach ($file in $encodedFiles) {
+          $newName = $file.Name -replace '%2B', '+'
+          $newPath = Join-Path $file.DirectoryName $newName
+          Write-Host "Renaming: $($file.Name) -> $newName"
+          Rename-Item -Path $file.FullName -NewName $newPath
+        }
+        
+        # Remove old MSIX
+        Remove-Item $msixPath -Force
+        
+        # Recreate MSIX with corrected filenames
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $msixPath)
+        Remove-Item $tempDir -Recurse -Force
         
         # Verify
         if (Test-Path "Solitaire-GTK.msix") {
           Write-Host "✅ MSIX package created successfully: Solitaire-GTK.msix"
           $msixSize = (Get-Item "Solitaire-GTK.msix").Length
           Write-Host "MSIX file size: $msixSize bytes"
-          Write-Host "Package is unsigned and ready for Microsoft Store submission"
           
           Write-Host "=== DEBUG MSIX: Contents of generated MSIX ==="
           & tar -tf "Solitaire-GTK.msix" | grep -i "libstdc"
