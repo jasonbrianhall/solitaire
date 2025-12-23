@@ -727,11 +727,6 @@ jobs:
         </Package>
         "@ | Out-File -FilePath "msix-package/AppxManifest.xml" -Encoding UTF8
 
-    - name: Sign MSI
-      uses: sigstore/gh-action-sigstore-python@2
-      with:
-        inputs: artifacts/build/windows/Solitaire-GTK.msi
-
     - name: Build MSIX Package
       run: |
         # Use Windows SDK MakeAppx tool to create MSIX
