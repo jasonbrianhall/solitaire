@@ -519,54 +519,120 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
+        # DEBUG: Show what we have
+        Write-Host "=== Checking artifact structure ==="
+        Get-ChildItem -Path "artifacts" -Recurse -File | Select-Object FullName | Head -20
+        
+        # Find the actual location of the executable files
+        $exePath = $null
+        if (Test-Path "artifacts/build/windows") {
+          Write-Host "Found: artifacts/build/windows"
+          $exePath = "artifacts/build/windows"
+        } elseif (Test-Path "artifacts/windows") {
+          Write-Host "Found: artifacts/windows"
+          $exePath = "artifacts/windows"
+        } elseif (Test-Path "artifacts") {
+          $exeTest = Get-ChildItem "artifacts" -Filter "*.exe" -Recurse | Select-Object -First 1
+          if ($exeTest) {
+            Write-Host "Found exe files in artifacts: $($exeTest.DirectoryName)"
+            $exePath = $exeTest.DirectoryName
+          }
+        }
+        
+        if (-not $exePath) {
+          Write-Error "Could not find solitaire.exe in artifacts!"
+          Exit 1
+        }
+        
+        Write-Host "=== Files to copy from $exePath ==="
+        Get-ChildItem -Path $exePath | Select-Object Name
+        
         # Copy application files
         Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
         
-        $iconPath = "artifacts/build/windows/solitaire.png"
+        # Check what's actually there
+        Write-Host "Files in msix-package/Files with 'stdc' in name:"
+        Get-ChildItem "msix-package/Files" -Recurse -File | Where-Object {$_.Name -like "*stdc*"}
+        
+        Write-Host "=== Verifying files in msix-package/Files ==="
+        $files = Get-ChildItem -Path "msix-package/Files" -Recurse -File
+        Write-Host "Total files: $($files.Count)"
+        Write-Host "Files with + in name:"
+        $files | Where-Object {$_.Name -like "*+*"} | ForEach-Object {
+          Write-Host "  ✓ $($_.Name)"
+        }
+        Write-Host "Files with %2B in name (CORRUPTED):"
+        $files | Where-Object {$_.Name -like "*%2B*"} | ForEach-Object {
+          Write-Host "  ✗ $($_.Name)"
+        }
+        
+        
+        $solitaireIcon = "artifacts/build/windows/solitaire.png"
+        $freecellIcon = "artifacts/build/windows/freecell.png"
+        $spiderIcon = "artifacts/build/windows/spider.png"
         
         # Fallback if PNGs don't exist
-        if (-not (Test-Path $iconPath)) {
-          $iconPath = "artifacts/build/windows/icon.png"
+        if (-not (Test-Path $solitaireIcon)) {
+          $solitaireIcon = "artifacts/build/windows/icon.png"
         }
         
         # Verify at least one icon exists
-        if (-not (Test-Path $iconPath)) {
+        if (-not (Test-Path $solitaireIcon)) {
           Write-Error "No solitaire icon found"
           exit 1
         }
         
         Write-Host "Creating Microsoft Store compliant assets..."
         
-        # Store Logo (50x50)
-        & magick "$iconPath" -resize 50x50 "msix-package/Assets/StoreLogo.scale-100.png"
-        & magick "$iconPath" -resize 63x63 "msix-package/Assets/StoreLogo.scale-125.png"
-        & magick "$iconPath" -resize 75x75 "msix-package/Assets/StoreLogo.scale-150.png"
-        & magick "$iconPath" -resize 100x100 "msix-package/Assets/StoreLogo.scale-200.png"
+        # Store Logo (50x50) - use main solitaire icon
+        & magick "$solitaireIcon" -resize 50x50 "msix-package/Assets/StoreLogo.scale-100.png"
+        & magick "$solitaireIcon" -resize 63x63 "msix-package/Assets/StoreLogo.scale-125.png"
+        & magick "$solitaireIcon" -resize 75x75 "msix-package/Assets/StoreLogo.scale-150.png"
+        & magick "$solitaireIcon" -resize 100x100 "msix-package/Assets/StoreLogo.scale-200.png"
         
-        # Square 44x44 Logo (for taskbar, start menu)
-        & magick "$iconPath" -resize 44x44 "msix-package/Assets/Square44x44Logo.scale-100.png"
-        & magick "$iconPath" -resize 55x55 "msix-package/Assets/Square44x44Logo.scale-125.png"
-        & magick "$iconPath" -resize 66x66 "msix-package/Assets/Square44x44Logo.scale-150.png"
-        & magick "$iconPath" -resize 88x88 "msix-package/Assets/Square44x44Logo.scale-200.png"
+        # Function to create assets for each game
+        function Create-GameAssets {
+          param($IconPath, $GameName)
+          
+          Write-Host "Creating assets for $GameName..."
+          
+          # Square 44x44 Logo
+          & magick "$IconPath" -resize 44x44 "msix-package/Assets/${GameName}44x44.scale-100.png"
+          & magick "$IconPath" -resize 55x55 "msix-package/Assets/${GameName}44x44.scale-125.png"
+          & magick "$IconPath" -resize 66x66 "msix-package/Assets/${GameName}44x44.scale-150.png"
+          & magick "$IconPath" -resize 88x88 "msix-package/Assets/${GameName}44x44.scale-200.png"
+          
+          # Square 150x150 Logo (main tile)
+          & magick "$IconPath" -resize 150x150 "msix-package/Assets/${GameName}Logo.scale-100.png"
+          & magick "$IconPath" -resize 188x188 "msix-package/Assets/${GameName}Logo.scale-125.png"
+          & magick "$IconPath" -resize 225x225 "msix-package/Assets/${GameName}Logo.scale-150.png"
+          & magick "$IconPath" -resize 300x300 "msix-package/Assets/${GameName}Logo.scale-200.png"
+          
+          # Wide 310x150 Logo (wide tile)
+          & magick "$IconPath" -resize 150x150 -background "#0a5a2d" -gravity center -extent 310x150 "msix-package/Assets/${GameName}Wide.scale-100.png"
+          & magick "$IconPath" -resize 188x188 -background "#0a5a2d" -gravity center -extent 388x188 "msix-package/Assets/${GameName}Wide.scale-125.png"
+          & magick "$IconPath" -resize 225x225 -background "#0a5a2d" -gravity center -extent 465x225 "msix-package/Assets/${GameName}Wide.scale-150.png"
+          & magick "$IconPath" -resize 300x300 -background "#0a5a2d" -gravity center -extent 620x300 "msix-package/Assets/${GameName}Wide.scale-200.png"
+        }
         
-        # Target size variants (unplated, for file associations)
-        & magick "$iconPath" -resize 16x16 "msix-package/Assets/Square44x44Logo.targetsize-16_altform-unplated.png"
-        & magick "$iconPath" -resize 24x24 "msix-package/Assets/Square44x44Logo.targetsize-24_altform-unplated.png"
-        & magick "$iconPath" -resize 32x32 "msix-package/Assets/Square44x44Logo.targetsize-32_altform-unplated.png"
-        & magick "$iconPath" -resize 48x48 "msix-package/Assets/Square44x44Logo.targetsize-48_altform-unplated.png"
-        & magick "$iconPath" -resize 256x256 "msix-package/Assets/Square44x44Logo.targetsize-256_altform-unplated.png"
+        # Create assets for Solitaire
+        Create-GameAssets -IconPath $solitaireIcon -GameName "Solitaire"
         
-        # Square 150x150 Logo (main tile)
-        & magick "$iconPath" -resize 150x150 "msix-package/Assets/Square150x150Logo.scale-100.png"
-        & magick "$iconPath" -resize 188x188 "msix-package/Assets/Square150x150Logo.scale-125.png"
-        & magick "$iconPath" -resize 225x225 "msix-package/Assets/Square150x150Logo.scale-150.png"
-        & magick "$iconPath" -resize 300x300 "msix-package/Assets/Square150x150Logo.scale-200.png"
+        # Create assets for FreeCell (use freecell icon if available, otherwise solitaire)
+        if (Test-Path $freecellIcon) {
+          Create-GameAssets -IconPath $freecellIcon -GameName "FreeCell"
+        } else {
+          Write-Host "FreeCell icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "FreeCell"
+        }
         
-        # Wide 310x150 Logo (wide tile)
-        & magick "$iconPath" -resize 150x150 -background "#0a5a2d" -gravity center -extent 310x150 "msix-package/Assets/Wide310x150Logo.scale-100.png"
-        & magick "$iconPath" -resize 188x188 -background "#0a5a2d" -gravity center -extent 388x188 "msix-package/Assets/Wide310x150Logo.scale-125.png"
-        & magick "$iconPath" -resize 225x225 -background "#0a5a2d" -gravity center -extent 465x225 "msix-package/Assets/Wide310x150Logo.scale-150.png"
-        & magick "$iconPath" -resize 300x300 -background "#0a5a2d" -gravity center -extent 620x300 "msix-package/Assets/Wide310x150Logo.scale-200.png"
+        # Create assets for Spider (use spider icon if available, otherwise solitaire)
+        if (Test-Path $spiderIcon) {
+          Create-GameAssets -IconPath $spiderIcon -GameName "Spider"
+        } else {
+          Write-Host "Spider icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "Spider"
+        }
         
         Write-Host "All Microsoft Store assets created successfully"
 
@@ -610,51 +676,51 @@ jobs:
             <Application Id="Solitaire" Executable="Files\solitaire.exe" EntryPoint="Windows.FullTrustApplication">
               <uap:VisualElements DisplayName="Solitaire"
                                   Description="Classic Klondike Solitaire card game"
-                                  Square150x150Logo="Assets\Square150x150Logo.scale-100.png"
-                                  Square44x44Logo="Assets\Square44x44Logo.scale-100.png"
+                                  Square150x150Logo="Assets\SolitaireLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Solitaire44x44.scale-100.png"
                                   BackgroundColor="#0a5a2d">
-                <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.scale-100.png"
+                <uap:DefaultTile Wide310x150Logo="Assets\SolitaireWide.scale-100.png"
                                 ShortName="Solitaire">
                   <uap:ShowNameOnTiles>
                     <uap:ShowOn Tile="square150x150Logo"/>
                     <uap:ShowOn Tile="wide310x150Logo"/>
                   </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\Square150x150Logo.scale-100.png" />
+                <uap:SplashScreen Image="Assets\SolitaireLogo.scale-100.png" />
               </uap:VisualElements>
             </Application>
             
             <Application Id="FreeCell" Executable="Files\freecell.exe" EntryPoint="Windows.FullTrustApplication">
               <uap:VisualElements DisplayName="FreeCell"
                                   Description="Strategic FreeCell Solitaire card game"
-                                  Square150x150Logo="Assets\Square150x150Logo.scale-100.png"
-                                  Square44x44Logo="Assets\Square44x44Logo.scale-100.png"
+                                  Square150x150Logo="Assets\FreeCellLogo.scale-100.png"
+                                  Square44x44Logo="Assets\FreeCell44x44.scale-100.png"
                                   BackgroundColor="#0a5a2d">
-                <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.scale-100.png"
+                <uap:DefaultTile Wide310x150Logo="Assets\FreeCellWide.scale-100.png"
                                 ShortName="FreeCell">
                   <uap:ShowNameOnTiles>
                     <uap:ShowOn Tile="square150x150Logo"/>
                     <uap:ShowOn Tile="wide310x150Logo"/>
                   </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\Square150x150Logo.scale-100.png" />
+                <uap:SplashScreen Image="Assets\FreeCellLogo.scale-100.png" />
               </uap:VisualElements>
             </Application>
             
             <Application Id="Spider" Executable="Files\spider.exe" EntryPoint="Windows.FullTrustApplication">
               <uap:VisualElements DisplayName="Spider Solitaire"
                                   Description="Multi-deck Spider Solitaire challenge"
-                                  Square150x150Logo="Assets\Square150x150Logo.scale-100.png"
-                                  Square44x44Logo="Assets\Square44x44Logo.scale-100.png"
+                                  Square150x150Logo="Assets\SpiderLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Spider44x44.scale-100.png"
                                   BackgroundColor="#0a5a2d">
-                <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.scale-100.png"
+                <uap:DefaultTile Wide310x150Logo="Assets\SpiderWide.scale-100.png"
                                 ShortName="Spider">
                   <uap:ShowNameOnTiles>
                     <uap:ShowOn Tile="square150x150Logo"/>
                     <uap:ShowOn Tile="wide310x150Logo"/>
                   </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\Square150x150Logo.scale-100.png" />
+                <uap:SplashScreen Image="Assets\SpiderLogo.scale-100.png" />
               </uap:VisualElements>
             </Application>
           </Applications>
