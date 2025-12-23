@@ -518,11 +518,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Download Build Artifacts
+    - name: Download Portable ZIP
       uses: actions/download-artifact@v4
       with:
-        name: solitaire-build
-        path: artifacts
+        name: Solitaire-GTK-Portable.zip
+        path: .
 
     - name: Create Microsoft Store Assets
       run: |
@@ -531,17 +531,17 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # Copy application files
-        Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
+        # Extract the zip directly into Files to preserve exact filenames
+        Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "msix-package/Files/" -Force
         
         # Define icon paths for each game
-        $solitaireIcon = "artifacts/build/windows/solitaire.png"
-        $freecellIcon = "artifacts/build/windows/freecell.png"
-        $spiderIcon = "artifacts/build/windows/spider.png"
+        $solitaireIcon = "msix-package/Files/solitaire.png"
+        $freecellIcon = "msix-package/Files/freecell.png"
+        $spiderIcon = "msix-package/Files/spider.png"
         
         # Fallback if PNGs don't exist
         if (-not (Test-Path $solitaireIcon)) {
-          $solitaireIcon = "artifacts/build/windows/icon.png"
+          $solitaireIcon = "msix-package/Files/icon.png"
         }
         
         # Verify at least one icon exists
