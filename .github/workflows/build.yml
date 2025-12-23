@@ -518,11 +518,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Download Portable ZIP
+    - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: Solitaire-GTK-Portable.zip
-        path: .
+        name: solitaire-build
+        path: artifacts
 
     - name: Create Microsoft Store Assets
       run: |
@@ -532,7 +532,7 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
         # Extract the zip directly into Files to preserve exact filenames
-        Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "msix-package/Files/" -Force
+        Expand-Archive -Path "artifacts/Solitaire-GTK-Portable.zip" -DestinationPath "msix-package/Files/" -Force
         
         # Define icon paths for each game
         $solitaireIcon = "msix-package/Files/solitaire.png"
