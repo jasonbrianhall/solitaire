@@ -566,7 +566,6 @@ jobs:
         # This is a known issue where ZIP encodes + as %2B, breaking MSIX
         Write-Host "=== Renaming files with plus signs to avoid ZIP encoding ==="
         Get-ChildItem -Path "msix-package/Files" -Recurse -File | Where-Object {$_.Name -like "*+*"} | ForEach-Object {
-          $newName = $_.Name -replace '\+', '-'
           $newPath = Join-Path $_.DirectoryName $newName
           Write-Host "Renaming: $($_.Name) -> $newName"
           Rename-Item -Path $_.FullName -NewName $newPath -Force
