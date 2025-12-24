@@ -14,36 +14,13 @@
 #include <dirent.h>   // For directory listing on Unix/Linux
 #endif
 
-
 #ifdef _WIN32
-
 std::string getExecutableDir() { 
-    char buffer[MAX_PATH]; GetModuleFileNameA(NULL, buffer, MAX_PATH); 
+    char buffer[MAX_PATH]; 
+    GetModuleFileNameA(NULL, buffer, MAX_PATH); 
     std::string path(buffer); size_t pos = path.find_last_of("\\/"); 
     return (pos == std::string::npos) ? "." : path.substr(0, pos); 
 }
-
-std::string getPackagePath() {
-    UINT32 length = 0;
-    LONG rc = GetCurrentPackagePath(&length, nullptr);
-    if (rc != ERROR_INSUFFICIENT_BUFFER) {
-        return "";
-    }
-
-    std::vector<wchar_t> buffer(length);
-    rc = GetCurrentPackagePath(&length, buffer.data());
-    if (rc != ERROR_SUCCESS) {
-        return "";
-    }
-
-    // Convert wide string to UTF‑8
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, buffer.data(), -1, nullptr, 0, nullptr, nullptr);
-    std::string path(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, buffer.data(), -1, &path[0], size_needed, nullptr, nullptr);
-
-    return path;
-}
-
 #endif
 
 // Helper function to get directory structure as a string for debugging
@@ -112,7 +89,7 @@ SolitaireGame::SolitaireGame()
       current_game_mode_(GameMode::STANDARD_KLONDIKE),
       multi_deck_(1), // Initialize with 1 deck
       sound_enabled_(true),           // Set sound to enabled by default
-#ifdef WIN32
+#ifdef _WIN32
       sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
 #else
       sounds_zip_path_("sound.zip"),
@@ -191,9 +168,9 @@ void SolitaireGame::initializeGame() {
       if (!loaded) {
         std::cerr << "Failed to find cards.zip in any of the expected locations.\n";
 #ifdef _WIN32
-        showDirectoryStructureDialog(getExecutableDir());
+        //showDirectoryStructureDialog(getExecutableDir());
 #else
-        showDirectoryStructureDialog(".");
+        //showDirectoryStructureDialog(".");
 #endif
         showMissingFileDialog("cards.zip", "Card images are required to play this game.");
         exit(2); // Exit code 2: Missing required cards.zip

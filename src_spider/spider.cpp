@@ -11,6 +11,15 @@
 #include <windows.h>
 #endif
 
+#ifdef _WIN32
+std::string getExecutableDir() { 
+    char buffer[MAX_PATH]; 
+    GetModuleFileNameA(NULL, buffer, MAX_PATH); 
+    std::string path(buffer); size_t pos = path.find_last_of("\\/"); 
+    return (pos == std::string::npos) ? "." : path.substr(0, pos); 
+}
+#endif
+
 SolitaireGame::SolitaireGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
       window_(nullptr), game_area_(nullptr), buffer_surface_(nullptr),
@@ -23,7 +32,11 @@ SolitaireGame::SolitaireGame()
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
       sound_enabled_(true),           // Set sound to enabled by default
+#ifdef _WIN32
+      sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
+#else
       sounds_zip_path_("sound.zip"),
+#endif
       number_of_suits(1),
       relaxed_rules_mode_(false),
       current_seed_(0) { // Initialize to 0 temporarily
@@ -55,7 +68,11 @@ void SolitaireGame::run(int argc, char **argv) {
 void SolitaireGame::initializeGame() {
   try {
     // Try to find cards.zip in several common locations
+#ifdef _WIN32
+    const std::vector<std::string> paths = {getExecutableDir() + "\\cards.zip"};
+#else
     const std::vector<std::string> paths = {"cards.zip"};
+#endif
 
     bool loaded = false;
     for (const auto &path : paths) {

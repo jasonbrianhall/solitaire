@@ -9,6 +9,15 @@
 #include <direct.h>
 #endif
 
+#ifdef _WIN32
+std::string getExecutableDir() { 
+    char buffer[MAX_PATH]; 
+    GetModuleFileNameA(NULL, buffer, MAX_PATH); 
+    std::string path(buffer); size_t pos = path.find_last_of("\\/"); 
+    return (pos == std::string::npos) ? "." : path.substr(0, pos); 
+}
+#endif
+
 FreecellGame::FreecellGame()
     : dragging_(false), drag_source_pile_(-1),
       window_(nullptr), game_area_(nullptr), buffer_surface_(nullptr),
@@ -22,7 +31,11 @@ FreecellGame::FreecellGame()
       source_pile_(-1), source_card_idx_(-1),
       drag_source_card_idx_(-1),
       sound_enabled_(true),      
+#ifdef _WIN32
+      sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
+#else
       sounds_zip_path_("sound.zip"),
+#endif
       current_seed_(0) {
   srand(time(NULL));  // Seed the random number generator with current time
   current_seed_ = rand();  // Generate random seed
@@ -61,8 +74,7 @@ void FreecellGame::initializeGame() {
       std::string exe_dir(exe_path);
       size_t last_slash = exe_dir.find_last_of("\\/");
       if (last_slash != std::string::npos) {
-        exe_dir = exe_dir.substr(0, last_slash);
-        paths.push_back(exe_dir + "\\cards.zip");
+        paths.push_back(getExecutableDir() + "\\cards.zip");
       }
     }
 #else
