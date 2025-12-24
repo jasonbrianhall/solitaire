@@ -296,6 +296,9 @@ private:
   std::string sounds_zip_path_;
   bool sound_enabled_;
 
+  // Method to check if sound.zip exists and initialize sound system
+  void checkAndInitializeSound();
+
   // Method to initialize sound system
   bool initializeAudio();
 

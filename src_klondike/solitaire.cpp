@@ -60,10 +60,6 @@ SolitaireGame::SolitaireGame()
 #endif
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
-  initializeAudio();
-#ifndef _WIN32
-   usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second); timing issue; doesn't initialize the sound before the game is loaded.
-#endif  
   current_seed_ = rand();  
   initializeSettingsDir();
   loadSettings();
@@ -77,6 +73,27 @@ SolitaireGame::~SolitaireGame() {
     cairo_surface_destroy(buffer_surface_);
   }
   cleanupAudio();
+}
+
+void SolitaireGame::checkAndInitializeSound() {
+  // Check if sound.zip file exists
+  struct stat buffer;
+  bool sound_file_exists = (stat(sounds_zip_path_.c_str(), &buffer) == 0);
+  
+  if (!sound_file_exists) {
+    // Sound file doesn't exist - disable sound and show dialog
+    sound_enabled_ = false;
+    std::string message = "Sound file (sound.zip) was not found at:\n" + 
+                          sounds_zip_path_ + 
+                          "\n\nSound has been disabled. Game will continue without audio.";
+    showErrorDialog("Sound File Missing", message);
+  } else {
+    // Sound file exists - initialize audio system
+    initializeAudio();
+#ifndef _WIN32
+    usleep(100000);  // Unix/Linux usleep takes microseconds; timing issue
+#endif
+  }
 }
 
 
@@ -768,6 +785,9 @@ void SolitaireGame::setupWindow() {
 
   // Make sure the window is realized before calculating scale
   gtk_widget_realize(window_);
+  
+  // Check if sound.zip exists and initialize sound system
+  checkAndInitializeSound();
     
   // Now get the initial dimensions with correct scale factor
   GtkAllocation allocation;
