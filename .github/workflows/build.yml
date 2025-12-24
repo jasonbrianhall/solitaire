@@ -201,315 +201,110 @@ jobs:
             <!-- License agreement -->
             <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
             
-            <!-- Custom properties -->
-            <Property Id="ARPPRODUCTICON" Value="SolitaireIcon" />
-            <Property Id="ARPURLINFOABOUT" Value="https://github.com/yourusername/solitaire" />
-            <Property Id="ARPNOREPAIR" Value="yes" />
-            <Property Id="ARPNOMODIFY" Value="yes" />
-            <Property Id="ARPHELPLINK" Value="https://github.com/yourusername/solitaire/issues" />
+            <!-- Standard MSI UI -->
+            <UIRef Id="WixUI_InstallDir" />
             
-            <!-- Installation scope choice -->
-            <Property Id="ApplicationFolderName" Value="Solitaire Essentials" />
-            <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
-            <WixVariable Id="WixUISupportPerUser" Value="1" />
-            <WixVariable Id="WixUISupportPerMachine" Value="1" />
+            <Feature Id="Complete" Level="1">
+              <ComponentRef Id="MainExecutables" />
+              <ComponentRef Id="GameLibraries" />
+              <ComponentRef Id="GameResources" />
+              <ComponentRef Id="StartMenuShortcuts" />
+              <ComponentGroupRef Id="DesktopShortcutsGroup" />
+            </Feature>
             
             <Directory Id="TARGETDIR" Name="SourceDir">
-              <!-- Program Files installation -->
               <Directory Id="ProgramFilesFolder">
-                <Directory Id="INSTALLFOLDER" Name="!(bind.Property.ApplicationFolderName)">
-                  
-                  <!-- Main application component -->
-                  <Component Id="MainExecutable" 
-                           Guid="93F5A218-4C3D-48E5-B85F-1E6C9D4A7B23"
-                           Win64="no">
-                    <File Id="MainEXE" 
-                          Name="solitaire.exe" 
-                          Source="solitaire.exe" 
-                          KeyPath="yes">
-                      <!-- File associations could go here -->
-                    </File>
-                    
-                    <!-- Game executables -->
-                    <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe"/>
-                    <File Id="SpiderEXE" Name="spider.exe" Source="spider.exe"/>
-                    
-                    <!-- Application files -->
-                    <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
-                    <File Id="SoundsZIP" Name="sound.zip" Source="sound.zip"/>
-                    <File Id="SolitaireIconFile" Name="solitaire.ico" Source="solitaire.ico"/>
-                    <File Id="FreecellIconFile" Name="freecell.ico" Source="freecell.ico"/>
-                    <File Id="SpiderIconFile" Name="spider.ico" Source="spider.ico"/>
-                    <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
-                    <File Id="README" Name="README.md" Source="README.md"/>
-                    <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
-                    <File Id="LICENSE_TXT" Name="LICENSE.txt" Source="LICENSE.txt"/>
-                    
-                    <!-- DLL files -->
-        $($dllEntries -join "`r`n")
-                    
-                    <!-- Registry entries for uninstall info -->
-                    <RegistryKey Root="HKLM" Key="SOFTWARE\Solitaire Essentials">
-                      <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
-                      <RegistryValue Type="string" Name="Version" Value="${{ needs.build-linux.outputs.version }}" />
-                      <RegistryValue Type="string" Name="Publisher" Value="Jason Brian Hall" />
-                    </RegistryKey>
-                  </Component>
-                  
-                  <!-- GTK Runtime directories -->
-                  <Directory Id="LibDir" Name="lib">
-                    <Directory Id="GdkPixbuf" Name="gdk-pixbuf-2.0">
-                      <Component Id="GdkPixbufDir" Guid="E5F7B982-D93A-4A42-A3B2-642D3F9E3F48">
-                        <CreateFolder />
-                        <RemoveFolder Id="RemoveGdkPixbuf" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
-                                     Type="integer" Name="GdkPixbuf" Value="1" KeyPath="yes"/>
-                      </Component>
-                    </Directory>
-                    <Directory Id="Gtk3" Name="gtk-3.0">
-                      <Component Id="Gtk3Dir" Guid="F8D4C159-8E2B-4B47-B9A3-753D2F9E4F59">
-                        <CreateFolder />
-                        <RemoveFolder Id="RemoveGtk3" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
-                                     Type="integer" Name="Gtk3" Value="1" KeyPath="yes"/>
-                      </Component>
-                    </Directory>
-                  </Directory>
-                  
-                  <Directory Id="ShareDir" Name="share">
-                    <Directory Id="GLib2" Name="glib-2.0">
-                      <Directory Id="Schemas" Name="schemas">
-                        <Component Id="GtkSchemas" Guid="A7C3D845-B6E1-4C53-8D1E-864F2F9E5F60">
-                          <File Id="GSchemas" Name="gschemas.compiled" 
-                                Source="share/glib-2.0/schemas/gschemas.compiled"/>
-                          <RemoveFolder Id="RemoveSchemas" On="uninstall" />
-                          <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
-                                       Type="integer" Name="Schemas" Value="1" KeyPath="yes"/>
-                        </Component>
-                      </Directory>
-                    </Directory>
-                    <Directory Id="Icons" Name="icons">
-                      <Component Id="IconsDir" Guid="B9E5F371-A4C2-4D64-92F4-975E3F9E6F71">
-                        <CreateFolder />
-                        <RemoveFolder Id="RemoveIcons" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
-                                     Type="integer" Name="Icons" Value="1" KeyPath="yes"/>
-                      </Component>
-                    </Directory>
-                    <Directory Id="Themes" Name="themes">
-                      <Component Id="ThemesDir" Guid="C2F6A482-B5D3-4E75-A3F5-086A4F9E7F82">
-                        <CreateFolder />
-                        <RemoveFolder Id="RemoveThemes" On="uninstall" />
-                        <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Components" 
-                                     Type="integer" Name="Themes" Value="1" KeyPath="yes"/>
-                      </Component>
-                    </Directory>
-                  </Directory>
-                </Directory>
+                <Directory Id="INSTALLFOLDER" Name="Solitaire Essentials" />
               </Directory>
-              
-              <!-- Start Menu shortcuts -->
               <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="Solitaire Essentials">
-                  <Component Id="ApplicationShortcuts" Guid="C8E2D459-F6A1-4B93-9C72-E31D8FE52D47">
-                    <Shortcut Id="ApplicationStartMenuKlondike" 
-                             Name="Solitaire" 
-                             Target="[INSTALLFOLDER]solitaire.exe" 
-                             WorkingDirectory="INSTALLFOLDER"
-                             Description="Play Classic Solitaire (Klondike)"
-                             Icon="SolitaireIcon"/>
-                    <Shortcut Id="ApplicationStartMenuFreeCell" 
-                             Name="FreeCell" 
-                             Target="[INSTALLFOLDER]freecell.exe" 
-                             WorkingDirectory="INSTALLFOLDER"
-                             Description="Play FreeCell Solitaire"
-                             Icon="FreecellIcon"/>
-                    <Shortcut Id="ApplicationStartMenuSpider"
-                             Name="Spider Solitaire"
-                             Target="[INSTALLFOLDER]spider.exe"
-                             WorkingDirectory="INSTALLFOLDER"
-                             Description="Play Spider Solitaire"
-                             Icon="SpiderIcon"/>
-                    <Shortcut Id="UninstallShortcut"
-                             Name="Uninstall Solitaire Essentials"
-                             Target="[SystemFolder]msiexec.exe"
-                             Arguments="/x [ProductCode]"
-                             Description="Uninstall Solitaire Essentials" />
-                    <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
-                    <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
-                                 Name="StartMenu" Type="integer" Value="1" KeyPath="yes"/>
-                  </Component>
-                </Directory>
+                <Directory Id="SolitaireMenuFolder" Name="Solitaire Essentials" />
               </Directory>
-              
-              <!-- Desktop shortcuts (optional) -->
-              <Directory Id="DesktopFolder" Name="Desktop">
-                <Component Id="SolitaireDesktopShortcut" Guid="D7F8E432-F9C8-4D79-9F2A-E53F7F9F9B84">
-                  <Condition>DESKTOP_SHORTCUT</Condition>
-                  <Shortcut Id="SolitaireDesktopShortcut" 
-                           Name="Solitaire" 
-                           Target="[INSTALLFOLDER]solitaire.exe"
-                           WorkingDirectory="INSTALLFOLDER"
-                           Description="Play Classic Solitaire (Klondike)"
-                           Icon="SolitaireIcon"/>
-                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
-                               Name="SolitaireDesktop" Type="integer" Value="1" KeyPath="yes"/>
-                </Component>
-                
-                <Component Id="FreecellDesktopShortcut" Guid="A3E9B241-C5D7-4E83-8A1B-F64C8F9D0C95">
-                  <Condition>DESKTOP_SHORTCUT</Condition>
-                  <Shortcut Id="FreecellDesktopShortcut" 
-                           Name="FreeCell" 
-                           Target="[INSTALLFOLDER]freecell.exe"
-                           WorkingDirectory="INSTALLFOLDER"
-                           Description="Play FreeCell Solitaire"
-                           Icon="FreecellIcon"/>
-                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
-                               Name="FreecellDesktop" Type="integer" Value="1" KeyPath="yes"/>
-                </Component>
-                
-                <Component Id="SpiderDesktopShortcut" Guid="B8F4A352-D6E8-4F94-9B2C-C75D9C0E1DA6">
-                  <Condition>DESKTOP_SHORTCUT</Condition>
-                  <Shortcut Id="SpiderDesktopShortcut" 
-                           Name="Spider Solitaire" 
-                           Target="[INSTALLFOLDER]spider.exe"
-                           WorkingDirectory="INSTALLFOLDER"
-                           Description="Play Spider Solitaire"
-                           Icon="SpiderIcon"/>
-                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
-                               Name="SpiderDesktop" Type="integer" Value="1" KeyPath="yes"/>
-                </Component>
-              </Directory>
+              <Directory Id="DesktopFolder" Name="Desktop" />
             </Directory>
             
-            <!-- Feature definitions -->
-            <Feature Id="ProductFeature" 
-                     Title="Solitaire Essentials" 
-                     Description="Classic card games including Klondike, FreeCell, and Spider Solitaire with GTK runtime."
-                     Level="1" 
-                     ConfigurableDirectory="INSTALLFOLDER"
-                     AllowAdvertise="no">
-              <ComponentRef Id="MainExecutable" />
-              <ComponentRef Id="ApplicationShortcuts" />
-              <ComponentRef Id="GtkSchemas" />
-              <ComponentRef Id="GdkPixbufDir" />
-              <ComponentRef Id="Gtk3Dir" />
-              <ComponentRef Id="IconsDir" />
-              <ComponentRef Id="ThemesDir" />
-            </Feature>
+            <DirectoryRef Id="INSTALLFOLDER">
+              <Component Id="MainExecutables" Guid="*">
+                <File Id="solitaire_exe" Name="solitaire.exe" Source="solitaire.exe" KeyPath="yes" />
+                <File Id="freecell_exe" Name="freecell.exe" Source="freecell.exe" />
+                <File Id="spider_exe" Name="spider.exe" Source="spider.exe" />
+              </Component>
+              
+              <Component Id="GameLibraries" Guid="*">
+                <File Id="libgtk_dll" Name="libgtk-3-0.dll" Source="libgtk-3-0.dll" />
+                $dllEntries
+              </Component>
+              
+              <Component Id="GameResources" Guid="*">
+                <File Id="cards_zip" Name="cards.zip" Source="cards.zip" />
+                <File Id="sound_zip" Name="sound.zip" Source="sound.zip" />
+                <File Id="readme_md" Name="README.md" Source="README.md" />
+                <File Id="license_md" Name="LICENSE.md" Source="LICENSE.md" />
+              </Component>
+            </DirectoryRef>
             
-            <Feature Id="DesktopShortcutFeature" 
-                     Title="Desktop Shortcuts" 
-                     Description="Create shortcuts on the desktop for all games."
-                     Level="1000">
-              <ComponentRef Id="SolitaireDesktopShortcut" />
-              <ComponentRef Id="FreecellDesktopShortcut" />
-              <ComponentRef Id="SpiderDesktopShortcut" />
-            </Feature>
+            <DirectoryRef Id="SolitaireMenuFolder">
+              <Component Id="StartMenuShortcuts" Guid="*">
+                <Shortcut Id="SolitaireStartMenuShortcut" 
+                          Name="Solitaire" 
+                          Target="[INSTALLFOLDER]solitaire.exe"
+                          Icon="solitaire.ico" />
+                <Shortcut Id="FreeCellStartMenuShortcut" 
+                          Name="FreeCell" 
+                          Target="[INSTALLFOLDER]freecell.exe"
+                          Icon="freecell.ico" />
+                <Shortcut Id="SpiderStartMenuShortcut" 
+                          Name="Spider Solitaire" 
+                          Target="[INSTALLFOLDER]spider.exe"
+                          Icon="spider.ico" />
+                <Shortcut Id="UninstallShortcut" 
+                          Name="Uninstall Solitaire Essentials" 
+                          Target="[System64Folder]msiexec.exe"
+                          Arguments="/x [ProductCode]" />
+                <RemoveFolder Id="SolitaireMenuFolder" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\Solitaire Essentials" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+              </Component>
+            </DirectoryRef>
             
-            <!-- Application icons -->
-            <Icon Id="SolitaireIcon" SourceFile="solitaire.ico"/>
-            <Icon Id="FreecellIcon" SourceFile="freecell.ico"/>
-            <Icon Id="SpiderIcon" SourceFile="spider.ico"/>
+            <DirectoryRef Id="DesktopFolder">
+              <Component Id="DesktopShortcuts" Guid="*">
+                <Condition>DESKTOP_SHORTCUT</Condition>
+                <Shortcut Id="DesktopSolitaireShortcut" 
+                          Name="Solitaire" 
+                          Target="[INSTALLFOLDER]solitaire.exe"
+                          Icon="solitaire.ico" />
+                <Shortcut Id="DesktopFreeCellShortcut" 
+                          Name="FreeCell" 
+                          Target="[INSTALLFOLDER]freecell.exe"
+                          Icon="freecell.ico" />
+                <Shortcut Id="DesktopSpiderShortcut" 
+                          Name="Spider Solitaire" 
+                          Target="[INSTALLFOLDER]spider.exe"
+                          Icon="spider.ico" />
+              </Component>
+            </DirectoryRef>
             
-            <!-- Custom actions for cleanup -->
-            <CustomAction Id="CleanupRegistryOnUninstall" 
-                         Script="vbscript"
-                         Execute="deferred"
-                         Impersonate="no">
-              <![CDATA[
-                On Error Resume Next
-                Set shell = CreateObject("WScript.Shell")
-                shell.RegDelete "HKLM\SOFTWARE\Solitaire Essentials\"
-                shell.RegDelete "HKCU\Software\SolitaireCollection\"
-              ]]>
-            </CustomAction>
+            <ComponentGroup Id="DesktopShortcutsGroup">
+              <ComponentRef Id="DesktopShortcuts" />
+            </ComponentGroup>
             
-            <InstallExecuteSequence>
-              <Custom Action="CleanupRegistryOnUninstall" Before="RemoveFiles">
-                REMOVE="ALL"
-              </Custom>
-            </InstallExecuteSequence>
+            <Icon Id="solitaire.ico" SourceFile="solitaire.ico" />
+            <Icon Id="freecell.ico" SourceFile="freecell.ico" />
+            <Icon Id="spider.ico" SourceFile="spider.ico" />
             
-            <!-- UI Configuration -->
-            <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
             <Property Id="DESKTOP_SHORTCUT" Value="1" />
-            
-            <UIRef Id="WixUI_FeatureTree" />
-            <UIRef Id="WixUI_ErrorProgressText" />
-            
           </Product>
         </Wix>
-        "@ | Out-File -FilePath "installer.wxs" -Encoding UTF8
+        "@ | Out-File -FilePath "Solitaire.wxs" -Encoding UTF8
+        
+        # Compile and link
+        candle.exe -o obj\ Solitaire.wxs -dWixUILicenseRtf="License.rtf"
+        light.exe -o Solitaire-GTK.msi obj\Solitaire.wixobj -ext WixUIExtension
 
-    - name: Create License RTF for Installer
-      working-directory: artifacts/build/windows
-      run: |
-        @"
-        {\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
-        \f0\fs24
-        MIT License\par
-        \par
-        Copyright (c) 2025 Jason Brian Hall\par
-        \par
-        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\par
-        \par
-        The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\par
-        \par
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\par
-        }
-        "@ | Out-File -FilePath "License.rtf" -Encoding UTF8
-
-    - name: Build MSI Installer
-      working-directory: artifacts/build/windows
-      run: |
-        # Debug: Show current directory and files
-        Write-Host "=== DEBUG: Current directory ==="
-        Get-Location
-        Write-Host "=== DEBUG: Files in current directory ==="
-        Get-ChildItem
-        
-        # Compile the installer
-        Write-Host "=== Building MSI installer ==="
-        & candle.exe installer.wxs
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Candle compilation failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-        
-        Write-Host "=== DEBUG: Files after candle ==="
-        Get-ChildItem
-        
-        & light.exe -ext WixUIExtension installer.wixobj -o "Solitaire-GTK.msi"
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Light linking failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-        
-        Write-Host "=== DEBUG: Files after light ==="
-        Get-ChildItem
-        
-        # Verify MSI was created
-        if (Test-Path "Solitaire-GTK.msi") {
-          Write-Host "✅ MSI installer created successfully: Solitaire-GTK.msi"
-          $msiSize = (Get-Item "Solitaire-GTK.msi").Length
-          Write-Host "MSI file size: $msiSize bytes"
-        } else {
-          Write-Error "❌ MSI file was not created!"
-          exit 1
-        }
-
-    - name: Upload MSI Installer
+    - name: Upload MSI Package
       uses: actions/upload-artifact@v4
       with:
         name: Solitaire-GTK.msi
         path: artifacts/build/windows/Solitaire-GTK.msi
-
-    - name: Upload Portable ZIP
-      uses: actions/upload-artifact@v4
-      with:
-        name: Solitaire-GTK-Portable.zip
-        path: Solitaire-GTK-Portable.zip
 
   build-msix-windows:
     needs: build-linux
@@ -530,71 +325,111 @@ jobs:
       run: |
         Expand-Archive -Path "Solitaire-GTK-Portable.zip" -DestinationPath "artifacts/build/windows/" -Force
 
+    - name: Create MSIX Package Directory Structure
+      run: |
+        # Create the basic directory structure
+        New-Item -ItemType Directory -Path "msix-package/Assets" -Force
+        New-Item -ItemType Directory -Path "msix-package/Files" -Force
+        
+        # Copy executables to Files subfolder
+        Copy-Item "artifacts/build/windows/solitaire.exe" "msix-package/Files/" -Force
+        Copy-Item "artifacts/build/windows/freecell.exe" "msix-package/Files/" -Force
+        Copy-Item "artifacts/build/windows/spider.exe" "msix-package/Files/" -Force
+        
+        # Copy DLLs to Files subfolder
+        Get-ChildItem "artifacts/build/windows/" -Filter "*.dll" | ForEach-Object {
+          Copy-Item $_.FullName "msix-package/Files/$($_.Name)" -Force
+        }
+        
+        # Copy share directory to Files subfolder
+        if (Test-Path "artifacts/build/windows/share") {
+          Copy-Item "artifacts/build/windows/share" "msix-package/Files/share" -Recurse -Force
+        }
+        
+        # Copy sound.zip and cards.zip to ROOT of MSIX package (NOT in Files/)
+        Copy-Item "artifacts/build/windows/sound.zip" "msix-package/sound.zip" -Force
+        Copy-Item "artifacts/build/windows/cards.zip" "msix-package/cards.zip" -Force
+
     - name: Create Microsoft Store Assets
       run: |
-        # Create package structure
-        New-Item -ItemType Directory -Path "msix-package" -Force
-        New-Item -ItemType Directory -Path "msix-package/Files" -Force
-        New-Item -ItemType Directory -Path "msix-package/Assets" -Force
-        
-        # Copy extracted files to msix package
-        Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
-        
-        # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
-        $freecellIcon = "artifacts/build/windows/freecell.png"
+        $freeCellIcon = "artifacts/build/windows/freecell.png"
         $spiderIcon = "artifacts/build/windows/spider.png"
         
-        # Fallback if PNGs don't exist
-        if (-not (Test-Path $solitaireIcon)) {
-          $solitaireIcon = "artifacts/build/windows/icon.png"
-        }
-        
-        # Verify at least one icon exists
-        if (-not (Test-Path $solitaireIcon)) {
-          Write-Error "No solitaire icon found"
-          exit 1
-        }
-        
-        Write-Host "Creating Microsoft Store compliant assets..."
-        
-        # Store Logo (50x50) - use main solitaire icon
-        & magick "$solitaireIcon" -resize 50x50 "msix-package/Assets/StoreLogo.scale-100.png"
-        & magick "$solitaireIcon" -resize 63x63 "msix-package/Assets/StoreLogo.scale-125.png"
-        & magick "$solitaireIcon" -resize 75x75 "msix-package/Assets/StoreLogo.scale-150.png"
-        & magick "$solitaireIcon" -resize 100x100 "msix-package/Assets/StoreLogo.scale-200.png"
-        
-        # Function to create assets for each game
+        # Function to create all scale variants
         function Create-GameAssets {
-          param($IconPath, $GameName)
+          param(
+            [string]$IconPath,
+            [string]$GameName
+          )
           
-          Write-Host "Creating assets for $GameName..."
+          if (-not (Test-Path $IconPath)) {
+            Write-Host "Warning: Icon not found at $IconPath"
+            return
+          }
           
-          # Square 44x44 Logo
-          & magick "$IconPath" -resize 44x44 "msix-package/Assets/${GameName}44x44.scale-100.png"
-          & magick "$IconPath" -resize 55x55 "msix-package/Assets/${GameName}44x44.scale-125.png"
-          & magick "$IconPath" -resize 66x66 "msix-package/Assets/${GameName}44x44.scale-150.png"
-          & magick "$IconPath" -resize 88x88 "msix-package/Assets/${GameName}44x44.scale-200.png"
+          # Load image
+          Add-Type -AssemblyName System.Drawing
+          $img = [System.Drawing.Image]::FromFile((Resolve-Path $IconPath))
           
-          # Square 150x150 Logo (main tile)
-          & magick "$IconPath" -resize 150x150 "msix-package/Assets/${GameName}Logo.scale-100.png"
-          & magick "$IconPath" -resize 188x188 "msix-package/Assets/${GameName}Logo.scale-125.png"
-          & magick "$IconPath" -resize 225x225 "msix-package/Assets/${GameName}Logo.scale-150.png"
-          & magick "$IconPath" -resize 300x300 "msix-package/Assets/${GameName}Logo.scale-200.png"
+          # Create scaled versions
+          $scales = @(100, 125, 150, 200)
+          foreach ($scale in $scales) {
+            $size = 150 * $scale / 100
+            $resized = New-Object System.Drawing.Bitmap($size, $size)
+            $graphics = [System.Drawing.Graphics]::FromImage($resized)
+            $graphics.DrawImage($img, 0, 0, $size, $size)
+            $graphics.Dispose()
+            
+            $filename = "msix-package/Assets/$($GameName)Logo.scale-$scale.png"
+            $resized.Save($filename)
+            $resized.Dispose()
+            
+            Write-Host "Created: $filename"
+          }
           
-          # Wide 310x150 Logo (wide tile)
-          & magick "$IconPath" -resize 150x150 -background "#0a5a2d" -gravity center -extent 310x150 "msix-package/Assets/${GameName}Wide.scale-100.png"
-          & magick "$IconPath" -resize 188x188 -background "#0a5a2d" -gravity center -extent 388x188 "msix-package/Assets/${GameName}Wide.scale-125.png"
-          & magick "$IconPath" -resize 225x225 -background "#0a5a2d" -gravity center -extent 465x225 "msix-package/Assets/${GameName}Wide.scale-150.png"
-          & magick "$IconPath" -resize 300x300 -background "#0a5a2d" -gravity center -extent 620x300 "msix-package/Assets/${GameName}Wide.scale-200.png"
+          # Create square tiles
+          foreach ($scale in $scales) {
+            $size = 44 * $scale / 100
+            $resized = New-Object System.Drawing.Bitmap($size, $size)
+            $graphics = [System.Drawing.Graphics]::FromImage($resized)
+            $graphics.DrawImage($img, 0, 0, $size, $size)
+            $graphics.Dispose()
+            
+            $filename = "msix-package/Assets/$($GameName)44x44.scale-$scale.png"
+            $resized.Save($filename)
+            $resized.Dispose()
+            
+            Write-Host "Created: $filename"
+          }
+          
+          # Create wide tiles
+          foreach ($scale in $scales) {
+            $width = 310 * $scale / 100
+            $height = 150 * $scale / 100
+            $resized = New-Object System.Drawing.Bitmap($width, $height)
+            $graphics = [System.Drawing.Graphics]::FromImage($resized)
+            $graphics.DrawImage($img, 0, 0, $width, $height)
+            $graphics.Dispose()
+            
+            $filename = "msix-package/Assets/$($GameName)Wide.scale-$scale.png"
+            $resized.Save($filename)
+            $resized.Dispose()
+            
+            Write-Host "Created: $filename"
+          }
+          
+          $img.Dispose()
         }
         
-        # Create assets for Solitaire
-        Create-GameAssets -IconPath $solitaireIcon -GameName "Solitaire"
+        # Create assets for Solitaire (main game)
+        if (Test-Path $solitaireIcon) {
+          Create-GameAssets -IconPath $solitaireIcon -GameName "Solitaire"
+        }
         
-        # Create assets for FreeCell (use freecell icon if available, otherwise solitaire)
-        if (Test-Path $freecellIcon) {
-          Create-GameAssets -IconPath $freecellIcon -GameName "FreeCell"
+        # Create assets for FreeCell
+        if (Test-Path $freeCellIcon) {
+          Create-GameAssets -IconPath $freeCellIcon -GameName "FreeCell"
         } else {
           Write-Host "FreeCell icon not found, using Solitaire icon"
           Create-GameAssets -IconPath $solitaireIcon -GameName "FreeCell"
@@ -699,6 +534,18 @@ jobs:
 
     - name: Build MSIX Package
       run: |
+        # Verify sound.zip and cards.zip are in the root
+        if (-not (Test-Path "msix-package/sound.zip")) {
+          Write-Error "sound.zip not found in MSIX package root!"
+          exit 1
+        }
+        if (-not (Test-Path "msix-package/cards.zip")) {
+          Write-Error "cards.zip not found in MSIX package root!"
+          exit 1
+        }
+        
+        Write-Host "Verified sound.zip and cards.zip are in MSIX package root"
+        
         # Use Windows SDK MakeAppx tool to create MSIX
         $makeAppxPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.22621.0\x64\makeappx.exe"
         
@@ -769,7 +616,7 @@ jobs:
     - name: Download Portable Artifact
       uses: actions/download-artifact@v4
       with:
-        name: Solitaire-GTK-Portable.zip
+        name: solitaire-build
         path: release
 
     - name: Create GitHub Release
