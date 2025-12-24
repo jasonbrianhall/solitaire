@@ -17,6 +17,12 @@
 
 #ifdef _WIN32
 
+std::string getExecutableDir() { 
+    char buffer[MAX_PATH]; GetModuleFileNameA(NULL, buffer, MAX_PATH); 
+    std::string path(buffer); size_t pos = path.find_last_of("\\/"); 
+    return (pos == std::string::npos) ? "." : path.substr(0, pos); 
+}
+
 std::string getPackagePath() {
     UINT32 length = 0;
     LONG rc = GetCurrentPackagePath(&length, nullptr);
@@ -107,7 +113,7 @@ SolitaireGame::SolitaireGame()
       multi_deck_(1), // Initialize with 1 deck
       sound_enabled_(true),           // Set sound to enabled by default
 #ifdef WIN32
-      sounds_zip_path_(getPackagePath() + "\\sound.zip"),
+      sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
 #else
       sounds_zip_path_("sound.zip"),
 #endif
@@ -165,7 +171,7 @@ void SolitaireGame::initializeGame() {
     try {
       // Try to find cards.zip in several common locations
 #ifdef _WIN32
-      const std::vector<std::string> paths = {getPackagePath() + "\\cards.zip"};
+      const std::vector<std::string> paths = {getExecutableDir() + "\\cards.zip"};
 #else
       const std::vector<std::string> paths = {"cards.zip"};
 #endif
@@ -185,7 +191,7 @@ void SolitaireGame::initializeGame() {
       if (!loaded) {
         std::cerr << "Failed to find cards.zip in any of the expected locations.\n";
 #ifdef _WIN32
-        showDirectoryStructureDialog(getPackagePath());
+        showDirectoryStructureDialog(getExecutableDir());
 #else
         showDirectoryStructureDialog(".");
 #endif
