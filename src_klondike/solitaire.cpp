@@ -1312,12 +1312,18 @@ void SolitaireGame::dealTestLayout() {
 void SolitaireGame::initializeSettingsDir() {
 #ifdef _WIN32
     char app_data[MAX_PATH];
-    if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data) != S_OK) {
+    HRESULT hr = SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data);
+    if (hr != S_OK) {
+        std::cerr << "SHGetFolderPathA failed with code: " << hr << std::endl;
         settings_dir_ = "./";
         return;
     }
+    std::cerr << "AppData path: " << app_data << std::endl;
     settings_dir_ = std::string(app_data) + "\\Solitaire";
-    CreateDirectoryA(settings_dir_.c_str(), NULL);
+    std::cerr << "Settings dir: " << settings_dir_ << std::endl;
+    if (!CreateDirectoryA(settings_dir_.c_str(), NULL)) {
+        std::cerr << "CreateDirectoryA failed, error: " << GetLastError() << std::endl;
+    }
 #else
     const char *home = getenv("HOME");
     if (!home) {
