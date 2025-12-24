@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sys/stat.h>
 #ifdef _WIN32
+#include <shlobj.h>
+#include <windows.h>
 #include <direct.h>
 #endif
 

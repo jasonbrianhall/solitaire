@@ -7,6 +7,8 @@
 #include <array>
 #ifdef _WIN32
 #include <direct.h>
+#include <shlobj.h>
+#include <windows.h>
 #endif
 
 SolitaireGame::SolitaireGame()
