@@ -27,7 +27,7 @@ FreecellGame::FreecellGame()
   srand(time(NULL));  // Seed the random number generator with current time
   current_seed_ = rand();  // Generate random seed
   initializeGame();
-  initializeSettingsDir();
+  //initializeSettingsDir();
   initializeAudio();
 }
 
@@ -1160,18 +1160,12 @@ void FreecellGame::cleanupCardCache() {
 void FreecellGame::initializeSettingsDir() {
 #ifdef _WIN32
     char app_data[MAX_PATH];
-    HRESULT hr = SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data);
-    if (hr != S_OK) {
-        std::cerr << "SHGetFolderPathA failed with code: " << hr << std::endl;
+    if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data) != S_OK) {
         settings_dir_ = "./";
         return;
     }
-    std::cerr << "AppData path: " << app_data << std::endl;
     settings_dir_ = std::string(app_data) + "\\Solitaire";
-    std::cerr << "Settings dir: " << settings_dir_ << std::endl;
-    if (!CreateDirectoryA(settings_dir_.c_str(), NULL)) {
-        std::cerr << "CreateDirectoryA failed, error: " << GetLastError() << std::endl;
-    }
+    CreateDirectoryA(settings_dir_.c_str(), NULL);
 #else
     const char *home = getenv("HOME");
     if (!home) {
@@ -1197,23 +1191,41 @@ bool FreecellGame::loadSettings() {
 #endif
       ;
 
-  std::cerr << "Attempting to load settings from: " << settings_file << std::endl;
-  
   std::ifstream file(settings_file);
   if (!file) {
     std::cerr << "Failed to open settings file" << std::endl;
     return false;
   }
 
+  // Read settings from file (can be extended as needed)
   std::string line;
   while (std::getline(file, line)) {
-    if (line.length() >= 10 && line.substr(0, 10) == "card_back=") {  // Check length first!
-      custom_back_path_ = line.substr(10);
-      std::cerr << "Loaded custom back path: " << custom_back_path_ << std::endl;
-    }
+    // Process settings here
   }
 
   return true;
+}
+
+void FreecellGame::saveSettings() {
+  if (settings_dir_.empty()) {
+    return;
+  }
+
+  std::string settings_file = settings_dir_ +
+#ifdef _WIN32
+                              "\\settings.txt"
+#else
+                              "/settings.txt"
+#endif
+      ;
+
+  std::ofstream file(settings_file);
+  if (!file) {
+    std::cerr << "Could not save settings" << std::endl;
+    return;
+  }
+
+  // Write settings to file (can be extended as needed)
 }
 
 void FreecellGame::refreshDisplay() {
