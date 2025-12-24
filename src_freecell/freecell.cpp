@@ -66,7 +66,7 @@ void FreecellGame::initializeGame() {
 #endif
 
   if (debug_log.is_open()) {
-    debug_log << "\n=== Game Initialization at " << __TIME__ << " ===" << std::endl;
+    debug_log << "\n=== Game Initialization ===" << std::endl;
   }
   
   try {
@@ -102,29 +102,27 @@ void FreecellGame::initializeGame() {
     for (const auto &path : paths) {
       try {
         if (debug_log.is_open()) {
-          debug_log << "Attempting to load cards.zip from: " << path << std::endl;
+          debug_log << "Trying: " << path << std::endl;
         }
         
         if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
-          // Initialize a single deck for Classic FreeCell
           deck_ = cardlib::Deck(path);
           deck_.removeJokers();
         } else {
-          // Initialize a MultiDeck with 2 decks for Double FreeCell
           multi_deck_ = cardlib::MultiDeck(2, path);
           multi_deck_.includeJokersInAllDecks(false);
           has_multi_deck_ = true;
         }
         
         if (debug_log.is_open()) {
-          debug_log << "SUCCESS: Loaded cards from: " << path << std::endl;
+          debug_log << "SUCCESS: " << path << std::endl;
         }
         loaded = true;
         break;
       } catch (const std::exception &e) {
         last_error = e.what();
         if (debug_log.is_open()) {
-          debug_log << "FAILED to load from " << path << ": " << e.what() << std::endl;
+          debug_log << "FAILED: " << path << " - " << e.what() << std::endl;
         }
       }
     }
@@ -133,7 +131,6 @@ void FreecellGame::initializeGame() {
       std::string error_msg = "Could not find cards.zip in any search path";
       if (debug_log.is_open()) {
         debug_log << "ERROR: " << error_msg << std::endl;
-        debug_log.close();
       }
       throw std::runtime_error(error_msg);
     }
@@ -153,9 +150,9 @@ void FreecellGame::initializeGame() {
     animated_foundation_cards_.resize(4);
     for (auto& pile : animated_foundation_cards_) {
       if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
-        pile.resize(13, false);  // 13 cards per foundation in classic mode
+        pile.resize(13, false);
       } else {
-        pile.resize(26, false);  // 26 cards per foundation in double mode (2 full sequences)
+        pile.resize(26, false);
       }
     }
 
@@ -169,102 +166,12 @@ void FreecellGame::initializeGame() {
 
   } catch (const std::exception &e) {
     if (debug_log.is_open()) {
-      debug_log << "FATAL ERROR during game initialization: " << e.what() << std::endl;
+      debug_log << "FATAL: " << e.what() << std::endl;
       debug_log.close();
     }
     exit(1);
   }
 }
-  try {
-    // Try to find cards.zip in several common locations
-    std::vector<std::string> paths;
-    
-    // Add current directory
-    paths.push_back("cards.zip");
-    
-#ifdef _WIN32
-    // On Windows, also try the directory of the executable
-    char exe_path[MAX_PATH];
-    if (GetModuleFileNameA(NULL, exe_path, MAX_PATH) != 0) {
-      std::string exe_dir(exe_path);
-      size_t last_slash = exe_dir.find_last_of("\/");
-      if (last_slash != std::string::npos) {
-        exe_dir = exe_dir.substr(0, last_slash);
-        paths.push_back(exe_dir + "\cards.zip");
-        std::cerr << "Searching for cards.zip in: " << exe_dir << std::endl;
-      }
-    }
-#else
-    // On Unix/Linux, try common locations
-    paths.push_back("/usr/share/games/freecell/cards.zip");
-    paths.push_back("./cards.zip");
-#endif
-
-    bool loaded = false;
-    std::string last_error;
-    
-    for (const auto &path : paths) {
-      try {
-        std::cerr << "Attempting to load cards.zip from: " << path << std::endl;
-        
-        if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
-          // Initialize a single deck for Classic FreeCell
-          deck_ = cardlib::Deck(path);
-          deck_.removeJokers();
-        } else {
-          // Initialize a MultiDeck with 2 decks for Double FreeCell
-          multi_deck_ = cardlib::MultiDeck(2, path);
-          multi_deck_.includeJokersInAllDecks(false);
-          has_multi_deck_ = true;
-        }
-        
-        std::cerr << "Successfully loaded cards from: " << path << std::endl;
-        loaded = true;
-        break;
-      } catch (const std::exception &e) {
-        last_error = e.what();
-        std::cerr << "Failed to load cards from " << path << ": " << e.what()
-                  << std::endl;
-      }
-    }
-
-    if (!loaded) {
-      std::string error_msg = "Could not find cards.zip in any search path";
-      std::cerr << error_msg << std::endl;
-      throw std::runtime_error(error_msg);
-    }
-
-    // Shuffle with current seed
-    if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
-      deck_.shuffle(current_seed_);
-    } else {
-      multi_deck_.shuffle(current_seed_);
-    }
-
-    // Update layout based on game mode
-    updateLayoutForGameMode();
-    
-    // Initialize the foundation cards tracking vector
-    animated_foundation_cards_.clear();
-    animated_foundation_cards_.resize(4);
-    for (auto& pile : animated_foundation_cards_) {
-      if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
-        pile.resize(13, false);  // 13 cards per foundation in classic mode
-      } else {
-        pile.resize(26, false);  // 26 cards per foundation in double mode (2 full sequences)
-      }
-    }
-
-    // Deal cards
-    deal();
-
-  } catch (const std::exception &e) {
-    std::cerr << "Fatal error during game initialization: " << e.what()
-              << std::endl;
-    exit(1);
-  }
-}
-
 
 void FreecellGame::deal() {
   // Clear all piles first
