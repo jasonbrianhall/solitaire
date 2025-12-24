@@ -7,8 +7,36 @@
 #include <direct.h>
 #include <windows.h>  // For Sleep function on Windows
 #include <shlobj.h>
+#include <appmodel.h>
+#include <vector>
 #else
 #include <unistd.h>   // For usleep function on Unix/Linux
+#endif
+
+
+#ifdef _WIN32
+
+std::string getPackagePath() {
+    UINT32 length = 0;
+    LONG rc = GetCurrentPackagePath(&length, nullptr);
+    if (rc != ERROR_INSUFFICIENT_BUFFER) {
+        return "";
+    }
+
+    std::vector<wchar_t> buffer(length);
+    rc = GetCurrentPackagePath(&length, buffer.data());
+    if (rc != ERROR_SUCCESS) {
+        return "";
+    }
+
+    // Convert wide string to UTF‑8
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, buffer.data(), -1, nullptr, 0, nullptr, nullptr);
+    std::string path(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, buffer.data(), -1, &path[0], size_needed, nullptr, nullptr);
+
+    return path;
+}
+
 #endif
 
 SolitaireGame::SolitaireGame()
@@ -25,7 +53,11 @@ SolitaireGame::SolitaireGame()
       current_game_mode_(GameMode::STANDARD_KLONDIKE),
       multi_deck_(1), // Initialize with 1 deck
       sound_enabled_(true),           // Set sound to enabled by default
+#ifdef WIN32
+      sounds_zip_path_(getPackagePath() + "\\sound.zip"),
+#else
       sounds_zip_path_("sound.zip"),
+#endif
       current_seed_(0) { // Initialize to 0 temporarily
   srand(time(NULL));  // Seed the random number generator with current time
   initializeAudio();
@@ -33,7 +65,6 @@ SolitaireGame::SolitaireGame()
    usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second); timing issue; doesn't initialize the sound before the game is loaded.
 #endif  
   current_seed_ = rand();  
-  initializeGame();
   initializeSettingsDir();
   loadSettings();
 }
@@ -48,9 +79,12 @@ SolitaireGame::~SolitaireGame() {
   cleanupAudio();
 }
 
+
+
 void SolitaireGame::run(int argc, char **argv) {
   gtk_init(&argc, &argv);
   setupWindow();
+  initializeGame();  // Initialize game after GTK is ready and window exists
   setupGameArea();
   gtk_main();
 }
@@ -60,8 +94,11 @@ void SolitaireGame::initializeGame() {
     // Original single-deck initialization
     try {
       // Try to find cards.zip in several common locations
+#ifdef _WIN32
+      const std::vector<std::string> paths = {getPackagePath() + "\\cards.zip"};
+#else
       const std::vector<std::string> paths = {"cards.zip"};
-
+#endif
       bool loaded = false;
       for (const auto &path : paths) {
         try {
@@ -76,7 +113,8 @@ void SolitaireGame::initializeGame() {
       }
 
       if (!loaded) {
-        throw std::runtime_error("Could not find cards.zip in any search path");
+        showMissingFileDialog("cards.zip", "Card images are required to play this game.");
+        exit(2); // Exit code 2: Missing required cards.zip
       }
       
       deck_.shuffle(current_seed_);
@@ -99,7 +137,8 @@ void SolitaireGame::initializeGame() {
     } catch (const std::exception &e) {
       std::cerr << "Fatal error during game initialization: " << e.what()
                 << std::endl;
-      exit(1);
+      showErrorDialog("Game Initialization Error", e.what());
+      exit(1); // Exit code 1: General fatal error
     }
   } else {
     // Multi-deck initialization
@@ -1991,4 +2030,42 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_stroke(cr);
   
   cairo_restore(cr);
+}
+
+void SolitaireGame::showMissingFileDialog(const std::string &filename, 
+                                          const std::string &details) {
+  // Create a dialog to show missing file error
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_),
+      GTK_DIALOG_DESTROY_WITH_PARENT,
+      GTK_MESSAGE_ERROR,
+      GTK_BUTTONS_OK,
+      "Missing Required File");
+  
+  // Set detailed message
+  std::string message = "Could not find " + filename + ".\n\n" + details + 
+                        "\n\nPlease ensure the file is in the application directory.";
+  gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), 
+                                           "%s", message.c_str());
+  
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
+}
+
+void SolitaireGame::showErrorDialog(const std::string &title, 
+                                    const std::string &message) {
+  // Create a dialog to show error
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window_),
+      GTK_DIALOG_DESTROY_WITH_PARENT,
+      GTK_MESSAGE_ERROR,
+      GTK_BUTTONS_OK,
+      "%s", title.c_str());
+  
+  // Set detailed message
+  gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), 
+                                           "%s", message.c_str());
+  
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 }

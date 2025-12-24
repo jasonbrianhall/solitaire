@@ -313,6 +313,8 @@ private:
 
 void showHowToPlay();
 void showKeyboardShortcuts();
+void showMissingFileDialog(const std::string &filename, const std::string &details);
+void showErrorDialog(const std::string &title, const std::string &message);
 
 // In the private: section of the SolitaireGame class in solitaire.h
 
