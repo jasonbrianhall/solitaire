@@ -11,6 +11,7 @@
 #include <vector>
 #else
 #include <unistd.h>   // For usleep function on Unix/Linux
+#include <dirent.h>   // For directory listing on Unix/Linux
 #endif
 
 
@@ -38,6 +39,58 @@ std::string getPackagePath() {
 }
 
 #endif
+
+// Helper function to get directory structure as a string for debugging
+std::string getDirectoryStructure(const std::string &directory = ".") {
+  std::string result;
+  result += "=== Directory Structure ===\n";
+  result += "Directory: " + directory + "\n";
+  result += "Absolute path: ";
+  
+  char cwd[1024];
+#ifdef _WIN32
+  if (_getcwd(cwd, sizeof(cwd)) != nullptr) {
+#else
+  if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+#endif
+    result += cwd;
+  } else {
+    result += "(unable to determine)";
+  }
+  result += "\n\nContents:\n";
+  
+#ifdef _WIN32
+  WIN32_FIND_DATAA findData;
+  HANDLE findHandle = FindFirstFileA((directory + "\\*").c_str(), &findData);
+  
+  if (findHandle != INVALID_HANDLE_VALUE) {
+    do {
+      std::string name = findData.cFileName;
+      std::string type = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? "[DIR]" : "[FILE]";
+      result += "  " + type + " " + name + "\n";
+    } while (FindNextFileA(findHandle, &findData));
+    FindClose(findHandle);
+  } else {
+    result += "  (unable to read directory)\n";
+  }
+#else
+  DIR *dir = opendir(directory.c_str());
+  if (dir != nullptr) {
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != nullptr) {
+      std::string name = entry->d_name;
+      std::string type = (entry->d_type == DT_DIR) ? "[DIR]" : "[FILE]";
+      result += "  " + type + " " + name + "\n";
+    }
+    closedir(dir);
+  } else {
+    result += "  (unable to read directory)\n";
+  }
+#endif
+  
+  result += "=== End Directory Structure ===\n";
+  return result;
+}
 
 SolitaireGame::SolitaireGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
@@ -130,6 +183,12 @@ void SolitaireGame::initializeGame() {
       }
 
       if (!loaded) {
+        std::cerr << "Failed to find cards.zip in any of the expected locations.\n";
+#ifdef _WIN32
+        showDirectoryStructureDialog(getPackagePath());
+#else
+        showDirectoryStructureDialog(".");
+#endif
         showMissingFileDialog("cards.zip", "Card images are required to play this game.");
         exit(2); // Exit code 2: Missing required cards.zip
       }
@@ -2050,6 +2109,55 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_stroke(cr);
   
   cairo_restore(cr);
+}
+
+void SolitaireGame::showDirectoryStructureDialog(const std::string &directory) {
+  // Create dialog with OK button
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      "Directory Contents - Debugging Info",
+      GTK_WINDOW(window_),
+      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
+      "OK", GTK_RESPONSE_OK, NULL);
+
+  // Set dialog size
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 400);
+
+  // Create and configure the content area
+  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
+
+  // Create a text view for the directory contents
+  GtkWidget *text_view = gtk_text_view_new();
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD);
+  gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+  gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(text_view), FALSE);
+  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(text_view), 8);
+  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(text_view), 8);
+
+  // Use monospace font for better readability
+  PangoFontDescription *font_desc = pango_font_description_from_string("Monospace 10");
+  gtk_widget_override_font(text_view, font_desc);
+  pango_font_description_free(font_desc);
+
+  // Get directory structure as string
+  std::string dir_info = getDirectoryStructure(directory);
+
+  // Set the text
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+  gtk_text_buffer_set_text(buffer, dir_info.c_str(), -1);
+
+  // Add text view to a scrolled window
+  GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_size_request(scrolled_window, 550, 350);
+  gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
+  gtk_container_add(GTK_CONTAINER(content_area), scrolled_window);
+
+  // Show all widgets and run the dialog
+  gtk_widget_show_all(dialog);
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 }
 
 void SolitaireGame::showMissingFileDialog(const std::string &filename, 

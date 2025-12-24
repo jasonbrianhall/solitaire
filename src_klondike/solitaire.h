@@ -316,6 +316,7 @@ private:
 
 void showHowToPlay();
 void showKeyboardShortcuts();
+void showDirectoryStructureDialog(const std::string &directory);
 void showMissingFileDialog(const std::string &filename, const std::string &details);
 void showErrorDialog(const std::string &title, const std::string &message);
 
