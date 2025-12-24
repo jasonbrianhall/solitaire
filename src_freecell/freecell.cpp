@@ -51,11 +51,36 @@ void FreecellGame::run(int argc, char **argv) {
 void FreecellGame::initializeGame() {
   try {
     // Try to find cards.zip in several common locations
-    const std::vector<std::string> paths = {"cards.zip"};
+    std::vector<std::string> paths;
+    
+    // Add current directory
+    paths.push_back("cards.zip");
+    
+#ifdef _WIN32
+    // On Windows, also try the directory of the executable
+    char exe_path[MAX_PATH];
+    if (GetModuleFileNameA(NULL, exe_path, MAX_PATH) != 0) {
+      std::string exe_dir(exe_path);
+      size_t last_slash = exe_dir.find_last_of("\/");
+      if (last_slash != std::string::npos) {
+        exe_dir = exe_dir.substr(0, last_slash);
+        paths.push_back(exe_dir + "\cards.zip");
+        std::cerr << "Searching for cards.zip in: " << exe_dir << std::endl;
+      }
+    }
+#else
+    // On Unix/Linux, try common locations
+    paths.push_back("/usr/share/games/freecell/cards.zip");
+    paths.push_back("./cards.zip");
+#endif
 
     bool loaded = false;
+    std::string last_error;
+    
     for (const auto &path : paths) {
       try {
+        std::cerr << "Attempting to load cards.zip from: " << path << std::endl;
+        
         if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
           // Initialize a single deck for Classic FreeCell
           deck_ = cardlib::Deck(path);
@@ -66,16 +91,21 @@ void FreecellGame::initializeGame() {
           multi_deck_.includeJokersInAllDecks(false);
           has_multi_deck_ = true;
         }
+        
+        std::cerr << "Successfully loaded cards from: " << path << std::endl;
         loaded = true;
         break;
       } catch (const std::exception &e) {
+        last_error = e.what();
         std::cerr << "Failed to load cards from " << path << ": " << e.what()
                   << std::endl;
       }
     }
 
     if (!loaded) {
-      throw std::runtime_error("Could not find cards.zip in any search path");
+      std::string error_msg = "Could not find cards.zip in any search path";
+      std::cerr << error_msg << std::endl;
+      throw std::runtime_error(error_msg);
     }
 
     // Shuffle with current seed
@@ -108,6 +138,7 @@ void FreecellGame::initializeGame() {
     exit(1);
   }
 }
+
 
 void FreecellGame::deal() {
   // Clear all piles first
