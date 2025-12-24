@@ -34,8 +34,8 @@ SolitaireGame::SolitaireGame()
 #endif  
   current_seed_ = rand();  // Generate random seed - THIS LINE WAS MISSING A SEMICOLON!
   initializeGame();
-  initializeSettingsDir();
-  loadSettings();
+  //initializeSettingsDir();
+  //loadSettings();
 }
 
 SolitaireGame::~SolitaireGame() {
