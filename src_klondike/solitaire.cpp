@@ -32,7 +32,7 @@ SolitaireGame::SolitaireGame()
 #ifndef _WIN32
    usleep(100000);  // Unix/Linux usleep takes microseconds (1/1,000,000 of a second); timing issue; doesn't initialize the sound before the game is loaded.
 #endif  
-  current_seed_ = rand();  // Generate random seed - THIS LINE WAS MISSING A SEMICOLON!
+  current_seed_ = rand();  
   initializeGame();
   initializeSettingsDir();
   loadSettings();

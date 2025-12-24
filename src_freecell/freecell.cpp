@@ -1157,7 +1157,7 @@ void FreecellGame::cleanupCardCache() {
   card_surface_cache_.clear();
 }
 
-void FreecellGame::initializeSettingsDir() {
+/*void FreecellGame::initializeSettingsDir() {
 #ifdef _WIN32
     char app_data[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data) != S_OK) {
@@ -1177,7 +1177,7 @@ void FreecellGame::initializeSettingsDir() {
 #endif
 }
 
-/*bool FreecellGame::loadSettings() {
+bool FreecellGame::loadSettings() {
   if (settings_dir_.empty()) {
     std::cerr << "Settings directory is empty" << std::endl;
     return false;

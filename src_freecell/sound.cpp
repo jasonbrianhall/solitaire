@@ -310,6 +310,6 @@ bool FreecellGame::setSoundsZipPath(const std::string &path) {
   }
 
   // Save the new path to settings
-  saveSettings();
+  //saveSettings();
   return true;
 }
