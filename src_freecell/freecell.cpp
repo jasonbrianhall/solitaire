@@ -1177,7 +1177,7 @@ void FreecellGame::initializeSettingsDir() {
 #endif
 }
 
-bool FreecellGame::loadSettings() {
+/*bool FreecellGame::loadSettings() {
   if (settings_dir_.empty()) {
     std::cerr << "Settings directory is empty" << std::endl;
     return false;
@@ -1226,7 +1226,7 @@ void FreecellGame::saveSettings() {
   }
 
   // Write settings to file (can be extended as needed)
-}
+}*/
 
 void FreecellGame::refreshDisplay() {
   if (game_area_) {

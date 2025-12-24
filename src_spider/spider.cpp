@@ -30,9 +30,9 @@ SolitaireGame::SolitaireGame()
   srand(time(NULL));  // Seed the random number generator with current time
   current_seed_ = rand();  // Generate random seed
   initializeGame();
-  //initializeSettingsDir();
+  initializeSettingsDir();
   initializeAudio();
-  //loadSettings();
+  loadSettings();
 }
 
 SolitaireGame::~SolitaireGame() {
