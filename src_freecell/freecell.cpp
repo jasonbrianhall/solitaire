@@ -49,31 +49,9 @@ void FreecellGame::run(int argc, char **argv) {
 }
 
 void FreecellGame::initializeGame() {
-  // Open debug log file
-  std::ofstream debug_log;
-#ifdef _WIN32
-  char app_data[MAX_PATH];
-  if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data) == S_OK) {
-    std::string log_path = std::string(app_data) + "\\Freecell\\debug.log";
-    debug_log.open(log_path, std::ios::app);
-  }
-#else
-  const char *home = getenv("HOME");
-  if (home) {
-    std::string log_path = std::string(home) + "/.freecell/debug.log";
-    debug_log.open(log_path, std::ios::app);
-  }
-#endif
-
-  if (debug_log.is_open()) {
-    debug_log << "\n=== Game Initialization ===" << std::endl;
-  }
-  
   try {
     // Try to find cards.zip in several common locations
     std::vector<std::string> paths;
-    
-    // Add current directory
     paths.push_back("cards.zip");
     
 #ifdef _WIN32
@@ -85,26 +63,16 @@ void FreecellGame::initializeGame() {
       if (last_slash != std::string::npos) {
         exe_dir = exe_dir.substr(0, last_slash);
         paths.push_back(exe_dir + "\\cards.zip");
-        if (debug_log.is_open()) {
-          debug_log << "Executable directory: " << exe_dir << std::endl;
-        }
       }
     }
 #else
-    // On Unix/Linux, try common locations
     paths.push_back("/usr/share/games/freecell/cards.zip");
     paths.push_back("./cards.zip");
 #endif
 
     bool loaded = false;
-    std::string last_error;
-    
     for (const auto &path : paths) {
       try {
-        if (debug_log.is_open()) {
-          debug_log << "Trying: " << path << std::endl;
-        }
-        
         if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
           deck_ = cardlib::Deck(path);
           deck_.removeJokers();
@@ -113,26 +81,15 @@ void FreecellGame::initializeGame() {
           multi_deck_.includeJokersInAllDecks(false);
           has_multi_deck_ = true;
         }
-        
-        if (debug_log.is_open()) {
-          debug_log << "SUCCESS: " << path << std::endl;
-        }
         loaded = true;
         break;
       } catch (const std::exception &e) {
-        last_error = e.what();
-        if (debug_log.is_open()) {
-          debug_log << "FAILED: " << path << " - " << e.what() << std::endl;
-        }
+        // Try next path
       }
     }
 
     if (!loaded) {
-      std::string error_msg = "Could not find cards.zip in any search path";
-      if (debug_log.is_open()) {
-        debug_log << "ERROR: " << error_msg << std::endl;
-      }
-      throw std::runtime_error(error_msg);
+      throw std::runtime_error("Could not find cards.zip");
     }
 
     // Shuffle with current seed
@@ -158,18 +115,12 @@ void FreecellGame::initializeGame() {
 
     // Deal cards
     deal();
-    
-    if (debug_log.is_open()) {
-      debug_log << "Game initialized successfully" << std::endl;
-      debug_log.close();
-    }
 
   } catch (const std::exception &e) {
-    if (debug_log.is_open()) {
-      debug_log << "FATAL: " << e.what() << std::endl;
-      debug_log.close();
-    }
-    exit(1);
+      std::cerr << "Fatal error during game initialization: " << e.what()
+                << std::endl;
+
+      exit(1);
   }
 }
 
