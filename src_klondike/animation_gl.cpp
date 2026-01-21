@@ -484,6 +484,12 @@ void SolitaireGame::stopWinAnimation_gl() {
 gboolean SolitaireGame::onAnimationTick_gl(gpointer data) {
     SolitaireGame *game = static_cast<SolitaireGame *>(data);
     game->updateWinAnimation_gl();
+    
+    // Force redraw after animation update
+    if (game->gl_area_) {
+        gtk_widget_queue_draw(game->gl_area_);
+    }
+    
     return game->win_animation_active_ ? TRUE : FALSE;
 }
 
@@ -709,6 +715,12 @@ void SolitaireGame::updateDealAnimation_gl() {
 gboolean SolitaireGame::onDealAnimationTick_gl(gpointer data) {
     SolitaireGame *game = static_cast<SolitaireGame *>(data);
     game->updateDealAnimation_gl();
+    
+    // Force redraw after animation update
+    if (game->gl_area_) {
+        gtk_widget_queue_draw(game->gl_area_);
+    }
+    
     return game->deal_animation_active_ ? TRUE : FALSE;
 }
 
@@ -817,6 +829,12 @@ void SolitaireGame::startFoundationMoveAnimation_gl(const cardlib::Card &card,
 gboolean SolitaireGame::onFoundationMoveAnimationTick_gl(gpointer data) {
     SolitaireGame *game = static_cast<SolitaireGame *>(data);
     game->updateFoundationMoveAnimation_gl();
+    
+    // Force redraw after animation update
+    if (game->gl_area_) {
+        gtk_widget_queue_draw(game->gl_area_);
+    }
+    
     return game->foundation_move_animation_active_ ? TRUE : FALSE;
 }
 
@@ -921,6 +939,12 @@ void SolitaireGame::startStockToWasteAnimation_gl() {
 gboolean SolitaireGame::onStockToWasteAnimationTick_gl(gpointer data) {
     SolitaireGame *game = static_cast<SolitaireGame *>(data);
     game->updateStockToWasteAnimation_gl();
+    
+    // Force redraw after animation update
+    if (game->gl_area_) {
+        gtk_widget_queue_draw(game->gl_area_);
+    }
+    
     return game->stock_to_waste_animation_active_ ? TRUE : FALSE;
 }
 
@@ -988,19 +1012,49 @@ void SolitaireGame::drawAnimatedCard_gl(const AnimatedCard &anim_card,
 
     glm::mat4 model = glm::mat4(1.0f);
     
+    // With 0-1 vertex coordinates, center is at (0.5, 0.5) in local space
     model = glm::translate(model, glm::vec3(anim_card.x, anim_card.y, 0.0f));
-    model = glm::translate(model, glm::vec3(current_card_width_ / 2.0f, 
-                                             current_card_height_ / 2.0f, 0.0f));
+    model = glm::translate(model, glm::vec3(current_card_width_ * 0.5f, 
+                                             current_card_height_ * 0.5f, 0.0f));
     model = glm::rotate(model, static_cast<float>(anim_card.rotation), 
                         glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::translate(model, glm::vec3(-current_card_width_ / 2.0f, 
-                                             -current_card_height_ / 2.0f, 0.0f));
+    model = glm::translate(model, glm::vec3(-current_card_width_ * 0.5f, 
+                                             -current_card_height_ * 0.5f, 0.0f));
     model = glm::scale(model, glm::vec3(current_card_width_, current_card_height_, 1.0f));
 
     glUseProgram(shaderProgram);
     
     GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Bind the card texture
+    GLint texLoc = glGetUniformLocation(shaderProgram, "cardTexture");
+    glUniform1i(texLoc, 0);
+    glActiveTexture(GL_TEXTURE0);
+    
+    // Get the card image and bind it
+    GLuint texture = cardBackTexture_gl_;
+    auto card_image = deck_.getCardImage(anim_card.card);
+    if (card_image && !card_image->data.empty()) {
+        std::string card_key = std::to_string((int)anim_card.card.suit) + "_" + 
+                               std::to_string((int)anim_card.card.rank);
+        auto it = cardTextures_gl_.find(card_key);
+        
+        if (it != cardTextures_gl_.end()) {
+            texture = it->second;
+        } else {
+            texture = loadTextureFromMemory(card_image->data);
+            if (texture != 0) {
+                cardTextures_gl_[card_key] = texture;
+            }
+        }
+    }
+    
+    glBindTexture(GL_TEXTURE_2D, texture);
+    
+    // Set alpha
+    GLint alphaLoc = glGetUniformLocation(shaderProgram, "alpha");
+    glUniform1f(alphaLoc, 1.0f);
     
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -1012,21 +1066,34 @@ void SolitaireGame::drawCardFragment_gl(const CardFragment &fragment,
     if (!fragment.active)
         return;
 
+    // Note: CardFragment uses cairo_surface_t which isn't compatible with OpenGL
+    // For now, we'll just render the card back as a placeholder for fragments
+    
     glm::mat4 model = glm::mat4(1.0f);
     
     model = glm::translate(model, glm::vec3(fragment.x, fragment.y, 0.0f));
-    model = glm::translate(model, glm::vec3(fragment.width / 2.0f, 
-                                             fragment.height / 2.0f, 0.0f));
+    model = glm::translate(model, glm::vec3(fragment.width * 0.5f, 
+                                             fragment.height * 0.5f, 0.0f));
     model = glm::rotate(model, static_cast<float>(fragment.rotation), 
                         glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::translate(model, glm::vec3(-fragment.width / 2.0f, 
-                                             -fragment.height / 2.0f, 0.0f));
+    model = glm::translate(model, glm::vec3(-fragment.width * 0.5f, 
+                                             -fragment.height * 0.5f, 0.0f));
     model = glm::scale(model, glm::vec3(fragment.width, fragment.height, 1.0f));
 
     glUseProgram(shaderProgram);
     
     GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Bind card back texture as placeholder
+    GLint texLoc = glGetUniformLocation(shaderProgram, "cardTexture");
+    glUniform1i(texLoc, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
+    
+    // Set alpha
+    GLint alphaLoc = glGetUniformLocation(shaderProgram, "alpha");
+    glUniform1f(alphaLoc, 0.8f);  // Slightly transparent
     
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
