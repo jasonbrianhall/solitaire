@@ -250,6 +250,16 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
   
   fprintf(stderr, "[GL] Realize callback - initializing OpenGL resources\n");
   
+  // DIAGNOSTIC: Check if GL context is actually available
+  const GLubyte *version = glGetString(GL_VERSION);
+  if (version == nullptr) {
+    fprintf(stderr, "[GL] ERROR: No GL context available after gtk_gl_area_make_current()\n");
+    fprintf(stderr, "[GL] This means GtkGLArea failed to create/bind the GL context\n");
+    game->rendering_engine_ = RenderingEngine::CAIRO;
+    return FALSE;
+  }
+  fprintf(stderr, "[GL] GL Context verified: %s\n", (const char*)version);
+  
   // Initialize GL resources (NOW safe to call GL functions!)
   if (!game->initializeOpenGLResources()) {
     fprintf(stderr, "[GL] Failed to initialize OpenGL resources\n");
@@ -304,12 +314,30 @@ bool SolitaireGame::initializeOpenGLResources() {
   if (!glew_initialized) {
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
+    
+    fprintf(stderr, "[GL] glewInit returned: %i\n", err);
+    fprintf(stderr, "[GL] glewInit error string: %s\n", glewGetErrorString(err));
+    
     if (err != GLEW_OK) {
-      fprintf(stderr, "[GL] glewInit failed: %s %i\n", glewGetErrorString(err), err);
-      return false;
+      // DIAGNOSTIC: Try to see if basic GL functions work anyway
+      const GLubyte *vendor = glGetString(GL_VENDOR);
+      if (vendor != nullptr) {
+        fprintf(stderr, "[GL] WARNING: glewInit failed but GL_VENDOR is accessible: %s\n", (const char*)vendor);
+        fprintf(stderr, "[GL] GL is functional despite glewInit error - proceeding anyway\n");
+        glew_initialized = TRUE;
+        is_glew_initialized_ = true;  // ← ALSO SET THE MEMBER VARIABLE
+      } else {
+        fprintf(stderr, "[GL] FATAL: glewInit failed and GL functions unavailable\n");
+        fprintf(stderr, "[GL] glewInit failed: %s %i\n", glewGetErrorString(err), err);
+        return false;
+      }
+    } else {
+      glew_initialized = TRUE;
+      is_glew_initialized_ = true;  // ← SET THE MEMBER VARIABLE
+      fprintf(stderr, "[GL] GLEW initialized successfully\n");
     }
-    fprintf(stderr, "[GL] GLEW initialized\n");
-    glew_initialized = TRUE;
+  } else {
+    fprintf(stderr, "[GL] GLEW already initialized\n");
   }
   
   // ✅ NOW safe to call GL functions - context exists!

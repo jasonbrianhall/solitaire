@@ -9,6 +9,9 @@
 #include <GLFW/glfw3.h>
 #include <cmath>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 // OpenGL 3.4 Shader sources
 static const char *VERTEX_SHADER_GL = R"(
     #version 330 core
@@ -1341,35 +1344,39 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
 GLuint SolitaireGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
     if (data.empty()) return 0;
     
-    // For now, create a simple colored texture based on data hash
-    // TODO: Use stb_image or similar to decode PNG from memory
+    // Decode PNG from memory
+    int width, height, channels;
+    unsigned char *pixels = stbi_load_from_memory(
+        data.data(), data.size(), 
+        &width, &height, &channels, STBI_rgb_alpha
+    );
     
-    const int TEX_WIDTH = 64;
-    const int TEX_HEIGHT = 96;
-    unsigned char textureData[TEX_WIDTH * TEX_HEIGHT * 4];
-    
-    // Create a gradient texture for now
-    for (int i = 0; i < TEX_WIDTH * TEX_HEIGHT; i++) {
-        textureData[i*4 + 0] = 200;  // R
-        textureData[i*4 + 1] = 200;  // G
-        textureData[i*4 + 2] = 200;  // B
-        textureData[i*4 + 3] = 255;  // A
+    if (!pixels) {
+        fprintf(stderr, "[GL] ERROR: Failed to decode PNG from memory\n");
+        return 0;
     }
     
+    // Create texture
     GLuint texture = 0;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
+    
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, 
-                 GL_RGBA, GL_UNSIGNED_BYTE, textureData);
     
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, 
+                 GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    
+    stbi_image_free(pixels);
     return texture;
 }
 
 void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up) {
+    static int count = 0;
+    if (count++ == 0) fprintf(stderr, "[GL] DRAWING CARDS NOW\n");
+    
     if (cardShaderProgram_gl_ == 0 || cardQuadVAO_gl_ == 0) {
         return;
     }
@@ -1377,7 +1384,6 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
     GLuint texture = cardBackTexture_gl_;
     
     if (face_up) {
-        // Try to get the card texture from the deck
         auto card_image = deck_.getCardImage(card);
         if (card_image && !card_image->data.empty()) {
             std::string card_key = std::to_string((int)card.suit) + "_" + std::to_string((int)card.rank);
@@ -1393,7 +1399,6 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
             }
         }
     } else {
-        // Use card back texture  
         if (cardBackTexture_gl_ == 0) {
             auto back_image = deck_.getCardBackImage();
             if (back_image && !back_image->data.empty()) {
@@ -1412,6 +1417,15 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
     
     GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Set alpha uniform to fully opaque
+    GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
+    glUniform1f(alphaLoc, 1.0f);
+    
+    // Set texture uniform
+    GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
+    glUniform1i(texLoc, 0);
+    glActiveTexture(GL_TEXTURE0);
     
     if (texture != 0) {
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -1503,12 +1517,6 @@ void SolitaireGame::renderFrame_gl() {
         return;
     }
     
-    if (tableau_.empty() || foundation_.empty() || stock_.empty() || waste_.empty()) {
-        glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        return;
-    }
-    
     if (rendering_engine_ != RenderingEngine::OPENGL || !opengl_initialized_) {
         return;
     }
@@ -1517,19 +1525,16 @@ void SolitaireGame::renderFrame_gl() {
     glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-    // Setup projection matrix
-    glm::mat4 projection = glm::ortho(0.0f, (float)1920, (float)1080, 0.0f, -1.0f, 1.0f);
+    // Setup matrices
     glUseProgram(cardShaderProgram_gl_);
+    
+    glm::mat4 projection = glm::ortho(0.0f, (float)1920, (float)1080, 0.0f, -1.0f, 1.0f);
     GLint projLoc = glGetUniformLocation(cardShaderProgram_gl_, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
     
-    static int frame_count = 0;
-    printf("Frame count %i\n", frame_count);
-    if (frame_count++ % 60 == 0) {  // Print every 60 frames
-        std::cout << "[GL] Frame " << frame_count << " - Drawing stock: " << stock_.size() 
-                  << " waste: " << waste_.size() << " foundation: " << foundation_.size() 
-                  << " tableau: " << tableau_.size() << std::endl;
-    }
+    glm::mat4 view = glm::mat4(1.0f);
+    GLint viewLoc = glGetUniformLocation(cardShaderProgram_gl_, "view");
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
     
     // Draw all game piles
     drawStockPile_gl();
