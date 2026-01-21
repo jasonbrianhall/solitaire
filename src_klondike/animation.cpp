@@ -1331,3 +1331,383 @@ void SolitaireGame::completeStockToWasteAnimation() {
   pending_waste_cards_.clear();
   refreshDisplay();
 }
+
+// Highlight the selected card in the onDraw method
+void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
+  int x = 0, y = 0;
+
+  if (!cr || selected_pile_ == -1) {
+    return;
+  }
+
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + foundation_.size() - 1;
+  // Calculate first tableau index
+  int first_tableau_index = max_foundation_index + 1;
+  
+  // Validate keyboard selection
+  if (keyboard_selection_active_) {
+    bool invalid_source = false;
+    
+    if (source_pile_ < 0) {
+      invalid_source = true;
+    } else if (source_pile_ >= first_tableau_index) {
+      int tableau_idx = source_pile_ - first_tableau_index;
+      if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
+        invalid_source = true;
+      }
+    } else if (source_pile_ == 1 && waste_.empty()) {
+      invalid_source = true;
+    } else if (source_pile_ >= 2 && source_pile_ <= max_foundation_index) {
+      int foundation_idx = source_pile_ - 2;
+      if (foundation_idx < 0 || foundation_idx >= foundation_.size()) {
+        invalid_source = true;
+      }
+    }
+    
+    if (invalid_source) {
+      // Invalid source pile, reset selection state
+      keyboard_selection_active_ = false;
+      source_pile_ = -1;
+      source_card_idx_ = -1;
+      return;
+    }
+  }
+
+  // Determine position based on pile type
+  if (selected_pile_ == 0) {
+    // Stock pile
+    x = current_card_spacing_;
+    y = current_card_spacing_;
+  } else if (selected_pile_ == 1) {
+    // Waste pile
+    x = 2 * current_card_spacing_ + current_card_width_;
+    y = current_card_spacing_;
+  } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
+    // Foundation piles - critical fix here
+    int foundation_idx = selected_pile_ - 2;
+    
+    // Make sure foundation_idx is valid
+    if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+      // Match the exact calculation from drawFoundationPiles()
+      x = 3 * (current_card_width_ + current_card_spacing_) + 
+          foundation_idx * (current_card_width_ + current_card_spacing_);
+      y = current_card_spacing_;
+    }
+  } else if (selected_pile_ >= first_tableau_index) {
+    // Tableau piles
+    int tableau_idx = selected_pile_ - first_tableau_index;
+    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+      x = current_card_spacing_ +
+          tableau_idx * (current_card_width_ + current_card_spacing_);
+
+      // For empty tableau piles, highlight the empty space
+      const auto &tableau_pile = tableau_[tableau_idx];
+      if (tableau_pile.empty()) {
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+      } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
+        // If no card is selected or the index is invalid, highlight the top card
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            (tableau_pile.size() - 1) * current_vert_spacing_;
+      } else {
+        // Highlight the specific selected card
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            selected_card_idx_ * current_vert_spacing_;
+      }
+    }
+  }
+
+  // Choose highlight color based on whether we're selecting a card to move
+  if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
+      (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
+    // Source card/pile is highlighted in blue
+    cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.5); // Semi-transparent blue
+  } else {
+    // Regular selection is highlighted in yellow
+    cairo_set_source_rgba(cr, 1.0, 1.0, 0.0, 0.5); // Semi-transparent yellow
+  }
+
+  cairo_set_line_width(cr, 3.0);
+  cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
+                  current_card_height_ + 4);
+  cairo_stroke(cr);
+
+  // If we have a card selected for movement, highlight all cards below it in a
+  // tableau pile
+  if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_card_idx_ >= 0) {
+    int tableau_idx = source_pile_ - first_tableau_index;
+    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+      auto &tableau_pile = tableau_[tableau_idx];
+
+      if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
+        // Highlight all cards from the selected one to the bottom
+        cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
+
+        x = current_card_spacing_ +
+            tableau_idx * (current_card_width_ + current_card_spacing_);
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            source_card_idx_ * current_vert_spacing_;
+
+        // Draw a single rectangle that covers all cards in the stack
+        int stack_height =
+            (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ +
+            current_card_height_;
+
+        if (stack_height > 0) {
+          cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
+                          stack_height + 4);
+          cairo_stroke(cr);
+        }
+      }
+    }
+  }
+}
+
+SolitaireGame::~SolitaireGame() {
+  if (buffer_cr_) {
+    cairo_destroy(buffer_cr_);
+  }
+  if (buffer_surface_) {
+    cairo_surface_destroy(buffer_surface_);
+  }
+  cleanupAudio();
+}
+
+void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
+                             const cardlib::Card *card, bool face_up) {
+  if (face_up && card) {
+
+    std::string key = std::to_string(static_cast<int>(card->suit)) +
+                      std::to_string(static_cast<int>(card->rank));
+    auto it = card_surface_cache_.find(key);
+
+    if (it == card_surface_cache_.end()) {
+      if (auto img = deck_.getCardImage(*card)) {
+        GError *error = nullptr;
+        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+
+        if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
+                                     &error)) {
+          if (error)
+            g_error_free(error);
+          g_object_unref(loader);
+          return;
+        }
+
+        if (!gdk_pixbuf_loader_close(loader, &error)) {
+          if (error)
+            g_error_free(error);
+          g_object_unref(loader);
+          return;
+        }
+
+        GdkPixbuf *original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+        if (original_pixbuf) {
+          GdkPixbuf *scaled_pixbuf = gdk_pixbuf_scale_simple(
+              original_pixbuf,
+              current_card_width_, // Use current dimensions
+              current_card_height_, GDK_INTERP_BILINEAR);
+
+          if (scaled_pixbuf) {
+            cairo_surface_t *surface = cairo_image_surface_create(
+                CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+            cairo_t *surface_cr = cairo_create(surface);
+
+            gdk_cairo_set_source_pixbuf(surface_cr, scaled_pixbuf, 0, 0);
+            cairo_paint(surface_cr);
+            cairo_destroy(surface_cr);
+
+            card_surface_cache_[key] = surface;
+
+            g_object_unref(scaled_pixbuf);
+          }
+        }
+        g_object_unref(loader);
+
+        it = card_surface_cache_.find(key);
+      }
+    }
+
+    if (it != card_surface_cache_.end()) {
+      // Scale the surface to the current card dimensions
+      cairo_save(cr);
+      cairo_scale(cr,
+                  (double)current_card_width_ /
+                      cairo_image_surface_get_width(it->second),
+                  (double)current_card_height_ /
+                      cairo_image_surface_get_height(it->second));
+      cairo_set_source_surface(cr, it->second,
+                               x * cairo_image_surface_get_width(it->second) /
+                                   current_card_width_,
+                               y * cairo_image_surface_get_height(it->second) /
+                                   current_card_height_);
+      cairo_paint(cr);
+      cairo_restore(cr);
+    }
+  } else {
+    auto custom_it = card_surface_cache_.find("custom_back");
+    auto default_it = card_surface_cache_.find("back");
+    cairo_surface_t *back_surface = nullptr;
+
+    if (!custom_back_path_.empty() && custom_it != card_surface_cache_.end()) {
+      back_surface = custom_it->second;
+    } else if (default_it != card_surface_cache_.end()) {
+      back_surface = default_it->second;
+    }
+
+    if (back_surface) {
+      // Scale the surface to the current card dimensions
+      cairo_save(cr);
+      cairo_scale(cr,
+                  (double)current_card_width_ /
+                      cairo_image_surface_get_width(back_surface),
+                  (double)current_card_height_ /
+                      cairo_image_surface_get_height(back_surface));
+      cairo_set_source_surface(
+          cr, back_surface,
+          x * cairo_image_surface_get_width(back_surface) / current_card_width_,
+          y * cairo_image_surface_get_height(back_surface) /
+              current_card_height_);
+      cairo_paint(cr);
+      cairo_restore(cr);
+    } else {
+      // Draw a placeholder rectangle if no back image is available
+      cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
+      cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+      cairo_stroke(cr);
+    }
+  }
+}
+
+void SolitaireGame::initializeCardCache() {
+  // Pre-load all card images into cairo surfaces with current dimensions
+  cleanupCardCache();
+
+  for (const auto &card : deck_.getAllCards()) {
+    if (auto img = deck_.getCardImage(card)) {
+      GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+      gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
+                              nullptr);
+      gdk_pixbuf_loader_close(loader, nullptr);
+
+      GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+      GdkPixbuf *scaled =
+          gdk_pixbuf_scale_simple(pixbuf, current_card_width_,
+                                  current_card_height_, GDK_INTERP_BILINEAR);
+
+      cairo_surface_t *surface = cairo_image_surface_create(
+          CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+      cairo_t *cr = cairo_create(surface);
+      gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+      cairo_paint(cr);
+      cairo_destroy(cr);
+
+      std::string key = std::to_string(static_cast<int>(card.suit)) +
+                        std::to_string(static_cast<int>(card.rank));
+      card_surface_cache_[key] = surface;
+
+      g_object_unref(scaled);
+      g_object_unref(loader);
+    }
+  }
+
+  // Cache card back
+  if (auto back_img = deck_.getCardBackImage()) {
+    GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+    gdk_pixbuf_loader_write(loader, back_img->data.data(),
+                            back_img->data.size(), nullptr);
+    gdk_pixbuf_loader_close(loader, nullptr);
+
+    GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+    GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
+        pixbuf, current_card_width_, current_card_height_, GDK_INTERP_BILINEAR);
+
+    cairo_surface_t *surface = cairo_image_surface_create(
+        CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
+    cairo_t *cr = cairo_create(surface);
+    gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+    cairo_paint(cr);
+    cairo_destroy(cr);
+
+    card_surface_cache_["back"] = surface;
+
+    g_object_unref(scaled);
+    g_object_unref(loader);
+  }
+}
+
+void SolitaireGame::cleanupCardCache() {
+  for (auto &[key, surface] : card_surface_cache_) {
+    cairo_surface_destroy(surface);
+  }
+  card_surface_cache_.clear();
+}
+
+cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
+  std::string key = std::to_string(static_cast<int>(card.suit)) +
+                    std::to_string(static_cast<int>(card.rank));
+  auto it = card_surface_cache_.find(key);
+  return it != card_surface_cache_.end() ? it->second : nullptr;
+}
+
+cairo_surface_t *SolitaireGame::getCardBackSurface() {
+  auto it = card_surface_cache_.find("back");
+  return it != card_surface_cache_.end() ? it->second : nullptr;
+}
+
+void SolitaireGame::cleanupResources() {
+  // Clean up Cairo resources
+  if (buffer_cr_) {
+    cairo_destroy(buffer_cr_);
+    buffer_cr_ = nullptr;
+  }
+  if (buffer_surface_) {
+    cairo_surface_destroy(buffer_surface_);
+    buffer_surface_ = nullptr;
+  }
+
+  // Clean up card cache
+  cleanupCardCache();
+}
+
+void SolitaireGame::clearCustomBack() {
+  custom_back_path_.clear();
+
+  // Remove the custom back from cache if it exists
+  auto it = card_surface_cache_.find("custom_back");
+  if (it != card_surface_cache_.end()) {
+    cairo_surface_destroy(it->second);
+    card_surface_cache_.erase(it);
+  }
+
+  // Update settings file
+  saveSettings();
+}
+
+void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
+  // Draw a placeholder for an empty pile (cell or foundation)
+  cairo_save(cr);
+  
+  // Draw a rounded rectangle with a thin border
+  double radius = 10.0;
+  double degrees = G_PI / 180.0;
+  
+  cairo_new_sub_path(cr);
+  cairo_arc(cr, x + current_card_width_ - radius, y + radius, radius, -90 * degrees, 0 * degrees);
+  cairo_arc(cr, x + current_card_width_ - radius, y + current_card_height_ - radius, radius, 0 * degrees, 90 * degrees);
+  cairo_arc(cr, x + radius, y + current_card_height_ - radius, radius, 90 * degrees, 180 * degrees);
+  cairo_arc(cr, x + radius, y + radius, radius, 180 * degrees, 270 * degrees);
+  cairo_close_path(cr);
+  
+  // Set a light gray fill with semi-transparency
+  cairo_set_source_rgba(cr, 0.85, 0.85, 0.85, 0.5);
+  cairo_fill_preserve(cr);
+  
+  // Set a darker gray border
+  cairo_set_source_rgb(cr, 0.5, 0.5, 0.5);
+  cairo_set_line_width(cr, 1.0);
+  cairo_stroke(cr);
+  
+  cairo_restore(cr);
+}
+
