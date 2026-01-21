@@ -1196,14 +1196,31 @@ bool SolitaireGame::initializeCardTextures_gl() {
     }
     
     try {
+        // CRITICAL FIX: Load the actual card back image from the deck
+        if (auto back_img = deck_.getCardBackImage()) {
+            if (!back_img->data.empty()) {
+                std::cout << "  Loading actual card back image from deck..." << std::endl;
+                cardBackTexture_gl_ = loadTextureFromMemory(back_img->data);
+                if (cardBackTexture_gl_ != 0) {
+                    std::cout << "✓ Card back texture loaded successfully (Texture ID: " 
+                              << cardBackTexture_gl_ << ")" << std::endl;
+                    return true;
+                } else {
+                    std::cerr << "  ⚠ Failed to load card back from memory, creating fallback..." << std::endl;
+                }
+            }
+        }
+        
+        // Fallback: Create a placeholder texture if real card back failed to load
         const int TEX_WIDTH = 32;
         const int TEX_HEIGHT = 48;
         const int TEX_CHANNELS = 4;
         
-        std::cout << "  Creating placeholder texture (" << TEX_WIDTH << "x" << TEX_HEIGHT << ")..." << std::endl;
+        std::cout << "  Creating fallback placeholder texture (" << TEX_WIDTH << "x" << TEX_HEIGHT << ")..." << std::endl;
         
+        // Create a nice gray placeholder instead of pure white
         unsigned char textureData[TEX_WIDTH * TEX_HEIGHT * TEX_CHANNELS];
-        memset(textureData, 255, sizeof(textureData));
+        memset(textureData, 200, sizeof(textureData)); // Gray color instead of white
         
         GLuint texture = 0;
         glGenTextures(1, &texture);
@@ -1225,8 +1242,8 @@ bool SolitaireGame::initializeCardTextures_gl() {
         }
         
         std::cout << "  Setting texture parameters..." << std::endl;
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         
@@ -1381,34 +1398,32 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
         return;
     }
     
+    // Default to card back texture
     GLuint texture = cardBackTexture_gl_;
     
     if (face_up) {
+        // Try to get the face-up card image
         auto card_image = deck_.getCardImage(card);
         if (card_image && !card_image->data.empty()) {
             std::string card_key = std::to_string((int)card.suit) + "_" + std::to_string((int)card.rank);
             auto it = cardTextures_gl_.find(card_key);
             
             if (it != cardTextures_gl_.end()) {
+                // Use cached texture
                 texture = it->second;
             } else {
+                // Load texture and cache it
                 texture = loadTextureFromMemory(card_image->data);
                 if (texture != 0) {
                     cardTextures_gl_[card_key] = texture;
+                } else {
+                    // Fallback to card back if loading failed
+                    texture = cardBackTexture_gl_;
                 }
             }
         }
-    } else {
-        if (cardBackTexture_gl_ == 0) {
-            auto back_image = deck_.getCardBackImage();
-            if (back_image && !back_image->data.empty()) {
-                cardBackTexture_gl_ = loadTextureFromMemory(back_image->data);
-                texture = cardBackTexture_gl_;
-            }
-        } else {
-            texture = cardBackTexture_gl_;
-        }
     }
+    // For face_down cards, use the default cardBackTexture_gl_ already set above
     
     // Draw card at position
     glm::mat4 model = glm::mat4(1.0f);
@@ -1440,12 +1455,19 @@ void SolitaireGame::drawStockPile_gl() {
     int y = current_card_spacing_;
     
     if (stock_.empty()) {
-        // Draw empty pile placeholder
+        // Draw empty pile placeholder with card back
         glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0f));
         model = glm::scale(model, glm::vec3(current_card_width_, current_card_height_, 1.0f));
         
         GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        
+        GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
+        glUniform1f(alphaLoc, 1.0f);
+        
+        GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
+        glUniform1i(texLoc, 0);
+        glActiveTexture(GL_TEXTURE0);
         
         glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
         glBindVertexArray(cardQuadVAO_gl_);
@@ -1477,12 +1499,19 @@ void SolitaireGame::drawFoundationPiles_gl() {
         int x = start_x + (int)(i * (current_card_width_ + current_card_spacing_));
         
         if (foundation_[i].empty()) {
-            // Draw empty foundation placeholder
+            // Draw empty foundation placeholder with card back
             glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3((float)x, (float)y, 0.0f));
             model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
             
             GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            
+            GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
+            glUniform1f(alphaLoc, 1.0f);
+            
+            GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
+            glUniform1i(texLoc, 0);
+            glActiveTexture(GL_TEXTURE0);
             
             glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
             glBindVertexArray(cardQuadVAO_gl_);
@@ -1521,14 +1550,35 @@ void SolitaireGame::renderFrame_gl() {
         return;
     }
     
+    // CRITICAL FIX: Get actual window dimensions instead of hardcoding
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(game_area_, &allocation);
+    
+    static int prev_width = -1, prev_height = -1;
+    static bool first = true;
+    if (first || allocation.width != prev_width || allocation.height != prev_height) {
+        fprintf(stderr, "[GL] Window dimensions: %d x %d\n", allocation.width, allocation.height);
+        fprintf(stderr, "[GL] Card dimensions: width=%d, height=%d, spacing=%d, vert_spacing=%d\n",
+                current_card_width_, current_card_height_, current_card_spacing_, current_vert_spacing_);
+        prev_width = allocation.width;
+        prev_height = allocation.height;
+        first = false;
+    }
+    
     // Clear screen
     glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
+    // CRITICAL FIX: Set viewport to match actual window size
+    glViewport(0, 0, allocation.width, allocation.height);
+    
     // Setup matrices
     glUseProgram(cardShaderProgram_gl_);
     
-    glm::mat4 projection = glm::ortho(0.0f, (float)1920, (float)1080, 0.0f, -1.0f, 1.0f);
+    // CRITICAL FIX: Use actual window dimensions instead of hardcoded 1920x1080
+    // This is the key fix for card sizing and positioning!
+    glm::mat4 projection = glm::ortho(0.0f, (float)allocation.width, 
+                                      (float)allocation.height, 0.0f, -1.0f, 1.0f);
     GLint projLoc = glGetUniformLocation(cardShaderProgram_gl_, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
     
