@@ -34,7 +34,6 @@ public:
   RenderingEngine getRenderingEngine() const { return rendering_engine_; }
   bool isOpenGLSupported() const;
   bool initializeRenderingEngine();
-  bool initializeRenderingEngine_gl();
   bool switchRenderingEngine(RenderingEngine newEngine);
   void cleanupRenderingEngine();
   std::string getRenderingEngineName() const;
@@ -43,7 +42,6 @@ public:
   void saveEnginePreference();
   void loadEnginePreference();
   void renderFrame();
-  void renderFrame_gl();
 
 
   enum class GameMode {
@@ -243,37 +241,49 @@ private:
   static gboolean onStockToWasteAnimationTick_gl(gpointer data);
   void completeStockToWasteAnimation_gl();
 
-  // Drawing Functions - OpenGL 3.4 Versions
-  void drawAnimatedCard_gl(const AnimatedCard &anim_card,
-                           GLuint shaderProgram,
-                           GLuint VAO);
-  void drawCardFragment_gl(const CardFragment &fragment,
-                           GLuint shaderProgram,
-                           GLuint VAO);
+  // OpenGL 3.4 Setup Functions
+  GLuint setupShaders_gl();
+  GLuint setupCardQuadVAO_gl();
+  bool initializeCardTextures_gl();
+  void cleanupOpenGLResources_gl();
+  void draw_comet_buster_gl(void *vis_ptr, void *other);
+  bool loadCardTexture_gl(const std::string &cardKey, const cardlib::Card &card);
+  
+  // OpenGL context validation and initialization
+  bool validateOpenGLContext();
+  bool initializeGLEW();
+  bool checkOpenGLCapabilities();
+  void logOpenGLInfo();
+  bool initializeRenderingEngine_gl();
+  void renderFrame_gl();
+  
+  // OpenGL auto-finish functions
+  static gboolean onAutoFinishTick_gl(gpointer data);
+  void processNextAutoFinishMove_gl();
+  
+  // OpenGL drawing helpers
+  void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
+  void drawCardFragment_gl(const CardFragment &fragment, GLuint shaderProgram, GLuint VAO);
   void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
 
-  // OpenGL Setup and Initialization Functions
-  GLuint setupCardQuadVAO_gl();      // Create VAO/VBO for card quads
-  GLuint setupShaders_gl();          // Compile and link shaders
-  bool initializeCardTextures_gl();  // Load card images as OpenGL textures
-  void cleanupOpenGLResources_gl();  // Clean up OpenGL resources
-  bool loadCardTexture_gl(const std::string &cardKey,
-                          const cardlib::Card &card);
+  // ============================================================================
+  // GL CONTEXT CALLBACKS (NEW - FIX FOR NO CONTEXT ERROR)
+  // ============================================================================
+  // Called when GL context is created (after widget realization)
+  static gboolean onGLRealize(GtkGLArea *area, gpointer data);
+  // Called every frame for rendering
+  static gboolean onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data);
+  // Deferred GL initialization (called from realize callback)
+  bool initializeOpenGLResources();
+  // Setup GL widget separately
+  void setupOpenGLArea();
+  void setupCairoArea();
 
-  // OpenGL Context and Initialization Validation
-  bool validateOpenGLContext();       // Check if GL context exists
-  bool initializeGLEW();              // Initialize GLEW with error checking
-  bool checkOpenGLCapabilities();     // Verify GPU supports OpenGL 3.3+
-  void logOpenGLInfo();               // Log detailed GPU information
+  // ============================================================================
 
-  // Auto-Finish Animation - OpenGL 3.4 Version
-  static gboolean onAutoFinishTick_gl(gpointer data);
-  void processNextAutoFinishMove_gl();
-
-  // Auto-Finish Animation - Cairo Version
   static gboolean onAutoFinishTick_cairo(gpointer data);
   void processNextAutoFinishMove_cairo();
 
@@ -303,7 +313,9 @@ private:
 
   // GTK widgets
   GtkWidget *window_;
-  GtkWidget *game_area_;
+  GtkWidget *game_area_;        // Cairo rendering area
+  GtkWidget *gl_area_;          // OpenGL rendering area (NEW - FIX)
+  GtkWidget *rendering_stack_;  // Stack to switch between them (NEW - FIX)
   std::vector<GtkWidget *> card_widgets_;
 
   // Card dimensions and spacing
