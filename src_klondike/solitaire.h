@@ -21,6 +21,28 @@ public:
 
   void run(int argc, char **argv);
 
+  // ========================================================================
+  // RENDERING ENGINE SELECTION
+  // ========================================================================
+  enum class RenderingEngine {
+    CAIRO,    // CPU-based 2D rendering (original)
+    OPENGL    // GPU-accelerated 3D rendering
+  };
+
+  // Engine control methods
+  bool setRenderingEngine(RenderingEngine engine);
+  RenderingEngine getRenderingEngine() const { return rendering_engine_; }
+  bool isOpenGLSupported() const;
+  bool initializeRenderingEngine();
+  bool switchRenderingEngine(RenderingEngine newEngine);
+  void cleanupRenderingEngine();
+  std::string getRenderingEngineName() const;
+  void printEngineInfo();
+  void addEngineSelectionMenu(GtkWidget *menubar);
+  void saveEnginePreference();
+  void loadEnginePreference();
+  void renderFrame();
+
   enum class GameMode {
     STANDARD_KLONDIKE,  // Single deck
     DOUBLE_KLONDIKE,    // Two decks
@@ -75,6 +97,15 @@ struct TableauCard {
 };
 
 private:
+  // ========================================================================
+  // RENDERING ENGINE STATE
+  // ========================================================================
+  RenderingEngine rendering_engine_;
+  bool opengl_initialized_;
+  bool cairo_initialized_;
+  bool engine_switch_requested_;
+  RenderingEngine requested_engine_;
+
   // Game state
   static constexpr int BASE_WINDOW_WIDTH = 1024;
   static constexpr int BASE_WINDOW_HEIGHT = 768;
@@ -202,8 +233,51 @@ private:
   void processNextAutoFinishMove_gl();
 
   // ============================================================================
-  // Original Cairo Animation Methods (for backward compatibility)
+  // Original Cairo Animation Methods (renamed to _cairo suffix)
   // ============================================================================
+
+  // Win Animation - Cairo Versions
+  void updateWinAnimation_cairo();
+  void startWinAnimation_cairo();
+  void stopWinAnimation_cairo();
+  static gboolean onAnimationTick_cairo(gpointer data);
+  void launchNextCard_cairo();
+  void explodeCard_cairo(AnimatedCard &card);
+  void updateCardFragments_cairo(AnimatedCard &card);
+
+  // Deal Animation - Cairo Versions
+  void startDealAnimation_cairo();
+  void updateDealAnimation_cairo();
+  static gboolean onDealAnimationTick_cairo(gpointer data);
+  void dealNextCard_cairo();
+  void completeDeal_cairo();
+  void stopDealAnimation_cairo();
+
+  // Foundation Move Animation - Cairo Versions
+  void startFoundationMoveAnimation_cairo(const cardlib::Card &card,
+                                          int source_pile,
+                                          int source_index,
+                                          int target_pile);
+  void updateFoundationMoveAnimation_cairo();
+  static gboolean onFoundationMoveAnimationTick_cairo(gpointer data);
+
+  // Stock to Waste Animation - Cairo Versions
+  void startStockToWasteAnimation_cairo();
+  void updateStockToWasteAnimation_cairo();
+  static gboolean onStockToWasteAnimationTick_cairo(gpointer data);
+  void completeStockToWasteAnimation_cairo();
+
+  // Drawing Functions - Cairo Versions
+  void drawAnimatedCard_cairo(cairo_t *cr, const AnimatedCard &anim_card);
+  void drawCardFragment_cairo(cairo_t *cr, const CardFragment &fragment);
+  void drawWinAnimation_cairo();
+  void drawDealAnimation_cairo();
+  void drawFoundationAnimation_cairo();
+  void drawStockToWasteAnimation_cairo();
+
+  // Auto-Finish Animation - Cairo Version
+  static gboolean onAutoFinishTick_cairo(gpointer data);
+  void processNextAutoFinishMove_cairo();
 
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile

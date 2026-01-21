@@ -7,7 +7,7 @@
 #include <direct.h>
 #endif
 
-void SolitaireGame::updateWinAnimation() {
+void SolitaireGame::updateWinAnimation_cairo() {
   if (!win_animation_active_)
     return;
 
@@ -18,14 +18,14 @@ void SolitaireGame::updateWinAnimation() {
     if (rand() % 100 < 10) {
         // Launch 4 cards in rapid succession
         for (int i = 0; i < 4; i++) {
-            launchNextCard();
+            launchNextCard_cairo();
             
             // Check if we've reached the limit - break if needed
             if (cards_launched_ >= 52) 
                 break;
         }
     } else {    
-       launchNextCard();
+       launchNextCard_cairo();
     }
   }
 
@@ -65,7 +65,7 @@ void SolitaireGame::updateWinAnimation() {
       }
     } else {
       // Update explosion fragments
-      updateCardFragments(card);
+      updateCardFragments_cairo(card);
 
       // Check if all fragments are inactive
       bool all_fragments_inactive = true;
@@ -101,7 +101,7 @@ void SolitaireGame::updateWinAnimation() {
 }
 
 // Simple fix for the win animation in multi-deck mode
-void SolitaireGame::startWinAnimation() {
+void SolitaireGame::startWinAnimation_cairo() {
   if (win_animation_active_)
     return;
 
@@ -176,7 +176,7 @@ void SolitaireGame::startWinAnimation() {
       g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
 }
 
-void SolitaireGame::stopWinAnimation() {
+void SolitaireGame::stopWinAnimation_cairo() {
   if (!win_animation_active_)
     return;
 
@@ -218,7 +218,7 @@ gboolean SolitaireGame::onAnimationTick(gpointer data) {
   return game->win_animation_active_ ? TRUE : FALSE;
 }
 
-void SolitaireGame::launchNextCard() {
+void SolitaireGame::launchNextCard_cairo() {
   // Early exit if all cards have been launched
   if (cards_launched_ >= 52)
     return;
@@ -343,7 +343,7 @@ void SolitaireGame::launchNextCard() {
   cards_launched_++;
 }
 
-void SolitaireGame::updateCardFragments(AnimatedCard &card) {
+void SolitaireGame::updateCardFragments_cairo(AnimatedCard &card) {
   if (!card.exploded)
     return;
 
@@ -396,7 +396,7 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
   }
 }
 
-void SolitaireGame::drawCardFragment(cairo_t *cr,
+void SolitaireGame::drawCardFragment_cairo(cairo_t *cr,
                                      const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
   if (!fragment.active || !fragment.surface)
@@ -707,7 +707,7 @@ void SolitaireGame::drawDraggedCards() {
 }
 
 // Draw the win animation effects
-void SolitaireGame::drawWinAnimation() {
+void SolitaireGame::drawWinAnimation_cairo() {
   for (const auto &anim_card : animated_cards_) {
     if (!anim_card.active)
       continue;
@@ -719,7 +719,7 @@ void SolitaireGame::drawWinAnimation() {
       // Draw all the fragments for this card
       for (const auto &fragment : anim_card.fragments) {
         if (fragment.active) {
-          drawCardFragment(buffer_cr_, fragment);
+          drawCardFragment_cairo(buffer_cr_, fragment);
         }
       }
     }
@@ -727,7 +727,7 @@ void SolitaireGame::drawWinAnimation() {
 }
 
 // Draw the deal animation
-void SolitaireGame::drawDealAnimation() {
+void SolitaireGame::drawDealAnimation_cairo() {
   // Debug indicator - small red square to indicate deal animation is active
   cairo_set_source_rgb(buffer_cr_, 1.0, 0.0, 0.0);
   cairo_rectangle(buffer_cr_, 10, 10, 10, 10);
@@ -740,7 +740,7 @@ void SolitaireGame::drawDealAnimation() {
   }
 }
 
-void SolitaireGame::explodeCard(AnimatedCard &card) {
+void SolitaireGame::explodeCard_cairo(AnimatedCard &card) {
   // Mark the card as exploded
   card.exploded = true;
 
@@ -851,7 +851,7 @@ void SolitaireGame::explodeCard(AnimatedCard &card) {
   // cairo_surface_destroy(card_surface);
 }
 
-void SolitaireGame::startDealAnimation() {
+void SolitaireGame::startDealAnimation_cairo() {
   if (deal_animation_active_)
     return;
 
@@ -887,7 +887,7 @@ gboolean SolitaireGame::onDealAnimationTick(gpointer data) {
   return game->deal_animation_active_ ? TRUE : FALSE;
 }
 
-void SolitaireGame::updateDealAnimation() {
+void SolitaireGame::updateDealAnimation_cairo() {
   if (!deal_animation_active_)
     return;
 
@@ -1030,7 +1030,7 @@ void SolitaireGame::completeDeal() {
   refreshDisplay();
 }
 
-void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card,
+void SolitaireGame::startFoundationMoveAnimation_cairo(const cardlib::Card &card,
                                                  int source_pile,
                                                  int source_index,
                                                  int target_pile) {
@@ -1122,7 +1122,7 @@ gboolean SolitaireGame::onFoundationMoveAnimationTick(gpointer data) {
   return game->foundation_move_animation_active_ ? TRUE : FALSE;
 }
 
-void SolitaireGame::updateFoundationMoveAnimation() {
+void SolitaireGame::updateFoundationMoveAnimation_cairo() {
   if (!foundation_move_animation_active_)
     return;
 
@@ -1203,7 +1203,7 @@ void SolitaireGame::drawAnimatedCard(cairo_t *cr,
   cairo_restore(cr);
 }
 
-void SolitaireGame::startStockToWasteAnimation() {
+void SolitaireGame::startStockToWasteAnimation_cairo() {
   if (stock_to_waste_animation_active_ || stock_.empty())
     return;
   playSound(GameSoundEvent::CardFlip);
@@ -1270,7 +1270,7 @@ gboolean SolitaireGame::onStockToWasteAnimationTick(gpointer data) {
   return game->stock_to_waste_animation_active_ ? TRUE : FALSE;
 }
 
-void SolitaireGame::updateStockToWasteAnimation() {
+void SolitaireGame::updateStockToWasteAnimation_cairo() {
   if (!stock_to_waste_animation_active_)
     return;
 
@@ -1710,4 +1710,3 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   
   cairo_restore(cr);
 }
-
