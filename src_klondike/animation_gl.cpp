@@ -1087,10 +1087,10 @@ GLuint SolitaireGame::setupCardQuadVAO_gl() {
     }
     
     static const float quadVertices[] = {
-        -0.5f,  0.5f,  0.0f, 1.0f,
-         0.5f,  0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f,  0.0f, 0.0f
+         0.0f,  0.0f,  0.0f, 0.0f,
+         1.0f,  0.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f,
+         0.0f,  1.0f,  0.0f, 1.0f
     };
     
     static const unsigned int indices[] = {
@@ -1581,7 +1581,7 @@ void SolitaireGame::renderFrame_gl() {
     static int prev_width = -1, prev_height = -1;
     static bool first = true;
     if (first || allocation.width != prev_width || allocation.height != prev_height) {
-        fprintf(stderr, "[GL] Window dimensions: %d x %d (pos: %d, %d)\n", allocation.width, allocation.height, allocation.x, allocation.y);
+        fprintf(stderr, "[GL] Window dimensions: %d x %d\n", allocation.width, allocation.height);
         fprintf(stderr, "[GL] Card dimensions: width=%d, height=%d, spacing=%d, vert_spacing=%d\n",
                 current_card_width_, current_card_height_, current_card_spacing_, current_vert_spacing_);
         prev_width = allocation.width;
@@ -1594,8 +1594,7 @@ void SolitaireGame::renderFrame_gl() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // CRITICAL FIX: Set viewport to match actual window size
-    // Account for the widget's position offset
-    glViewport(allocation.x, allocation.y, allocation.width, allocation.height);
+    glViewport(0, 0, allocation.width, allocation.height);
     
     // Setup matrices
     glUseProgram(cardShaderProgram_gl_);
