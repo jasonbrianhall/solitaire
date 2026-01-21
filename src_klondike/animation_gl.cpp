@@ -137,7 +137,6 @@ bool SolitaireGame::checkOpenGLCapabilities() {
         std::cerr << std::string(70, '=') << std::endl;
         std::cerr << "  Your GPU supports: OpenGL " << major_version << "." << minor_version << std::endl;
         std::cerr << "  Solution: Update graphics drivers or use a newer GPU" << std::endl;
-        std::cerr << "  Fallback: Cairo rendering mode will be used" << std::endl;
         std::cerr << std::string(70, '=') << "\n" << std::endl;
         return false;
     }
@@ -1498,7 +1497,7 @@ void SolitaireGame::drawTableauPiles_gl() {
 }
 
 void SolitaireGame::renderFrame_gl() {
-    // CRITICAL SAFETY CHECKS
+    printf("Rednering GL Frame\n");
     if (!game_fully_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
