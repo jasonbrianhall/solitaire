@@ -8,8 +8,8 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 DEBUG_FLAGS = -g -DDEBUG
 
 # Source files for Klondike Solitaire
-SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp src_klondike/mouse.cpp
-SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp
+SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation_cairo.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp src_klondike/mouse.cpp
+SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp src_klondike/animation_gl.cpp
 SRCS_WIN_KLONDIKE = src_klondike/windowsaudioplayer.cpp
 
 # Source files for Spider Solitaire
@@ -38,15 +38,21 @@ ZIP_LIBS_LINUX := $(shell pkg-config --libs libzip)
 ZIP_CFLAGS_WIN := $(shell mingw64-pkg-config --cflags libzip)
 ZIP_LIBS_WIN := $(shell mingw64-pkg-config --libs libzip)
 
+# OpenGL flags for Linux (3.4+ with GLEW, GLFW3, GLM)
+OPENGL_CFLAGS_LINUX := $(shell pkg-config --cflags gl glew glfw3)
+OPENGL_LIBS_LINUX := $(shell pkg-config --libs gl glew glfw3)
+# GLM is header-only, just add include path if needed
+GLM_CFLAGS := -I/usr/include/glm
+
 # Platform-specific settings
-CXXFLAGS_LINUX = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_LINUX) $(PULSE_CFLAGS) $(ZIP_CFLAGS_LINUX)
+CXXFLAGS_LINUX = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_LINUX) $(PULSE_CFLAGS) $(ZIP_CFLAGS_LINUX) $(OPENGL_CFLAGS_LINUX) $(GLM_CFLAGS)
 CXXFLAGS_WIN = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_WIN) $(ZIP_CFLAGS_WIN)
 
 # Debug-specific flags
 CXXFLAGS_LINUX_DEBUG = $(CXXFLAGS_LINUX) $(DEBUG_FLAGS)
 CXXFLAGS_WIN_DEBUG = $(CXXFLAGS_WIN) $(DEBUG_FLAGS)
 
-LDFLAGS_LINUX = $(GTK_LIBS_LINUX) $(PULSE_LIBS) $(ZIP_LIBS_LINUX) -pthread
+LDFLAGS_LINUX = $(GTK_LIBS_LINUX) $(PULSE_LIBS) $(ZIP_LIBS_LINUX) $(OPENGL_LIBS_LINUX) -pthread
 LDFLAGS_WIN = $(GTK_LIBS_WIN) $(ZIP_LIBS_WIN) -lwinmm -lstdc++ -mwindows
 
 # Object files for Klondike Solitaire
@@ -319,11 +325,11 @@ clean:
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  make                  - Build all games for Linux (default)"
-	@echo "  make linux            - Build all games for Linux"
-	@echo "  make windows          - Build all games for Windows"
+	@echo "  make                  - Build all games for Linux (default) with OpenGL support"
+	@echo "  make linux            - Build all games for Linux with OpenGL support"
+	@echo "  make windows          - Build all games for Windows (Cairo only, no OpenGL)"
 	@echo ""
-	@echo "  make klondike         - Build Klondike Solitaire for Linux"
+	@echo "  make klondike         - Build Klondike Solitaire for Linux with dual-engine support"
 	@echo "  make spider           - Build Spider Solitaire for Linux"
 	@echo "  make freecell         - Build FreeCell for Linux"
 	@echo "  make solitaire        - Alias for make klondike"
@@ -333,14 +339,14 @@ help:
 	@echo "  make all-freecell     - Build FreeCell for Linux and Windows"
 	@echo "  make all-solitaire    - Alias for make all-klondike"
 	@echo ""
-	@echo "  make all-linux        - Build all games for Linux"
-	@echo "  make all-windows      - Build all games for Windows"
+	@echo "  make all-linux        - Build all games for Linux with OpenGL support"
+	@echo "  make all-windows      - Build all games for Windows (no OpenGL)"
 	@echo ""
-	@echo "  make klondike-linux   - Build Klondike Solitaire for Linux"
+	@echo "  make klondike-linux   - Build Klondike Solitaire for Linux with OpenGL support"
 	@echo "  make spider-linux     - Build Spider Solitaire for Linux"
 	@echo "  make freecell-linux   - Build FreeCell for Linux"
 	@echo ""
-	@echo "  make klondike-linux-debug - Build Klondike Solitaire for Linux with debug symbols"
+	@echo "  make klondike-linux-debug - Build Klondike Solitaire for Linux with debug symbols and OpenGL"
 	@echo "  make spider-linux-debug   - Build Spider Solitaire for Linux with debug symbols"
 	@echo "  make freecell-linux-debug - Build FreeCell for Linux with debug symbols"
 	@echo ""
@@ -355,3 +361,11 @@ help:
 	@echo "  make all-debug        - Build all games for Linux and Windows with debug symbols"
 	@echo "  make clean            - Remove all build files"
 	@echo "  make help             - Show this help message"
+	@echo ""
+	@echo "Klondike Solitaire now includes dual-engine support:"
+	@echo "  - Cairo (CPU-based, all platforms)"
+	@echo "  - OpenGL 3.4 (GPU-accelerated, Linux only)"
+	@echo ""
+	@echo "To use OpenGL on Linux, ensure these packages are installed:"
+	@echo "  Ubuntu: sudo apt-get install libgl1-mesa-dev libglew-dev libglfw3-dev libglm-dev"
+	@echo "  Fedora: sudo dnf install mesa-libGL-devel glew-devel glfw-devel glm-devel"
