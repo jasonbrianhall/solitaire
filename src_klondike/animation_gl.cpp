@@ -61,44 +61,240 @@ static const char *FRAGMENT_SHADER_SIMPLE_GL = R"(
     }
 )";
 
-// Helper function to compile shaders
+// ============================================================================
+// CONTEXT VALIDATION AND INITIALIZATION FUNCTIONS
+// ============================================================================
+
+bool SolitaireGame::validateOpenGLContext() {
+    const GLubyte *version = glGetString(GL_VERSION);
+    
+    if (version == nullptr) {
+        std::cerr << "\n" << std::string(70, '=') << std::endl;
+        std::cerr << "CRITICAL ERROR: No OpenGL Context Available" << std::endl;
+        std::cerr << std::string(70, '=') << std::endl;
+        std::cerr << "  Problem: OpenGL function called without active GL context" << std::endl;
+        std::cerr << "  Cause: " << std::endl;
+        std::cerr << "    1. GLFW window not created or context not made current" << std::endl;
+        std::cerr << "    2. GPU driver not installed or outdated" << std::endl;
+        std::cerr << "    3. OpenGL disabled in system settings" << std::endl;
+        std::cerr << "  Solution: Ensure GLFW context is created BEFORE calling OpenGL functions" << std::endl;
+        std::cerr << std::string(70, '=') << "\n" << std::endl;
+        return false;
+    }
+    
+    std::cout << "✓ OpenGL Context Active: " << reinterpret_cast<const char*>(version) << std::endl;
+    return true;
+}
+
+bool SolitaireGame::initializeGLEW() {
+    if (is_glew_initialized_) {
+        std::cout << "✓ GLEW Already Initialized" << std::endl;
+        return true;
+    }
+    
+    if (!validateOpenGLContext()) {
+        std::cerr << "ERROR: Cannot initialize GLEW without OpenGL context" << std::endl;
+        return false;
+    }
+    
+    glewExperimental = GL_TRUE;
+    GLenum glewStatus = glewInit();
+    
+    if (glewStatus != GLEW_OK) {
+        std::cerr << "\n" << std::string(70, '=') << std::endl;
+        std::cerr << "CRITICAL ERROR: GLEW Initialization Failed" << std::endl;
+        std::cerr << std::string(70, '=') << std::endl;
+        std::cerr << "  GLEW Error: " << glewGetErrorString(glewStatus) << std::endl;
+        std::cerr << "  This usually means:" << std::endl;
+        std::cerr << "    - GLFW context is not current (not bound to calling thread)" << std::endl;
+        std::cerr << "    - Graphics driver is missing OpenGL extensions" << std::endl;
+        std::cerr << "  Solution: Make sure glfw context is set as current thread context" << std::endl;
+        std::cerr << std::string(70, '=') << "\n" << std::endl;
+        return false;
+    }
+    
+    is_glew_initialized_ = true;
+    std::cout << "✓ GLEW Initialized: " << glewGetString(GLEW_VERSION) << std::endl;
+    return true;
+}
+
+bool SolitaireGame::checkOpenGLCapabilities() {
+    std::cout << "\nChecking OpenGL Capabilities..." << std::endl;
+    
+    if (!validateOpenGLContext()) {
+        return false;
+    }
+    
+    int major_version = 0, minor_version = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &major_version);
+    glGetIntegerv(GL_MINOR_VERSION, &minor_version);
+    
+    std::cout << "  OpenGL Version: " << major_version << "." << minor_version << std::endl;
+    
+    if (major_version < 3 || (major_version == 3 && minor_version < 3)) {
+        std::cerr << "\n" << std::string(70, '=') << std::endl;
+        std::cerr << "ERROR: OpenGL 3.3+ Required" << std::endl;
+        std::cerr << std::string(70, '=') << std::endl;
+        std::cerr << "  Your GPU supports: OpenGL " << major_version << "." << minor_version << std::endl;
+        std::cerr << "  Solution: Update graphics drivers or use a newer GPU" << std::endl;
+        std::cerr << "  Fallback: Cairo rendering mode will be used" << std::endl;
+        std::cerr << std::string(70, '=') << "\n" << std::endl;
+        return false;
+    }
+    
+    std::cout << "  ✓ OpenGL 3.3+ supported" << std::endl;
+    
+    std::cout << "  Checking required extensions..." << std::endl;
+    
+    if (!GLEW_ARB_vertex_array_object) {
+        std::cerr << "    ✗ ARB_vertex_array_object NOT supported" << std::endl;
+        return false;
+    }
+    std::cout << "    ✓ ARB_vertex_array_object" << std::endl;
+    
+    if (!GLEW_ARB_shader_objects) {
+        std::cerr << "    ✗ ARB_shader_objects NOT supported" << std::endl;
+        return false;
+    }
+    std::cout << "    ✓ ARB_shader_objects" << std::endl;
+    
+    if (!GLEW_ARB_vertex_shader) {
+        std::cerr << "    ✗ ARB_vertex_shader NOT supported" << std::endl;
+        return false;
+    }
+    std::cout << "    ✓ ARB_vertex_shader" << std::endl;
+    
+    if (!GLEW_ARB_fragment_shader) {
+        std::cerr << "    ✗ ARB_fragment_shader NOT supported" << std::endl;
+        return false;
+    }
+    std::cout << "    ✓ ARB_fragment_shader" << std::endl;
+    
+    logOpenGLInfo();
+    return true;
+}
+
+void SolitaireGame::logOpenGLInfo() {
+    std::cout << "\n" << std::string(70, '-') << std::endl;
+    std::cout << "GPU INFORMATION" << std::endl;
+    std::cout << std::string(70, '-') << std::endl;
+    
+    std::cout << "  Vendor:  " << glGetString(GL_VENDOR) << std::endl;
+    std::cout << "  Device:  " << glGetString(GL_RENDERER) << std::endl;
+    std::cout << "  Version: " << glGetString(GL_VERSION) << std::endl;
+    std::cout << "  Shading: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+    
+    int max_texture_units = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_texture_units);
+    std::cout << "  Max Texture Units: " << max_texture_units << std::endl;
+    
+    int max_vao_attributes = 0;
+    glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_vao_attributes);
+    std::cout << "  Max VAO Attributes: " << max_vao_attributes << std::endl;
+    
+    int max_texture_size = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+    std::cout << "  Max Texture Size: " << max_texture_size << "x" << max_texture_size << std::endl;
+    
+    std::cout << std::string(70, '-') << "\n" << std::endl;
+}
+
+// ============================================================================
+// SHADER COMPILATION WITH ERROR HANDLING
+// ============================================================================
+
 GLuint compileShader_gl(const char *source, GLenum shaderType) {
+    std::cout << "  Compiling " << (shaderType == GL_VERTEX_SHADER ? "VERTEX" : "FRAGMENT") 
+              << " shader..." << std::endl;
+    
+    if (glGetString(GL_VERSION) == nullptr) {
+        std::cerr << "    ✗ ERROR: No OpenGL context for shader compilation" << std::endl;
+        return 0;
+    }
+    
     GLuint shader = glCreateShader(shaderType);
+    
+    if (shader == 0) {
+        std::cerr << "    ✗ ERROR: Failed to create shader object" << std::endl;
+        std::cerr << "      GL Error Code: " << glGetError() << std::endl;
+        return 0;
+    }
+    
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
     
-    int success;
-    char infoLog[512];
+    int success = 0;
+    char infoLog[1024] = {0};
+    
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    
     if (!success) {
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        std::cerr << "Shader compilation failed: " << infoLog << std::endl;
+        glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
+        
+        std::cerr << "    ✗ ERROR: Shader compilation failed" << std::endl;
+        std::cerr << "      Info Log:\n" << infoLog << std::endl;
+        std::cerr << "      GL Error: " << glGetError() << std::endl;
+        
+        glDeleteShader(shader);
+        return 0;
     }
     
+    std::cout << "    ✓ Shader compiled successfully (ID: " << shader << ")" << std::endl;
     return shader;
 }
 
-// Helper function to create shader program
 GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
+    std::cout << "Creating shader program..." << std::endl;
+    
+    if (glGetString(GL_VERSION) == nullptr) {
+        std::cerr << "  ✗ ERROR: No OpenGL context for program creation" << std::endl;
+        return 0;
+    }
+    
     GLuint vertexShader = compileShader_gl(vertexSrc, GL_VERTEX_SHADER);
+    if (vertexShader == 0) {
+        std::cerr << "  ✗ Failed to compile vertex shader" << std::endl;
+        return 0;
+    }
+    
     GLuint fragmentShader = compileShader_gl(fragmentSrc, GL_FRAGMENT_SHADER);
+    if (fragmentShader == 0) {
+        std::cerr << "  ✗ Failed to compile fragment shader" << std::endl;
+        glDeleteShader(vertexShader);
+        return 0;
+    }
     
     GLuint program = glCreateProgram();
+    if (program == 0) {
+        std::cerr << "  ✗ ERROR: Failed to create shader program" << std::endl;
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        return 0;
+    }
+    
     glAttachShader(program, vertexShader);
     glAttachShader(program, fragmentShader);
     glLinkProgram(program);
     
-    int success;
-    char infoLog[512];
+    int success = 0;
+    char infoLog[1024] = {0};
     glGetProgramiv(program, GL_LINK_STATUS, &success);
+    
     if (!success) {
-        glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        std::cerr << "Program linking failed: " << infoLog << std::endl;
+        glGetProgramInfoLog(program, sizeof(infoLog), nullptr, infoLog);
+        std::cerr << "  ✗ ERROR: Shader program linking failed" << std::endl;
+        std::cerr << "    Info Log:\n" << infoLog << std::endl;
+        
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        glDeleteProgram(program);
+        return 0;
     }
     
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
     
+    std::cout << "✓ Shader program created successfully (ID: " << program << ")" << std::endl;
     return program;
 }
 
@@ -124,7 +320,6 @@ void SolitaireGame::updateWinAnimation_gl() {
     if (!win_animation_active_)
         return;
 
-    // Launch new cards periodically
     launch_timer_ += ANIMATION_INTERVAL;
     if (launch_timer_ >= 100) {
         launch_timer_ = 0;
@@ -139,12 +334,10 @@ void SolitaireGame::updateWinAnimation_gl() {
         }
     }
 
-    // Update physics for all active cards
     bool all_cards_finished = true;
     
-    // Using window dimensions instead of GTK allocation
-    int window_width = current_card_width_ * 10;  // Base estimate
-    int window_height = current_card_height_ * 10; // Base estimate
+    int window_width = current_card_width_ * 10;
+    int window_height = current_card_height_ * 10;
 
     const double explosion_min = window_height * EXPLOSION_THRESHOLD_MIN;
     const double explosion_max = window_height * EXPLOSION_THRESHOLD_MAX;
@@ -154,21 +347,17 @@ void SolitaireGame::updateWinAnimation_gl() {
             continue;
 
         if (!card.exploded) {
-            // Update position
             card.x += card.velocity_x;
             card.y += card.velocity_y;
             card.velocity_y += GRAVITY;
 
-            // Update rotation
             card.rotation += card.rotation_velocity;
 
-            // Check if card should explode
             if (card.y > explosion_min && card.y < explosion_max &&
                 (rand() % 100 < 5)) {
                 explodeCard_gl(card);
             }
 
-            // Check if card is off screen
             if (card.x < -current_card_width_ || card.x > window_width ||
                 card.y > window_height + current_card_height_) {
                 card.active = false;
@@ -176,10 +365,8 @@ void SolitaireGame::updateWinAnimation_gl() {
                 all_cards_finished = false;
             }
         } else {
-            // Update explosion fragments
             updateCardFragments_gl(card);
 
-            // Check if all fragments are inactive
             bool all_fragments_inactive = true;
             for (const auto &fragment : card.fragments) {
                 if (fragment.active) {
@@ -213,7 +400,6 @@ void SolitaireGame::startWinAnimation_gl() {
     resetKeyboardNavigation();
     playSound(GameSoundEvent::WinGame);
 
-    // Display win dialog (keep GTK for simplicity, replace with custom if needed)
     GtkWidget *dialog = gtk_message_dialog_new(
         GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
         GTK_BUTTONS_OK, NULL);
@@ -242,9 +428,9 @@ void SolitaireGame::startWinAnimation_gl() {
     launch_timer_ = 0;
     animated_cards_.clear();
 
-    // Handle multi-deck mode
     if (current_game_mode_ != GameMode::STANDARD_KLONDIKE) {
         std::vector<std::vector<cardlib::Card>> original_foundation = foundation_;
+        
         foundation_.clear();
         foundation_.resize(4);
         
@@ -266,7 +452,7 @@ void SolitaireGame::startWinAnimation_gl() {
         animated_foundation_cards_[i].resize(13, false);
     }
 
-    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
+    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick_gl, this);
 }
 
 void SolitaireGame::stopWinAnimation_gl() {
@@ -280,9 +466,7 @@ void SolitaireGame::stopWinAnimation_gl() {
         animation_timer_id_ = 0;
     }
 
-    // Clean up fragment surfaces
     for (auto &card : animated_cards_) {
-        // For OpenGL, we don't need to destroy Cairo surfaces
         card.fragments.clear();
     }
 
@@ -386,7 +570,7 @@ void SolitaireGame::updateCardFragments_gl(AnimatedCard &card) {
     if (!card.exploded)
         return;
 
-    int window_height = 768; // Base estimate
+    int window_height = 768;
 
     for (auto &fragment : card.fragments) {
         if (!fragment.active)
@@ -459,7 +643,7 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
 
             fragment.rotation = card.rotation;
             fragment.rotation_velocity = (rand() % 60 - 30) / 5.0;
-            fragment.surface = nullptr; // OpenGL: no Cairo surface needed
+            fragment.surface = nullptr;
             fragment.active = true;
 
             card.fragments.push_back(fragment);
@@ -486,15 +670,6 @@ void SolitaireGame::startDealAnimation_gl() {
     }
 
     animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick_gl, this);
-
-    dealNextCard_gl();
-    refreshDisplay();
-}
-
-gboolean SolitaireGame::onDealAnimationTick_gl(gpointer data) {
-    SolitaireGame *game = static_cast<SolitaireGame *>(data);
-    game->updateDealAnimation_gl();
-    return game->deal_animation_active_ ? TRUE : FALSE;
 }
 
 void SolitaireGame::updateDealAnimation_gl() {
@@ -502,12 +677,11 @@ void SolitaireGame::updateDealAnimation_gl() {
         return;
 
     deal_timer_ += ANIMATION_INTERVAL;
+
     if (deal_timer_ >= DEAL_INTERVAL) {
         deal_timer_ = 0;
         dealNextCard_gl();
     }
-
-    bool all_cards_arrived = true;
 
     for (auto &card : deal_cards_) {
         if (!card.active)
@@ -517,81 +691,50 @@ void SolitaireGame::updateDealAnimation_gl() {
         double dy = card.target_y - card.y;
         double distance = sqrt(dx * dx + dy * dy);
 
-        if (distance < 5.0) {
-            card.x = card.target_x;
-            card.y = card.target_y;
+        if (distance < 2.0) {
             card.active = false;
-            playSound(GameSoundEvent::CardPlace);
         } else {
-            double speed = distance * 0.15 * DEAL_SPEED;
-            double move_x = dx * speed / distance;
-            double move_y = dy * speed / distance;
-
-            double progress = 1.0 - (distance / sqrt(dx * dx + dy * dy));
-            double arc_height = 50.0;
-            double arc_offset = sin(progress * M_PI) * arc_height;
-
-            card.x += move_x;
-            card.y += move_y - arc_offset * 0.1;
-
-            card.rotation *= 0.95;
-
-            all_cards_arrived = false;
+            double speed = DEAL_SPEED;
+            card.x += dx * speed;
+            card.y += dy * speed;
+            card.rotation += 0.1;
         }
     }
 
-    if (all_cards_arrived && cards_dealt_ >= 28) {
-        completeDeal_gl();
-    }
-
     refreshDisplay();
+}
+
+gboolean SolitaireGame::onDealAnimationTick_gl(gpointer data) {
+    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+    game->updateDealAnimation_gl();
+    return game->deal_animation_active_ ? TRUE : FALSE;
 }
 
 void SolitaireGame::dealNextCard_gl() {
     if (cards_dealt_ >= 28)
         return;
 
-    int pile_index = 0;
-    int card_index = 0;
-    int cards_so_far = 0;
-
-    for (int i = 0; i < 7; i++) {
-        if (cards_so_far + (i + 1) > cards_dealt_) {
-            pile_index = i;
-            card_index = cards_dealt_ - cards_so_far;
-            break;
-        }
-        cards_so_far += (i + 1);
-    }
-
-    double start_x = current_card_spacing_;
-    double start_y = current_card_spacing_;
-
-    double target_x = current_card_spacing_ +
-                      pile_index * (current_card_width_ + current_card_spacing_);
-    double target_y = (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
-                      card_index * current_vert_spacing_;
+    int tableau_pile = cards_dealt_ % 7;
+    int tableau_index = cards_dealt_ / 7;
 
     AnimatedCard anim_card;
-    anim_card.card = tableau_[pile_index][card_index].card;
-    anim_card.x = start_x;
-    anim_card.y = start_y;
-    anim_card.target_x = target_x;
-    anim_card.target_y = target_y;
-    anim_card.velocity_x = 0;
-    anim_card.velocity_y = 0;
-    anim_card.rotation = (rand() % 1256) / 100.0 - 6.28;
+    anim_card.card = tableau_[tableau_pile][tableau_index].card;
+    anim_card.face_up = tableau_[tableau_pile][tableau_index].face_up;
+    anim_card.x = current_card_spacing_;
+    anim_card.y = current_card_spacing_;
+    anim_card.target_x = current_card_spacing_ +
+                         tableau_pile * (current_card_width_ + current_card_spacing_);
+    anim_card.target_y = (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
+                         tableau_index * current_vert_spacing_;
+    anim_card.rotation = 0;
     anim_card.rotation_velocity = 0;
     anim_card.active = true;
     anim_card.exploded = false;
-    anim_card.face_up = tableau_[pile_index][card_index].face_up;
-
-    playSound(tableau_[pile_index][card_index].face_up ?
-              GameSoundEvent::CardFlip :
-              GameSoundEvent::DealCard);
 
     deal_cards_.push_back(anim_card);
     cards_dealt_++;
+
+    playSound(GameSoundEvent::DealCard);
 }
 
 void SolitaireGame::completeDeal_gl() {
@@ -603,58 +746,33 @@ void SolitaireGame::completeDeal_gl() {
     }
 
     deal_cards_.clear();
-    cards_dealt_ = 0;
-
     refreshDisplay();
 }
 
 void SolitaireGame::stopDealAnimation_gl() {
-    if (!deal_animation_active_)
-        return;
-
-    deal_animation_active_ = false;
-
-    if (animation_timer_id_ > 0) {
-        g_source_remove(animation_timer_id_);
-        animation_timer_id_ = 0;
-    }
-
-    deal_cards_.clear();
-    cards_dealt_ = 0;
-
-    refreshDisplay();
+    completeDeal_gl();
 }
 
 // ============================================================================
-// Foundation Move Animation Functions - OpenGL Version
+// Foundation Move Animation - OpenGL Version
 // ============================================================================
 
 void SolitaireGame::startFoundationMoveAnimation_gl(const cardlib::Card &card,
-                                                    int source_pile,
-                                                    int source_index,
-                                                    int target_pile) {
-    if (foundation_move_animation_active_) {
-        foundation_[foundation_target_pile_ - 2].push_back(foundation_move_card_.card);
-
-        if (checkWinCondition()) {
-            if (animation_timer_id_ > 0) {
-                g_source_remove(animation_timer_id_);
-                animation_timer_id_ = 0;
-            }
-            foundation_move_animation_active_ = false;
-            startWinAnimation_gl();
-            return;
-        }
-    }
+                                                     int source_pile,
+                                                     int source_index,
+                                                     int target_pile) {
+    if (foundation_move_animation_active_)
+        return;
 
     foundation_move_animation_active_ = true;
     foundation_target_pile_ = target_pile;
     foundation_move_timer_ = 0;
 
-    double start_x, start_y;
+    double start_x = 0, start_y = 0;
 
-    if (source_pile == 1) {
-        start_x = 2 * current_card_spacing_ + current_card_width_;
+    if (source_pile < 2) {
+        start_x = current_card_spacing_ +
+                  source_pile * (current_card_width_ + current_card_spacing_);
         start_y = current_card_spacing_;
     } else if (source_pile >= 6 && source_pile <= 12) {
         int tableau_index = source_pile - 6;
@@ -747,7 +865,7 @@ void SolitaireGame::updateFoundationMoveAnimation_gl() {
 }
 
 // ============================================================================
-// Stock to Waste Animation Functions - OpenGL Version
+// Stock to Waste Animation - OpenGL Version
 // ============================================================================
 
 void SolitaireGame::startStockToWasteAnimation_gl() {
@@ -868,22 +986,13 @@ void SolitaireGame::drawAnimatedCard_gl(const AnimatedCard &anim_card,
 
     glm::mat4 model = glm::mat4(1.0f);
     
-    // Translate to card position
     model = glm::translate(model, glm::vec3(anim_card.x, anim_card.y, 0.0f));
-    
-    // Translate to center for rotation
     model = glm::translate(model, glm::vec3(current_card_width_ / 2.0f, 
                                              current_card_height_ / 2.0f, 0.0f));
-    
-    // Apply rotation (around Z-axis)
     model = glm::rotate(model, static_cast<float>(anim_card.rotation), 
                         glm::vec3(0.0f, 0.0f, 1.0f));
-    
-    // Translate back
     model = glm::translate(model, glm::vec3(-current_card_width_ / 2.0f, 
                                              -current_card_height_ / 2.0f, 0.0f));
-    
-    // Scale to card dimensions
     model = glm::scale(model, glm::vec3(current_card_width_, current_card_height_, 1.0f));
 
     glUseProgram(shaderProgram);
@@ -962,41 +1071,298 @@ void SolitaireGame::drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VA
 // OpenGL Setup Functions
 // ============================================================================
 
-GLuint setupCardQuadVAO_gl() {
-    GLuint VAO, VBO, EBO;
+GLuint SolitaireGame::setupCardQuadVAO_gl() {
+    std::cout << "\nSetting up card quad VAO..." << std::endl;
     
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ Cannot setup VAO - no OpenGL context available" << std::endl;
+        return 0;
+    }
+    
+    if (!is_glew_initialized_) {
+        std::cerr << "✗ Cannot setup VAO - GLEW not initialized" << std::endl;
+        return 0;
+    }
+    
+    static const float quadVertices[] = {
+        -0.5f,  0.5f,  0.0f, 1.0f,
+         0.5f,  0.5f,  1.0f, 1.0f,
+         0.5f, -0.5f,  1.0f, 0.0f,
+        -0.5f, -0.5f,  0.0f, 0.0f
+    };
+    
+    static const unsigned int indices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+    
+    GLuint VAO = 0, VBO = 0, EBO = 0;
+    
+    GLenum err = glGetError();
+    while (err != GL_NO_ERROR) {
+        std::cout << "  Clearing pre-existing GL error: " << err << std::endl;
+        err = glGetError();
+    }
+    
+    std::cout << "  Generating VAO..." << std::endl;
     glGenVertexArrays(1, &VAO);
+    err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "  ✗ glGenVertexArrays failed with error: " << err << std::endl;
+        return 0;
+    }
+    if (VAO == 0) {
+        std::cerr << "  ✗ glGenVertexArrays returned invalid VAO (0)" << std::endl;
+        return 0;
+    }
+    std::cout << "    ✓ VAO generated (ID: " << VAO << ")" << std::endl;
+    
+    std::cout << "  Generating VBO..." << std::endl;
     glGenBuffers(1, &VBO);
+    err = glGetError();
+    if (err != GL_NO_ERROR || VBO == 0) {
+        std::cerr << "  ✗ glGenBuffers(VBO) failed with error: " << err << std::endl;
+        glDeleteVertexArrays(1, &VAO);
+        return 0;
+    }
+    std::cout << "    ✓ VBO generated (ID: " << VBO << ")" << std::endl;
+    
+    std::cout << "  Generating EBO..." << std::endl;
     glGenBuffers(1, &EBO);
-
+    err = glGetError();
+    if (err != GL_NO_ERROR || EBO == 0) {
+        std::cerr << "  ✗ glGenBuffers(EBO) failed with error: " << err << std::endl;
+        glDeleteBuffers(1, &VBO);
+        glDeleteVertexArrays(1, &VAO);
+        return 0;
+    }
+    std::cout << "    ✓ EBO generated (ID: " << EBO << ")" << std::endl;
+    
+    std::cout << "  Configuring VAO..." << std::endl;
     glBindVertexArray(VAO);
-
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD_VERTICES_GL), QUAD_VERTICES_GL, GL_STATIC_DRAW);
-
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(QUAD_INDICES_GL), QUAD_INDICES_GL, GL_STATIC_DRAW);
-
-    // Position attribute
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-
-    // Texture coordinate attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-
+    
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
-
+    
+    err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "  ✗ OpenGL error during VAO configuration: " << err << std::endl;
+        glDeleteBuffers(1, &EBO);
+        glDeleteBuffers(1, &VBO);
+        glDeleteVertexArrays(1, &VAO);
+        return 0;
+    }
+    
+    std::cout << "✓ Card quad VAO setup complete (VAO ID: " << VAO << ")" << std::endl;
     return VAO;
 }
 
-GLuint setupShaders_gl() {
-    return createShaderProgram_gl(VERTEX_SHADER_GL, FRAGMENT_SHADER_GL);
+GLuint SolitaireGame::setupShaders_gl() {
+    std::cout << "\nSetting up shaders..." << std::endl;
+    
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ Cannot setup shaders - no OpenGL context available" << std::endl;
+        return 0;
+    }
+    
+    GLuint program = createShaderProgram_gl(VERTEX_SHADER_GL, FRAGMENT_SHADER_GL);
+    
+    if (program == 0) {
+        std::cerr << "✗ Failed to create shader program" << std::endl;
+        return 0;
+    }
+    
+    std::cout << "✓ Shaders setup complete" << std::endl;
+    return program;
+}
+
+bool SolitaireGame::initializeCardTextures_gl() {
+    std::cout << "\nInitializing card textures..." << std::endl;
+    
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ Cannot initialize textures - no OpenGL context available" << std::endl;
+        return false;
+    }
+    
+    try {
+        const int TEX_WIDTH = 32;
+        const int TEX_HEIGHT = 48;
+        const int TEX_CHANNELS = 4;
+        
+        std::cout << "  Creating placeholder texture (" << TEX_WIDTH << "x" << TEX_HEIGHT << ")..." << std::endl;
+        
+        unsigned char textureData[TEX_WIDTH * TEX_HEIGHT * TEX_CHANNELS];
+        memset(textureData, 255, sizeof(textureData));
+        
+        GLuint texture = 0;
+        glGenTextures(1, &texture);
+        
+        if (texture == 0) {
+            std::cerr << "  ✗ ERROR: Failed to generate texture object" << std::endl;
+            std::cerr << "    GL Error: " << glGetError() << std::endl;
+            return false;
+        }
+        std::cout << "    ✓ Texture object created (ID: " << texture << ")" << std::endl;
+        
+        glBindTexture(GL_TEXTURE_2D, texture);
+        
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cerr << "  ✗ ERROR: Failed to bind texture: " << err << std::endl;
+            glDeleteTextures(1, &texture);
+            return false;
+        }
+        
+        std::cout << "  Setting texture parameters..." << std::endl;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        
+        std::cout << "  Uploading texture data..." << std::endl;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, 
+                     GL_RGBA, GL_UNSIGNED_BYTE, textureData);
+        
+        err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cerr << "  ✗ ERROR: Failed to upload texture data: " << err << std::endl;
+            glDeleteTextures(1, &texture);
+            return false;
+        }
+        
+        cardBackTexture_gl_ = texture;
+        std::cout << "✓ Card textures initialized successfully (Texture ID: " << texture << ")" << std::endl;
+        return true;
+        
+    } catch (const std::exception &e) {
+        std::cerr << "✗ EXCEPTION: Failed to initialize card textures" << std::endl;
+        std::cerr << "  What: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "✗ UNKNOWN EXCEPTION: Failed to initialize card textures" << std::endl;
+        return false;
+    }
+}
+
+bool SolitaireGame::initializeRenderingEngine_gl() {
+    std::cout << "\n" << std::string(70, '=') << std::endl;
+    std::cout << "INITIALIZING RENDERING ENGINE" << std::endl;
+    std::cout << std::string(70, '=') << std::endl;
+    
+    if (rendering_engine_ != RenderingEngine::OPENGL) {
+        std::cout << "✓ Using Cairo rendering (CPU-based)" << std::endl;
+        cairo_initialized_ = true;
+        return true;
+    }
+    
+    std::cout << "Initializing OpenGL rendering engine..." << std::endl;
+    std::cout << "\n[STEP 1/5] Validating OpenGL context..." << std::endl;
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ FATAL: OpenGL context validation failed" << std::endl;
+        std::cerr << "Falling back to Cairo mode" << std::endl;
+        rendering_engine_ = RenderingEngine::CAIRO;
+        cairo_initialized_ = true;
+        return false;
+    }
+    std::cout << "✓ Context validated" << std::endl;
+    
+    std::cout << "\n[STEP 2/5] Initializing GLEW..." << std::endl;
+    if (!initializeGLEW()) {
+        std::cerr << "✗ FATAL: GLEW initialization failed" << std::endl;
+        std::cerr << "Falling back to Cairo mode" << std::endl;
+        rendering_engine_ = RenderingEngine::CAIRO;
+        cairo_initialized_ = true;
+        return false;
+    }
+    std::cout << "✓ GLEW initialized" << std::endl;
+    
+    std::cout << "\n[STEP 3/5] Checking GPU capabilities..." << std::endl;
+    if (!checkOpenGLCapabilities()) {
+        std::cerr << "✗ FATAL: GPU does not meet minimum requirements (OpenGL 3.3+)" << std::endl;
+        std::cerr << "Falling back to Cairo mode" << std::endl;
+        rendering_engine_ = RenderingEngine::CAIRO;
+        cairo_initialized_ = true;
+        return false;
+    }
+    std::cout << "✓ GPU capabilities verified" << std::endl;
+    
+    std::cout << "\n[STEP 4/5] Compiling shaders..." << std::endl;
+    cardShaderProgram_gl_ = setupShaders_gl();
+    if (cardShaderProgram_gl_ == 0) {
+        std::cerr << "✗ FATAL: Shader compilation failed" << std::endl;
+        glDeleteProgram(cardShaderProgram_gl_);
+        cardShaderProgram_gl_ = 0;
+        rendering_engine_ = RenderingEngine::CAIRO;
+        cairo_initialized_ = true;
+        return false;
+    }
+    std::cout << "✓ Shaders compiled and linked" << std::endl;
+    
+    std::cout << "\n[STEP 5/5] Setting up vertex arrays and textures..." << std::endl;
+    cardQuadVAO_gl_ = setupCardQuadVAO_gl();
+    if (cardQuadVAO_gl_ == 0) {
+        std::cerr << "✗ FATAL: VAO setup failed" << std::endl;
+        cleanupOpenGLResources_gl();
+        rendering_engine_ = RenderingEngine::CAIRO;
+        cairo_initialized_ = true;
+        return false;
+    }
+    std::cout << "✓ VAO created" << std::endl;
+    
+    if (!initializeCardTextures_gl()) {
+        std::cerr << "✗ FATAL: Texture initialization failed" << std::endl;
+        cleanupOpenGLResources_gl();
+        rendering_engine_ = RenderingEngine::CAIRO;
+        cairo_initialized_ = true;
+        return false;
+    }
+    std::cout << "✓ Textures initialized" << std::endl;
+    
+    opengl_initialized_ = true;
+    std::cout << "\n" << std::string(70, '=') << std::endl;
+    std::cout << "✓ OPENGL RENDERING ENGINE READY" << std::endl;
+    std::cout << std::string(70, '=') << "\n" << std::endl;
+    
+    return true;
+}
+
+void SolitaireGame::renderFrame_gl() {
+    if (rendering_engine_ != RenderingEngine::OPENGL) {
+        return;
+    }
+    
+    if (!opengl_initialized_) {
+        std::cerr << "WARNING: Attempted to render before OpenGL initialization" << std::endl;
+        return;
+    }
+    
+    if (cardShaderProgram_gl_ == 0 || cardQuadVAO_gl_ == 0) {
+        std::cerr << "ERROR: OpenGL resources not properly initialized" << std::endl;
+        std::cerr << "  Shader Program: " << cardShaderProgram_gl_ << std::endl;
+        std::cerr << "  VAO: " << cardQuadVAO_gl_ << std::endl;
+        return;
+    }
+    
+    glClearColor(0.1f, 0.5f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "GL Error during rendering: " << err << std::endl;
+    }
 }
 
 // ============================================================================
-// Auto-Finish Animation - OpenGL Version
+// Auto-Finish Animation - OpenGL 3.4 Version
 // ============================================================================
 
 gboolean SolitaireGame::onAutoFinishTick_gl(gpointer data) {
@@ -1007,5 +1373,28 @@ gboolean SolitaireGame::onAutoFinishTick_gl(gpointer data) {
 
 void SolitaireGame::processNextAutoFinishMove_gl() {
     // Placeholder for auto-finish logic
-    // This would be implemented based on game logic
+}
+
+void SolitaireGame::cleanupOpenGLResources_gl() {
+    if (cardShaderProgram_gl_ != 0) {
+        glDeleteProgram(cardShaderProgram_gl_);
+        cardShaderProgram_gl_ = 0;
+    }
+    
+    if (cardQuadVAO_gl_ != 0) {
+        glDeleteVertexArrays(1, &cardQuadVAO_gl_);
+        cardQuadVAO_gl_ = 0;
+    }
+    
+    if (cardBackTexture_gl_ != 0) {
+        glDeleteTextures(1, &cardBackTexture_gl_);
+        cardBackTexture_gl_ = 0;
+    }
+    
+    for (auto &pair : cardTextures_gl_) {
+        glDeleteTextures(1, &pair.second);
+    }
+    cardTextures_gl_.clear();
+    
+    std::cout << "OpenGL resources cleaned up" << std::endl;
 }

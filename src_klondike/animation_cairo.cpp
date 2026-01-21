@@ -53,7 +53,7 @@ void SolitaireGame::updateWinAnimation_cairo() {
       // Check if card should explode (increase random chance from 2% to 5%)
       if (card.y > explosion_min && card.y < explosion_max &&
           (rand() % 100 < 5)) {
-        explodeCard(card);
+        explodeCard_cairo(card);
       }
 
       // Check if card is off screen
@@ -85,7 +85,7 @@ void SolitaireGame::updateWinAnimation_cairo() {
 
   // Stop animation if all cards are done and we've launched them all
   /*if (all_cards_finished && cards_launched_ >= 52) {
-    stopWinAnimation();
+    stopWinAnimation_cairo();
   } */
   
   if (all_cards_finished) {
@@ -173,7 +173,7 @@ void SolitaireGame::startWinAnimation_cairo() {
 
   // Set up animation timer
   animation_timer_id_ =
-      g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
+      g_timeout_add(ANIMATION_INTERVAL, onAnimationTick_cairo, this);
 }
 
 void SolitaireGame::stopWinAnimation_cairo() {
@@ -396,8 +396,7 @@ void SolitaireGame::updateCardFragments_cairo(AnimatedCard &card) {
   }
 }
 
-void SolitaireGame::drawCardFragment_cairo(cairo_t *cr,
-                                     const CardFragment &fragment) {
+void SolitaireGame::drawCardFragment_cairo(cairo_t *cr, const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
   if (!fragment.active || !fragment.surface)
     return;
@@ -564,7 +563,7 @@ void SolitaireGame::drawFoundationDuringWinAnimation(size_t pile_index, const st
 void SolitaireGame::drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
   // Check if the top card is being dragged from foundation
   bool top_card_dragging =
-      (dragging_ && drag_source_pile_ == pile_index + 2 &&
+      (dragging_ && static_cast<size_t>(drag_source_pile_) == pile_index + 2 &&
        !pile.empty() && drag_cards_.size() == 1 &&
        drag_cards_[0].suit == pile.back().suit &&
        drag_cards_[0].rank == pile.back().rank);
@@ -606,10 +605,10 @@ void SolitaireGame::drawTableauPiles() {
 // Draw tableau piles during the deal animation
 void SolitaireGame::drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
   // Figure out how many cards should be visible in this pile
-  int cards_in_this_pile = pile_index + 1; // Each pile has (index + 1) cards
+  // UNUSED: int cards_in_this_pile = pile_index + 1; // Each pile has (index + 1) cards
   int total_cards_before_this_pile = 0;
 
-  for (int p = 0; p < pile_index; p++) {
+  for (size_t p = 0; p < pile_index; p++) {
     total_cards_before_this_pile += (p + 1);
   }
 
@@ -680,7 +679,7 @@ void SolitaireGame::drawAllAnimations() {
 
   // Draw win animation
   if (win_animation_active_) {
-    drawWinAnimation();
+    drawWinAnimation_cairo();
   }
 
   // Draw foundation move animation
@@ -690,7 +689,7 @@ void SolitaireGame::drawAllAnimations() {
 
   // Draw deal animation
   if (deal_animation_active_) {
-    drawDealAnimation();
+    drawDealAnimation_cairo();
   }
 }
 
@@ -872,7 +871,7 @@ void SolitaireGame::startDealAnimation_cairo() {
 
   // Set up a new animation timer with a different callback
   animation_timer_id_ =
-      g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick, this);
+      g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick_cairo, this);
 
   // Deal the first card immediately
   dealNextCard();
@@ -1049,7 +1048,7 @@ void SolitaireGame::startFoundationMoveAnimation_cairo(const cardlib::Card &card
         animation_timer_id_ = 0;
       }
       foundation_move_animation_active_ = false;
-      startWinAnimation();
+      startWinAnimation_cairo();
       return;
     }
   }
@@ -1150,7 +1149,7 @@ void SolitaireGame::updateFoundationMoveAnimation_cairo() {
     // Check if the player has won - BUT only if auto-finish is not active
     // When auto-finishing, we'll check for win condition at the end
     if (!auto_finish_active_ && checkWinCondition()) {
-      startWinAnimation();
+      startWinAnimation_cairo();
     }
 
     // Continue auto-finish if active
@@ -1353,14 +1352,14 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
       invalid_source = true;
     } else if (source_pile_ >= first_tableau_index) {
       int tableau_idx = source_pile_ - first_tableau_index;
-      if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
+      if (tableau_idx < 0 || static_cast<size_t>(tableau_idx) >= tableau_.size()) {
         invalid_source = true;
       }
     } else if (source_pile_ == 1 && waste_.empty()) {
       invalid_source = true;
     } else if (source_pile_ >= 2 && source_pile_ <= max_foundation_index) {
       int foundation_idx = source_pile_ - 2;
-      if (foundation_idx < 0 || foundation_idx >= foundation_.size()) {
+      if (foundation_idx < 0 || static_cast<size_t>(foundation_idx) >= foundation_.size()) {
         invalid_source = true;
       }
     }
@@ -1388,7 +1387,7 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     int foundation_idx = selected_pile_ - 2;
     
     // Make sure foundation_idx is valid
-    if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+    if (foundation_idx >= 0 && static_cast<size_t>(foundation_idx) < foundation_.size()) {
       // Match the exact calculation from drawFoundationPiles()
       x = 3 * (current_card_width_ + current_card_spacing_) + 
           foundation_idx * (current_card_width_ + current_card_spacing_);
@@ -1397,7 +1396,7 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
   } else if (selected_pile_ >= first_tableau_index) {
     // Tableau piles
     int tableau_idx = selected_pile_ - first_tableau_index;
-    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
+    if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
       x = current_card_spacing_ +
           tableau_idx * (current_card_width_ + current_card_spacing_);
 
@@ -1439,7 +1438,7 @@ void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
     if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
       auto &tableau_pile = tableau_[tableau_idx];
 
-      if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
+      if (!tableau_pile.empty() && static_cast<size_t>(source_card_idx_) < tableau_pile.size()) {
         // Highlight all cards from the selected one to the bottom
         cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
 
@@ -1709,4 +1708,16 @@ void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_stroke(cr);
   
   cairo_restore(cr);
+}
+
+// Static callback wrapper for win animation timer
+gboolean SolitaireGame::onAnimationTick_cairo(gpointer data) {
+  auto* game = static_cast<SolitaireGame*>(data);
+  return game->onAnimationTick(data);
+}
+
+// Static callback wrapper for deal animation timer
+gboolean SolitaireGame::onDealAnimationTick_cairo(gpointer data) {
+  auto* game = static_cast<SolitaireGame*>(data);
+  return game->onDealAnimationTick(data);
 }

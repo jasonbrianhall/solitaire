@@ -110,6 +110,7 @@ SolitaireGame::SolitaireGame()
   // Load engine preference and initialize rendering
   loadEnginePreference();
   initializeRenderingEngine();
+  initializeRenderingEngine_gl();
   
   loadSettings();
 }
