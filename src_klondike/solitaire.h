@@ -268,6 +268,7 @@ private:
   void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
   
   // GL Drawing functions for game piles
   void drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up);

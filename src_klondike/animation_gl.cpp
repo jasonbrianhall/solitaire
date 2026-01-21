@@ -1137,6 +1137,23 @@ void SolitaireGame::drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VA
 }
 
 // ============================================================================
+// OpenGL Drag and Drop Support - CRITICAL FIX
+// ============================================================================
+
+void SolitaireGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
+    // Draw cards being dragged  
+    if (dragging_ && !drag_cards_.empty()) {
+        int drag_x = static_cast<int>(drag_start_x_ - drag_offset_x_);
+        int drag_y = static_cast<int>(drag_start_y_ - drag_offset_y_);
+        
+        for (size_t i = 0; i < drag_cards_.size(); i++) {
+            drawCard_gl(drag_cards_[i], drag_x,
+                       drag_y + static_cast<int>(i) * current_vert_spacing_, true);
+        }
+    }
+}
+
+// ============================================================================
 // OpenGL Setup Functions
 // ============================================================================
 
@@ -1703,6 +1720,9 @@ void SolitaireGame::renderFrame_gl() {
     if (stock_to_waste_animation_active_) {
         drawStockToWasteAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
+    
+    // Draw dragged cards overlay - CRITICAL FIX FOR DRAG VISUALIZATION
+    drawDraggedCards_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
 }
 
 // ============================================================================

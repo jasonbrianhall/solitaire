@@ -484,6 +484,13 @@ void SolitaireGame::setupOpenGLArea() {
   g_signal_connect(G_OBJECT(gl_area_), "motion-notify-event",
                   G_CALLBACK(onMotionNotify), this);
   
+  // Add size-allocate signal handler for resize events (CRITICAL FIX!)
+  g_signal_connect(
+      G_OBJECT(gl_area_), "size-allocate",
+      G_CALLBACK(+[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
+        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+        game->updateCardDimensions(allocation->width, allocation->height);
+      }), this);
   // Set minimum size
   gtk_widget_set_size_request(
       gl_area_,
