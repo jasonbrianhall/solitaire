@@ -1455,23 +1455,8 @@ void SolitaireGame::drawStockPile_gl() {
     int y = current_card_spacing_;
     
     if (stock_.empty()) {
-        // Draw empty pile placeholder with card back
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0f));
-        model = glm::scale(model, glm::vec3(current_card_width_, current_card_height_, 1.0f));
-        
-        GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-        
-        GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
-        glUniform1f(alphaLoc, 1.0f);
-        
-        GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
-        glUniform1i(texLoc, 0);
-        glActiveTexture(GL_TEXTURE0);
-        
-        glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
-        glBindVertexArray(cardQuadVAO_gl_);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        // Draw empty stock pile placeholder
+        drawEmptyPile_gl(x, y);
     } else {
         // Draw only the top card of stock
         drawCard_gl(stock_.back(), x, y, false);
@@ -1483,7 +1468,8 @@ void SolitaireGame::drawWastePile_gl() {
     int y = current_card_spacing_;
     
     if (waste_.empty()) {
-        // Empty pile - just spacing
+        // Draw empty waste pile placeholder (like Cairo's light green placeholder)
+        drawEmptyPile_gl(x, y);
         return;
     }
     
@@ -1499,23 +1485,8 @@ void SolitaireGame::drawFoundationPiles_gl() {
         int x = start_x + (int)(i * (current_card_width_ + current_card_spacing_));
         
         if (foundation_[i].empty()) {
-            // Draw empty foundation placeholder with card back
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3((float)x, (float)y, 0.0f));
-            model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
-            
-            GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-            
-            GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
-            glUniform1f(alphaLoc, 1.0f);
-            
-            GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
-            glUniform1i(texLoc, 0);
-            glActiveTexture(GL_TEXTURE0);
-            
-            glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
-            glBindVertexArray(cardQuadVAO_gl_);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            // Draw empty foundation placeholder
+            drawEmptyPile_gl(x, y);
         } else {
             // Draw top card of foundation (face up)
             drawCard_gl(foundation_[i].back(), x, y, true);
@@ -1539,6 +1510,59 @@ void SolitaireGame::drawTableauPiles_gl() {
     }
 }
 
+// Helper function to draw empty pile placeholders (light gray rectangle like Cairo)
+void SolitaireGame::drawEmptyPile_gl(int x, int y) {
+    // Draw light gray rectangle placeholder for empty pile
+    // This matches Cairo's appearance exactly: RGBA(0.85, 0.85, 0.85, 0.5)
+    
+    // Create light gray texture on first use (static, cached)
+    static GLuint emptyPileTexture = 0;
+    
+    if (emptyPileTexture == 0) {
+        const int WIDTH = 32;
+        const int HEIGHT = 48;
+        
+        unsigned char data[WIDTH * HEIGHT * 4];
+        for (int i = 0; i < WIDTH * HEIGHT * 4; i += 4) {
+            data[i] = (unsigned char)(0.85f * 255);     // R: 0.85
+            data[i + 1] = (unsigned char)(0.85f * 255); // G: 0.85
+            data[i + 2] = (unsigned char)(0.85f * 255); // B: 0.85
+            data[i + 3] = (unsigned char)(0.5f * 255);  // A: 0.5 (50% opacity)
+        }
+        
+        glGenTextures(1, &emptyPileTexture);
+        glBindTexture(GL_TEXTURE_2D, emptyPileTexture);
+        
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, WIDTH, HEIGHT, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, data);
+    }
+    
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3((float)x, (float)y, 0.0f));
+    model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
+    
+    GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Set full alpha (transparency handled by texture)
+    GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
+    glUniform1f(alphaLoc, 1.0f);
+    
+    // Draw with light gray placeholder texture
+    GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
+    glUniform1i(texLoc, 0);
+    glActiveTexture(GL_TEXTURE0);
+    
+    glBindTexture(GL_TEXTURE_2D, emptyPileTexture);
+    glBindVertexArray(cardQuadVAO_gl_);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
 void SolitaireGame::renderFrame_gl() {
     if (!game_fully_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
@@ -1557,7 +1581,7 @@ void SolitaireGame::renderFrame_gl() {
     static int prev_width = -1, prev_height = -1;
     static bool first = true;
     if (first || allocation.width != prev_width || allocation.height != prev_height) {
-        fprintf(stderr, "[GL] Window dimensions: %d x %d\n", allocation.width, allocation.height);
+        fprintf(stderr, "[GL] Window dimensions: %d x %d (pos: %d, %d)\n", allocation.width, allocation.height, allocation.x, allocation.y);
         fprintf(stderr, "[GL] Card dimensions: width=%d, height=%d, spacing=%d, vert_spacing=%d\n",
                 current_card_width_, current_card_height_, current_card_spacing_, current_vert_spacing_);
         prev_width = allocation.width;
@@ -1570,7 +1594,8 @@ void SolitaireGame::renderFrame_gl() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // CRITICAL FIX: Set viewport to match actual window size
-    glViewport(0, 0, allocation.width, allocation.height);
+    // Account for the widget's position offset
+    glViewport(allocation.x, allocation.y, allocation.width, allocation.height);
     
     // Setup matrices
     glUseProgram(cardShaderProgram_gl_);
@@ -1586,11 +1611,18 @@ void SolitaireGame::renderFrame_gl() {
     GLint viewLoc = glGetUniformLocation(cardShaderProgram_gl_, "view");
     glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
     
+    // Enable blending for transparency (used for empty pile indicators)
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
     // Draw all game piles
     drawStockPile_gl();
     drawWastePile_gl();
     drawFoundationPiles_gl();
     drawTableauPiles_gl();
+    
+    // Disable blending after drawing
+    glDisable(GL_BLEND);
     
     // Draw animations if active
     if (win_animation_active_) {
