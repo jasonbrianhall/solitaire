@@ -268,6 +268,14 @@ private:
   void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  
+  // GL Drawing functions for game piles
+  void drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up);
+  void drawStockPile_gl();
+  void drawWastePile_gl();
+  void drawFoundationPiles_gl();
+  void drawTableauPiles_gl();
+  GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
 
   // ============================================================================
   // GL CONTEXT CALLBACKS (NEW - FIX FOR NO CONTEXT ERROR)

@@ -1335,68 +1335,221 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
     return true;
 }
 
+// ============================================================================
+// GL DRAWING FUNCTIONS FOR GAME PILES
+// ============================================================================
+
+GLuint SolitaireGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
+    if (data.empty()) return 0;
+    
+    // For now, create a simple colored texture based on data hash
+    // TODO: Use stb_image or similar to decode PNG from memory
+    
+    const int TEX_WIDTH = 64;
+    const int TEX_HEIGHT = 96;
+    unsigned char textureData[TEX_WIDTH * TEX_HEIGHT * 4];
+    
+    // Create a gradient texture for now
+    for (int i = 0; i < TEX_WIDTH * TEX_HEIGHT; i++) {
+        textureData[i*4 + 0] = 200;  // R
+        textureData[i*4 + 1] = 200;  // G
+        textureData[i*4 + 2] = 200;  // B
+        textureData[i*4 + 3] = 255;  // A
+    }
+    
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, 
+                 GL_RGBA, GL_UNSIGNED_BYTE, textureData);
+    
+    return texture;
+}
+
+void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up) {
+    if (cardShaderProgram_gl_ == 0 || cardQuadVAO_gl_ == 0) {
+        return;
+    }
+    
+    GLuint texture = cardBackTexture_gl_;
+    
+    if (face_up) {
+        // Try to get the card texture from the deck
+        auto card_image = deck_.getCardImage(card);
+        if (card_image && !card_image->data.empty()) {
+            std::string card_key = std::to_string((int)card.suit) + "_" + std::to_string((int)card.rank);
+            auto it = cardTextures_gl_.find(card_key);
+            
+            if (it != cardTextures_gl_.end()) {
+                texture = it->second;
+            } else {
+                texture = loadTextureFromMemory(card_image->data);
+                if (texture != 0) {
+                    cardTextures_gl_[card_key] = texture;
+                }
+            }
+        }
+    } else {
+        // Use card back texture  
+        if (cardBackTexture_gl_ == 0) {
+            auto back_image = deck_.getCardBackImage();
+            if (back_image && !back_image->data.empty()) {
+                cardBackTexture_gl_ = loadTextureFromMemory(back_image->data);
+                texture = cardBackTexture_gl_;
+            }
+        } else {
+            texture = cardBackTexture_gl_;
+        }
+    }
+    
+    // Draw card at position
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3((float)x, (float)y, 0.0f));
+    model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
+    
+    GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    if (texture != 0) {
+        glBindTexture(GL_TEXTURE_2D, texture);
+    }
+    
+    glBindVertexArray(cardQuadVAO_gl_);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+void SolitaireGame::drawStockPile_gl() {
+    int x = current_card_spacing_;
+    int y = current_card_spacing_;
+    
+    if (stock_.empty()) {
+        // Draw empty pile placeholder
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0f));
+        model = glm::scale(model, glm::vec3(current_card_width_, current_card_height_, 1.0f));
+        
+        GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        
+        glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
+        glBindVertexArray(cardQuadVAO_gl_);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    } else {
+        // Draw only the top card of stock
+        drawCard_gl(stock_.back(), x, y, false);
+    }
+}
+
+void SolitaireGame::drawWastePile_gl() {
+    int x = current_card_spacing_ + (current_card_width_ + current_card_spacing_);
+    int y = current_card_spacing_;
+    
+    if (waste_.empty()) {
+        // Empty pile - just spacing
+        return;
+    }
+    
+    // Draw top card of waste pile (face up)
+    drawCard_gl(waste_.back(), x, y, true);
+}
+
+void SolitaireGame::drawFoundationPiles_gl() {
+    int start_x = current_card_spacing_ + (current_card_width_ + current_card_spacing_) * 3;
+    int y = current_card_spacing_;
+    
+    for (size_t i = 0; i < foundation_.size(); i++) {
+        int x = start_x + (int)(i * (current_card_width_ + current_card_spacing_));
+        
+        if (foundation_[i].empty()) {
+            // Draw empty foundation placeholder
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3((float)x, (float)y, 0.0f));
+            model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
+            
+            GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            
+            glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
+            glBindVertexArray(cardQuadVAO_gl_);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        } else {
+            // Draw top card of foundation (face up)
+            drawCard_gl(foundation_[i].back(), x, y, true);
+        }
+    }
+}
+
+void SolitaireGame::drawTableauPiles_gl() {
+    int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+    
+    for (size_t pile = 0; pile < tableau_.size(); pile++) {
+        int x = current_card_spacing_ + (int)(pile * (current_card_width_ + current_card_spacing_));
+        int y = base_y;
+        
+        for (size_t card_idx = 0; card_idx < tableau_[pile].size(); card_idx++) {
+            const TableauCard &tc = tableau_[pile][card_idx];
+            int card_y = y + (int)(card_idx * current_vert_spacing_);
+            
+            drawCard_gl(tc.card, x, card_y, tc.face_up);
+        }
+    }
+}
+
 void SolitaireGame::renderFrame_gl() {
-    // CRITICAL SAFETY CHECK #1: Game must be fully initialized before any rendering
+    // CRITICAL SAFETY CHECKS
     if (!game_fully_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return;
     }
     
-    // CRITICAL SAFETY CHECK #2: Game state must be populated
     if (tableau_.empty() || foundation_.empty() || stock_.empty() || waste_.empty()) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return;
     }
     
-    if (rendering_engine_ != RenderingEngine::OPENGL) {
+    if (rendering_engine_ != RenderingEngine::OPENGL || !opengl_initialized_) {
         return;
     }
     
-    if (!opengl_initialized_) {
-        std::cerr << "WARNING: Attempted to render before OpenGL initialization" << std::endl;
-        return;
-    }
-    
-    if (cardShaderProgram_gl_ == 0 || cardQuadVAO_gl_ == 0) {
-        std::cerr << "ERROR: OpenGL resources not properly initialized" << std::endl;
-        std::cerr << "  Shader Program: " << cardShaderProgram_gl_ << std::endl;
-        std::cerr << "  VAO: " << cardQuadVAO_gl_ << std::endl;
-        return;
-    }
-    
-    // Set clear color to felt green
+    // Clear screen
     glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-    // Set up 2D projection for card rendering
-    glm::mat4 projection = glm::ortho(0.0f, 1920.0f, 1080.0f, 0.0f, -1.0f, 1.0f);
-    
+    // Setup projection matrix
+    glm::mat4 projection = glm::ortho(0.0f, (float)1920, (float)1080, 0.0f, -1.0f, 1.0f);
     glUseProgram(cardShaderProgram_gl_);
     GLint projLoc = glGetUniformLocation(cardShaderProgram_gl_, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    
+    static int frame_count = 0;
+    if (frame_count++ % 60 == 0) {  // Print every 60 frames
+        std::cout << "[GL] Frame " << frame_count << " - Drawing stock: " << stock_.size() 
+                  << " waste: " << waste_.size() << " foundation: " << foundation_.size() 
+                  << " tableau: " << tableau_.size() << std::endl;
+    }
+    
+    // Draw all game piles
+    drawStockPile_gl();
+    drawWastePile_gl();
+    drawFoundationPiles_gl();
+    drawTableauPiles_gl();
     
     // Draw animations if active
     if (win_animation_active_) {
         drawWinAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
-    
     if (deal_animation_active_) {
         drawDealAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
-    
     if (foundation_move_animation_active_) {
         drawFoundationAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
-    
     if (stock_to_waste_animation_active_) {
         drawStockToWasteAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
-    }
-    
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR) {
-        std::cerr << "GL Error during rendering: 0x" << std::hex << err << std::dec << std::endl;
     }
 }
 
