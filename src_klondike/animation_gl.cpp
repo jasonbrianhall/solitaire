@@ -1336,6 +1336,20 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
 }
 
 void SolitaireGame::renderFrame_gl() {
+    // CRITICAL SAFETY CHECK #1: Game must be fully initialized before any rendering
+    if (!game_fully_initialized_) {
+        glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        return;
+    }
+    
+    // CRITICAL SAFETY CHECK #2: Game state must be populated
+    if (tableau_.empty() || foundation_.empty() || stock_.empty() || waste_.empty()) {
+        glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        return;
+    }
+    
     if (rendering_engine_ != RenderingEngine::OPENGL) {
         return;
     }
@@ -1352,12 +1366,37 @@ void SolitaireGame::renderFrame_gl() {
         return;
     }
     
-    glClearColor(0.1f, 0.5f, 0.1f, 1.0f);
+    // Set clear color to felt green
+    glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // Set up 2D projection for card rendering
+    glm::mat4 projection = glm::ortho(0.0f, 1920.0f, 1080.0f, 0.0f, -1.0f, 1.0f);
+    
+    glUseProgram(cardShaderProgram_gl_);
+    GLint projLoc = glGetUniformLocation(cardShaderProgram_gl_, "projection");
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    
+    // Draw animations if active
+    if (win_animation_active_) {
+        drawWinAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    }
+    
+    if (deal_animation_active_) {
+        drawDealAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    }
+    
+    if (foundation_move_animation_active_) {
+        drawFoundationAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    }
+    
+    if (stock_to_waste_animation_active_) {
+        drawStockToWasteAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    }
     
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {
-        std::cerr << "GL Error during rendering: " << err << std::endl;
+        std::cerr << "GL Error during rendering: 0x" << std::hex << err << std::dec << std::endl;
     }
 }
 
