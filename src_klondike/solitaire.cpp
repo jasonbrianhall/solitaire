@@ -305,7 +305,7 @@ bool SolitaireGame::initializeOpenGLResources() {
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
     if (err != GLEW_OK) {
-      fprintf(stderr, "[GL] glewInit failed: %s\n", glewGetErrorString(err));
+      fprintf(stderr, "[GL] glewInit failed: %s %i\n", glewGetErrorString(err), err);
       return false;
     }
     fprintf(stderr, "[GL] GLEW initialized\n");

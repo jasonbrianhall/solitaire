@@ -1497,7 +1497,6 @@ void SolitaireGame::drawTableauPiles_gl() {
 }
 
 void SolitaireGame::renderFrame_gl() {
-    printf("Rednering GL Frame\n");
     if (!game_fully_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1525,6 +1524,7 @@ void SolitaireGame::renderFrame_gl() {
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
     
     static int frame_count = 0;
+    printf("Frame count %i\n", frame_count);
     if (frame_count++ % 60 == 0) {  // Print every 60 frames
         std::cout << "[GL] Frame " << frame_count << " - Drawing stock: " << stock_.size() 
                   << " waste: " << waste_.size() << " foundation: " << foundation_.size() 
