@@ -973,13 +973,28 @@ void SolitaireGame::drawWastePile_gl() {
     int y = current_card_spacing_;
     
     if (waste_.empty()) {
-        // Draw empty waste pile placeholder (like Cairo's light green placeholder)
+        // Draw empty waste pile placeholder
         drawEmptyPile_gl(x, y);
         return;
     }
     
-    // Draw top card of waste pile (face up)
-    drawCard_gl(waste_.back(), x, y, true);
+    // Check if the top card is being dragged
+    bool top_card_dragging =
+        (dragging_ && drag_source_pile_ == 1 &&
+         drag_cards_.size() == 1 && waste_.size() >= 1 &&
+         drag_cards_[0].suit == waste_.back().suit &&
+         drag_cards_[0].rank == waste_.back().rank);
+
+    if (top_card_dragging && waste_.size() > 1) {
+        // Draw the second-to-top card (reveal it when top is dragged)
+        const auto &second_card = waste_[waste_.size() - 2];
+        drawCard_gl(second_card, x, y, true);
+    } else if (!top_card_dragging) {
+        // Draw the top card if it's not being dragged
+        const auto &top_card = waste_.back();
+        drawCard_gl(top_card, x, y, true);
+    }
+    // If top card is being dragged and there are no other cards, draw nothing (empty placeholder)
 }
 
 void SolitaireGame::drawFoundationPiles_gl() {
@@ -993,8 +1008,22 @@ void SolitaireGame::drawFoundationPiles_gl() {
             // Draw empty foundation placeholder
             drawEmptyPile_gl(x, y);
         } else {
-            // Draw top card of foundation (face up)
-            drawCard_gl(foundation_[i].back(), x, y, true);
+            // Check if the top card is being dragged from this foundation pile
+            bool top_card_dragging =
+                (dragging_ && drag_source_pile_ == static_cast<int>(i) + 2 &&
+                 !foundation_[i].empty() && drag_cards_.size() == 1 &&
+                 drag_cards_[0].suit == foundation_[i].back().suit &&
+                 drag_cards_[0].rank == foundation_[i].back().rank);
+
+            if (!top_card_dragging) {
+                // Draw top card normally
+                drawCard_gl(foundation_[i].back(), x, y, true);
+            } else if (foundation_[i].size() > 1) {
+                // Draw the second-to-top card (reveal it when top is dragged)
+                const auto &second_card = foundation_[i][foundation_[i].size() - 2];
+                drawCard_gl(second_card, x, y, true);
+            }
+            // If top card is dragged and it's the only card, draw nothing
         }
     }
 }
@@ -1002,11 +1031,25 @@ void SolitaireGame::drawFoundationPiles_gl() {
 void SolitaireGame::drawTableauPiles_gl() {
     int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
     
+    // Calculate pile index offsets to match Cairo's logic
+    // Pile indices: 0=stock, 1=waste, 2-5=foundation, 6+=tableau
+    int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
+    int first_tableau_index = max_foundation_index + 1;
+    
     for (size_t pile = 0; pile < tableau_.size(); pile++) {
         int x = current_card_spacing_ + (int)(pile * (current_card_width_ + current_card_spacing_));
         int y = base_y;
         
         for (size_t card_idx = 0; card_idx < tableau_[pile].size(); card_idx++) {
+            // Skip cards that are being dragged from THIS tableau pile
+            // This reveals the card underneath when dragging
+            if (dragging_ && 
+                drag_source_pile_ >= first_tableau_index && 
+                drag_source_pile_ - first_tableau_index == static_cast<int>(pile) &&
+                card_idx >= tableau_[pile].size() - drag_cards_.size()) {
+                continue;  // Skip this card - it's being dragged!
+            }
+            
             const TableauCard &tc = tableau_[pile][card_idx];
             int card_y = y + (int)(card_idx * current_vert_spacing_);
             
