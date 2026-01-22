@@ -8,8 +8,8 @@ CXXFLAGS_COMMON = -std=c++17 -Wall -Wextra
 DEBUG_FLAGS = -g -DDEBUG
 
 # Source files for Klondike Solitaire
-SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation_cairo.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp src_klondike/mouse.cpp
-SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp src_klondike/animation_gl.cpp src_klondike/animation.cpp
+SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation_cairo.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp src_klondike/mouse.cpp src_klondike/animation.cpp
+SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp src_klondike/animation_gl.cpp 
 SRCS_WIN_KLONDIKE = src_klondike/windowsaudioplayer.cpp
 
 # Source files for Spider Solitaire
@@ -49,7 +49,7 @@ CXXFLAGS_LINUX = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_LINUX) $(PULSE_CFLAGS) $(ZIP_CF
 CXXFLAGS_WIN = $(CXXFLAGS_COMMON) $(GTK_CFLAGS_WIN) $(ZIP_CFLAGS_WIN)
 
 # Debug-specific flags
-CXXFLAGS_LINUX_DEBUG = $(CXXFLAGS_LINUX) $(DEBUG_FLAGS)
+CXXFLAGS_LINUX_DEBUG = $(CXXFLAGS_LINUX) $(DEBUG_FLAGS) -DOPENGL
 CXXFLAGS_WIN_DEBUG = $(CXXFLAGS_WIN) $(DEBUG_FLAGS)
 
 LDFLAGS_LINUX = $(GTK_LIBS_LINUX) $(PULSE_LIBS) $(ZIP_LIBS_LINUX) $(OPENGL_LIBS_LINUX) -pthread

@@ -244,7 +244,7 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
 // GL CONTEXT CALLBACKS - FIX FOR NO OPENGL CONTEXT ERROR
 // ============================================================================
 
-#ifndef _WIN32
+#ifdef OPENGL
 // Called by GTK when GL context is created and available
 gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -278,7 +278,7 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
 }
 #endif
 
-#ifndef _WIN32
+#ifdef OPENGL
 // Called by GTK every frame to render
 gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
   (void)context;
@@ -311,7 +311,7 @@ gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpoin
 // GL INITIALIZATION - DEFERRED FROM CONSTRUCTOR
 // ============================================================================
 
-#ifndef _WIN32
+#ifdef OPENGL
 // Called from realize callback - NOW has GL context
 bool SolitaireGame::initializeOpenGLResources() {
   #ifdef __linux__
@@ -464,7 +464,7 @@ void SolitaireGame::setupCairoArea() {
   initializeCardCache();
 }
 
-#ifndef _WIN32
+#ifdef OPENGL
 void SolitaireGame::setupOpenGLArea() {
   #ifdef __linux__
   // Create OpenGL rendering area
@@ -1222,7 +1222,7 @@ void SolitaireGame::setupGameArea() {
   setupCairoArea();
   
   // Create OpenGL rendering area
-#ifndef _WIN32
+#ifdef OPENGL
   setupOpenGLArea();
 #endif
   
