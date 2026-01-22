@@ -1320,6 +1320,60 @@ GLuint SolitaireGame::setupShaders_gl() {
     return program;
 }
 
+bool SolitaireGame::reloadCustomCardBackTexture_gl() {
+    if (custom_back_path_.empty()) {
+        std::cerr << "ERROR: No custom back path set" << std::endl;
+        return false;
+    }
+
+    if (!validateOpenGLContext()) {
+        std::cerr << "ERROR: No OpenGL context available for custom back texture" << std::endl;
+        return false;
+    }
+
+    try {
+        // Read custom back image from disk
+        std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            std::cerr << "ERROR: Failed to open custom back file: " << custom_back_path_ << std::endl;
+            return false;
+        }
+
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        std::vector<uint8_t> imageData(size);
+        if (!file.read(reinterpret_cast<char*>(imageData.data()), size)) {
+            std::cerr << "ERROR: Failed to read custom back file" << std::endl;
+            return false;
+        }
+        file.close();
+
+        // Delete old texture if it exists
+        if (cardBackTexture_gl_ != 0) {
+            glDeleteTextures(1, &cardBackTexture_gl_);
+            cardBackTexture_gl_ = 0;
+        }
+
+        // Load custom back image and create new texture
+        std::cout << "Loading custom card back texture from: " << custom_back_path_ << std::endl;
+        cardBackTexture_gl_ = loadTextureFromMemory(imageData);
+        
+        if (cardBackTexture_gl_ != 0) {
+            std::cout << "✓ Custom card back texture loaded successfully (Texture ID: " 
+                      << cardBackTexture_gl_ << ")" << std::endl;
+            return true;
+        } else {
+            std::cerr << "ERROR: Failed to create texture from custom back image" << std::endl;
+            return false;
+        }
+
+    } catch (const std::exception &e) {
+        std::cerr << "EXCEPTION: Failed to reload custom card back texture: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 bool SolitaireGame::initializeCardTextures_gl() {
     std::cout << "\nInitializing card textures..." << std::endl;
     

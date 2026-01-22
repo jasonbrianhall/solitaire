@@ -1904,60 +1904,6 @@ void SolitaireGame::resetToDefaultBack() {
   refreshDisplay();
 }
 
-void SolitaireGame::refreshCardCache() {
-  // Clean up existing cache
-  cleanupCardCache();
-
-  // Rebuild the cache
-  initializeCardCache();
-
-  // If we have a custom back, reload it
-  if (!custom_back_path_.empty()) {
-
-    std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
-    if (file.is_open()) {
-      std::streamsize size = file.tellg();
-      file.seekg(0, std::ios::beg);
-
-      std::vector<char> buffer(size);
-      if (file.read(buffer.data(), size)) {
-        GError *error = nullptr;
-        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-
-        if (gdk_pixbuf_loader_write(loader, (const guchar *)buffer.data(), size,
-                                    &error)) {
-          gdk_pixbuf_loader_close(loader, &error);
-
-          GdkPixbuf *original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-          if (original_pixbuf) {
-            GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-                original_pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
-
-            if (scaled) {
-              cairo_surface_t *surface = cairo_image_surface_create(
-                  CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
-              cairo_t *surface_cr = cairo_create(surface);
-
-              gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
-              cairo_paint(surface_cr);
-              cairo_destroy(surface_cr);
-
-              card_surface_cache_["custom_back"] = surface;
-
-              g_object_unref(scaled);
-            }
-          }
-        }
-
-        if (error) {
-          g_error_free(error);
-        }
-        g_object_unref(loader);
-      }
-    }
-  }
-}
-
 void SolitaireGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
   game->toggleFullscreen();

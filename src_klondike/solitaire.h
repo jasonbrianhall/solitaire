@@ -231,6 +231,7 @@ private:
   void cleanupOpenGLResources_gl();
   void draw_comet_buster_gl(void *vis_ptr, void *other);
   bool loadCardTexture_gl(const std::string &cardKey, const cardlib::Card &card);
+  bool reloadCustomCardBackTexture_gl();
   
   // OpenGL context validation and initialization
   bool validateOpenGLContext();
