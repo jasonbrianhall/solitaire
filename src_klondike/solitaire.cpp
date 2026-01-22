@@ -1685,11 +1685,7 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
 void SolitaireGame::dealTestLayout() {
   // Clear all piles
   if (win_animation_active_) {
-    if(rendering_engine_ == RenderingEngine::CAIRO) {
-        stopWinAnimation();
-    } else {
-        stopWinAnimation_gl();
-    }
+    stopWinAnimation();
   }
 
   stock_.clear();
@@ -2095,11 +2091,7 @@ void SolitaireGame::processNextAutoFinishMove() {
     // Check if the player has won
     if (checkWinCondition()) {
       // FIX: Use conditional to call the right animation function for the active renderer
-      if (rendering_engine_ == RenderingEngine::OPENGL) {
-        startWinAnimation_gl();
-      } else {
         startWinAnimation();
-      }
     }
   }
 }

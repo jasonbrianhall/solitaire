@@ -398,92 +398,6 @@ void SolitaireGame::updateWinAnimation_gl() {
     refreshDisplay();
 }
 
-void SolitaireGame::startWinAnimation_gl() {
-    if (win_animation_active_)
-        return;
-
-    resetKeyboardNavigation();
-    playSound(GameSoundEvent::WinGame);
-
-    GtkWidget *dialog = gtk_message_dialog_new(
-        GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
-        GTK_BUTTONS_OK, NULL);
-
-    GtkWidget *message_area = gtk_message_dialog_get_message_area(GTK_MESSAGE_DIALOG(dialog));
-    GtkWidget *label = gtk_label_new("Congratulations! You've won!\n\n"
-                                      "Click or press any key to stop the celebration "
-                                      "and start a new game");
-    gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
-    gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
-    gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
-    gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
-    gtk_widget_set_margin_start(label, 20);
-    gtk_widget_set_margin_end(label, 20);
-    gtk_widget_set_margin_top(label, 10);
-    gtk_widget_set_margin_bottom(label, 10);
-
-    gtk_container_add(GTK_CONTAINER(message_area), label);
-    gtk_widget_show(label);
-
-    gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
-
-    win_animation_active_ = true;
-    cards_launched_ = 0;
-    launch_timer_ = 0;
-    animated_cards_.clear();
-
-    if (current_game_mode_ != GameMode::STANDARD_KLONDIKE) {
-        std::vector<std::vector<cardlib::Card>> original_foundation = foundation_;
-        
-        foundation_.clear();
-        foundation_.resize(4);
-        
-        for (int suit = 0; suit < 4; suit++) {
-            foundation_[suit].clear();
-            for (int rank = static_cast<int>(cardlib::Rank::ACE);
-                 rank <= static_cast<int>(cardlib::Rank::KING);
-                 rank++) {
-                cardlib::Card card(static_cast<cardlib::Suit>(suit),
-                                   static_cast<cardlib::Rank>(rank));
-                foundation_[suit].push_back(card);
-            }
-        }
-    }
-
-    animated_foundation_cards_.clear();
-    animated_foundation_cards_.resize(4);
-    for (size_t i = 0; i < 4; i++) {
-        animated_foundation_cards_[i].resize(13, false);
-    }
-
-    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick_gl, this);
-}
-
-void SolitaireGame::stopWinAnimation_gl() {
-    if (!win_animation_active_)
-        return;
-
-    win_animation_active_ = false;
-
-    if (animation_timer_id_ > 0) {
-        g_source_remove(animation_timer_id_);
-        animation_timer_id_ = 0;
-    }
-
-    for (auto &card : animated_cards_) {
-        card.fragments.clear();
-    }
-
-    animated_cards_.clear();
-    animated_foundation_cards_.clear();
-    cards_launched_ = 0;
-    launch_timer_ = 0;
-
-    initializeGame();
-    refreshDisplay();
-}
-
 gboolean SolitaireGame::onAnimationTick_gl(gpointer data) {
     SolitaireGame *game = static_cast<SolitaireGame *>(data);
     game->updateWinAnimation_gl();
@@ -808,7 +722,7 @@ void SolitaireGame::startFoundationMoveAnimation_gl(const cardlib::Card &card, i
         animation_timer_id_ = 0;
       }
       foundation_move_animation_active_ = false;
-      startWinAnimation_gl();
+      startWinAnimation();
       return;
     }
   }
@@ -906,7 +820,7 @@ void SolitaireGame::updateFoundationMoveAnimation_gl() {
         }
 
         if (!auto_finish_active_ && checkWinCondition()) {
-            startWinAnimation_gl();
+            startWinAnimation();
         }
 
         if (auto_finish_active_) {
