@@ -9,7 +9,7 @@ DEBUG_FLAGS = -g -DDEBUG
 
 # Source files for Klondike Solitaire
 SRCS_COMMON_KLONDIKE = src_klondike/solitaire.cpp src_klondike/cardlib.cpp src_klondike/sound.cpp src_klondike/animation_cairo.cpp src_klondike/keyboard.cpp src_klondike/audiomanager.cpp src_klondike/mouse.cpp
-SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp src_klondike/animation_gl.cpp
+SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp src_klondike/animation_gl.cpp src_klondike/animation.cpp
 SRCS_WIN_KLONDIKE = src_klondike/windowsaudioplayer.cpp
 
 # Source files for Spider Solitaire
