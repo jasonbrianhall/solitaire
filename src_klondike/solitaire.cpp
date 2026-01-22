@@ -1697,7 +1697,11 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
 void SolitaireGame::dealTestLayout() {
   // Clear all piles
   if (win_animation_active_) {
-    stopWinAnimation();
+    if(rendering_engine_ == RenderingEngine::CAIRO) {
+        stopWinAnimation();
+    } else {
+        stopWinAnimation_gl();
+    }
   }
 
   stock_.clear();
