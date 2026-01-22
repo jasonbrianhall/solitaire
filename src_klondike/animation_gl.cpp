@@ -1660,7 +1660,7 @@ void SolitaireGame::renderFrame_gl() {
     
     // CRITICAL FIX: Get actual window dimensions instead of hardcoding
     GtkAllocation allocation;
-    gtk_widget_get_allocation(game_area_, &allocation);
+    gtk_widget_get_allocation(gl_area_, &allocation);
     
     static int prev_width = -1, prev_height = -1;
     static bool first = true;
