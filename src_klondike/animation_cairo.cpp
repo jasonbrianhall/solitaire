@@ -467,7 +467,7 @@ void SolitaireGame::startDealAnimation() {
     return;
 
 #ifdef DEBUG
-  std::cout << "Starting deal animation" << std::endl; // Debug output
+  std::cout << "Starting deal animation" << std::endl;
 #endif
 
   deal_animation_active_ = true;
@@ -481,14 +481,26 @@ void SolitaireGame::startDealAnimation() {
     animation_timer_id_ = 0;
   }
 
-  // Set up a new animation timer with a different callback
-  animation_timer_id_ =
-      g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick, this);
+  // CRITICAL FIX: Determine which rendering surface is ACTUALLY visible
+  // Don't just trust rendering_engine_ - check which widget is in the stack
+  bool use_opengl_callback = false;
+  
+  if (rendering_stack_) {
+    GtkWidget *visible_child = gtk_stack_get_visible_child(GTK_STACK(rendering_stack_));
+    // Use OpenGL callback ONLY if gl_area_ is visible and initialized
+    use_opengl_callback = (visible_child == gl_area_ && gl_area_ != nullptr);
+  }
 
-  // Deal the first card immediately
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
+  // Set up animation timer with the callback for the VISIBLE rendering surface
+  if (use_opengl_callback) {
+      std::cerr << "DEBUG: Using OpenGL callback for deal animation (gl_area_ is visible)\n";
+      animation_timer_id_ =
+          g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick_gl, this);
       dealNextCard_gl();
   } else {
+      std::cerr << "DEBUG: Using Cairo callback for deal animation\n";
+      animation_timer_id_ =
+          g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick, this);
       dealNextCard();
   }
 
