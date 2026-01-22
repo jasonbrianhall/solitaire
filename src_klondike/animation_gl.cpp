@@ -587,7 +587,7 @@ void SolitaireGame::updateDealAnimation_gl() {
 
     if (deal_timer_ >= DEAL_INTERVAL) {
         deal_timer_ = 0;
-        dealNextCard_gl();
+        dealNextCard();
     }
 
     // Track whether all cards have arrived
@@ -641,49 +641,6 @@ gboolean SolitaireGame::onDealAnimationTick_gl(gpointer data) {
     }
     
     return game->deal_animation_active_ ? TRUE : FALSE;
-}
-
-void SolitaireGame::dealNextCard_gl() {
-    if (cards_dealt_ >= 28)
-        return;
-
-    // FIX: Use correct diagonal dealing pattern, not modulo cycling!
-    int pile_index = 0;
-    int card_index = 0;
-    int cards_so_far = 0;
-
-    // Determine the pile and card index for the current card
-    for (int i = 0; i < 7; i++) {
-        if (cards_so_far + (i + 1) > cards_dealt_) {
-            pile_index = i;
-            card_index = cards_dealt_ - cards_so_far;
-            break;
-        }
-        cards_so_far += (i + 1);
-    }
-
-    AnimatedCard anim_card;
-    anim_card.card = tableau_[pile_index][card_index].card;
-    anim_card.face_up = tableau_[pile_index][card_index].face_up;
-    anim_card.x = current_card_spacing_;
-    anim_card.y = current_card_spacing_;
-    anim_card.target_x = current_card_spacing_ +
-                         pile_index * (current_card_width_ + current_card_spacing_);
-    anim_card.target_y = (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
-                         card_index * current_vert_spacing_;
-    // FIX: Add random initial rotation
-    anim_card.rotation = (rand() % 1256) / 100.0 - 6.28;
-    anim_card.rotation_velocity = 0;
-    anim_card.active = true;
-    anim_card.exploded = false;
-
-    deal_cards_.push_back(anim_card);
-    cards_dealt_++;
-
-    // FIX: Play flip sound for face-up cards
-    playSound(tableau_[pile_index][card_index].face_up ? 
-              GameSoundEvent::CardFlip : 
-              GameSoundEvent::DealCard);
 }
 
 // ============================================================================

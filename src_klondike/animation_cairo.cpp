@@ -491,18 +491,9 @@ void SolitaireGame::startDealAnimation() {
     use_opengl_callback = (visible_child == gl_area_ && gl_area_ != nullptr);
   }
 
-  // Set up animation timer with the callback for the VISIBLE rendering surface
-  if (use_opengl_callback) {
-      std::cerr << "DEBUG: Using OpenGL callback for deal animation (gl_area_ is visible)\n";
-      animation_timer_id_ =
-          g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick_gl, this);
-      dealNextCard_gl();
-  } else {
-      std::cerr << "DEBUG: Using Cairo callback for deal animation\n";
       animation_timer_id_ =
           g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick, this);
       dealNextCard();
-  }
 
   // Force a redraw to ensure we don't see the cards already in place
   refreshDisplay();
