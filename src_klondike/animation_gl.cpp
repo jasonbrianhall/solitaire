@@ -328,11 +328,14 @@ void SolitaireGame::updateWinAnimation_gl() {
         if (rand() % 100 < 10) {
             for (int i = 0; i < 4; i++) {
                 launchNextCard_gl();
+                refreshDisplay();
+
                 if (cards_launched_ >= 52)
                     break;
             }
         } else {
             launchNextCard_gl();
+            refreshDisplay();
         }
     }
 
@@ -368,7 +371,7 @@ void SolitaireGame::updateWinAnimation_gl() {
             }
         } else {
             updateCardFragments_gl(card);
-
+            refreshDisplay();
             bool all_fragments_inactive = true;
             for (const auto &fragment : card.fragments) {
                 if (fragment.active) {
@@ -383,7 +386,7 @@ void SolitaireGame::updateWinAnimation_gl() {
             }
         }
     }
-
+    refreshDisplay();
     if (all_cards_finished) {
         for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
             std::fill(animated_foundation_cards_[i].begin(), 
@@ -489,7 +492,6 @@ gboolean SolitaireGame::onAnimationTick_gl(gpointer data) {
     if (game->gl_area_) {
         gtk_widget_queue_draw(game->gl_area_);
     }
-    
     return game->win_animation_active_ ? TRUE : FALSE;
 }
 
@@ -662,29 +664,6 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
 // ============================================================================
 // Deal Animation Functions - OpenGL Version
 // ============================================================================
-
-void SolitaireGame::startDealAnimation_gl() {
-    if (deal_animation_active_)
-        return;
-
-    deal_animation_active_ = true;
-    cards_dealt_ = 0;
-    deal_timer_ = 0;
-    deal_cards_.clear();
-    printf("animation_timer_id_ %i\n", animation_timer_id_);
-    if (animation_timer_id_ > 0) {
-        g_source_remove(animation_timer_id_);
-        animation_timer_id_ = 0;
-    }
-
-    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick_gl, this);
-    
-    // FIX: Deal the first card immediately like Cairo does
-    dealNextCard_gl();
-    
-    // FIX: Force a redraw to start the animation
-    refreshDisplay();
-}
 
 void SolitaireGame::updateDealAnimation_gl() {
     if (!deal_animation_active_)

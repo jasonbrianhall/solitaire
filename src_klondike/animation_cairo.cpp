@@ -875,7 +875,11 @@ void SolitaireGame::startDealAnimation() {
       g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick, this);
 
   // Deal the first card immediately
-  dealNextCard();
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+      dealNextCard_gl();
+  } else {
+      dealNextCard();
+  }
 
   // Force a redraw to ensure we don't see the cards already in place
   refreshDisplay();

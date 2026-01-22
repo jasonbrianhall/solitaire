@@ -823,13 +823,7 @@ void SolitaireGame::deal() {
   // Start the deal animation (call the correct version based on rendering engine)
   // FIX: Use conditional to call the right animation function for the active renderer
   std::cerr << "DEBUG: initializeGame() #1 - rendering_engine_ = " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
-    std::cerr << "DEBUG: Calling startDealAnimation_gl()\n";
-    startDealAnimation_gl();
-  } else {
-    std::cerr << "DEBUG: Calling startDealAnimation() (Cairo)\n";
     startDealAnimation();
-  }
 }
 
 void SolitaireGame::flipTopTableauCard(int pile_index) {
@@ -1131,13 +1125,7 @@ void SolitaireGame::dealMultiDeck() {
   // Start the deal animation (call the correct version based on rendering engine)
   // FIX: Use conditional to call the right animation function for the active renderer
   std::cerr << "DEBUG: initializeGame() #2 - rendering_engine_ = " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
-    std::cerr << "DEBUG: Calling startDealAnimation_gl()\n";
-    startDealAnimation_gl();
-  } else {
-    std::cerr << "DEBUG: Calling startDealAnimation() (Cairo)\n";
-    startDealAnimation();
-  }
+  startDealAnimation();
 }
 
 bool SolitaireGame::checkWinCondition() const {
