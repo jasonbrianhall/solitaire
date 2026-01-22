@@ -813,59 +813,87 @@ void SolitaireGame::stopDealAnimation_gl() {
 // Foundation Move Animation - OpenGL Version
 // ============================================================================
 
-void SolitaireGame::startFoundationMoveAnimation_gl(const cardlib::Card &card,
-                                                     int source_pile,
-                                                     int source_index,
-                                                     int target_pile) {
-    if (foundation_move_animation_active_)
-        return;
+void SolitaireGame::startFoundationMoveAnimation_gl(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
 
-    foundation_move_animation_active_ = true;
-    foundation_target_pile_ = target_pile;
-    foundation_move_timer_ = 0;
+  // before starting a new one to avoid race conditions
+  if (foundation_move_animation_active_) {
+    // Add the card to the foundation pile immediately
+    foundation_[foundation_target_pile_ - 2].push_back(
+        foundation_move_card_.card);
 
-    double start_x = 0, start_y = 0;
-
-    if (source_pile < 2) {
-        start_x = current_card_spacing_ +
-                  source_pile * (current_card_width_ + current_card_spacing_);
-        start_y = current_card_spacing_;
-    } else if (source_pile >= 6 && source_pile <= 12) {
-        int tableau_index = source_pile - 6;
-        start_x = current_card_spacing_ +
-                  tableau_index * (current_card_width_ + current_card_spacing_);
-        start_y = (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
-                  source_index * current_vert_spacing_;
-    } else {
-        foundation_move_animation_active_ = false;
-        return;
-    }
-
-    double target_x = current_card_spacing_ +
-                      (3 + (target_pile - 2)) * (current_card_width_ + current_card_spacing_);
-    double target_y = current_card_spacing_;
-
-    foundation_move_card_.card = card;
-    foundation_move_card_.x = start_x;
-    foundation_move_card_.y = start_y;
-    foundation_move_card_.target_x = target_x;
-    foundation_move_card_.target_y = target_y;
-    foundation_move_card_.velocity_x = 0;
-    foundation_move_card_.velocity_y = 0;
-    foundation_move_card_.rotation = 0;
-    foundation_move_card_.rotation_velocity = 0;
-    foundation_move_card_.active = true;
-    foundation_move_card_.exploded = false;
-    foundation_move_card_.face_up = true;
-
-    if (animation_timer_id_ > 0) {
+    // Check for win condition after adding the card
+    if (checkWinCondition()) {
+      // Stop the current animation and start win animation
+      if (animation_timer_id_ > 0) {
         g_source_remove(animation_timer_id_);
         animation_timer_id_ = 0;
+      }
+      foundation_move_animation_active_ = false;
+      startWinAnimation_gl();
+      return;
     }
+  }
 
-    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onFoundationMoveAnimationTick_gl, this);
+#ifdef DEBUG
+  std::cout << "Starting foundation move animation" << std::endl;
+#endif
 
-    refreshDisplay();
+  foundation_move_animation_active_ = true;
+  foundation_target_pile_ = target_pile;
+  foundation_move_timer_ = 0;
+
+  // Calculate start position based on source pile
+  double start_x, start_y;
+
+  if (source_pile == 1) {
+    // Waste pile
+    start_x = 2 * current_card_spacing_ + current_card_width_;
+    start_y = current_card_spacing_;
+  } else if (source_pile >= 6 && source_pile <= 12) {
+    // Tableau pile
+    int tableau_index = source_pile - 6;
+    start_x = current_card_spacing_ +
+              tableau_index * (current_card_width_ + current_card_spacing_);
+    start_y =
+        (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
+        source_index * current_vert_spacing_;
+  } else {
+    // Shouldn't happen, but just in case
+    foundation_move_animation_active_ = false;
+    return;
+  }
+
+  // Calculate target position in foundation
+  double target_x =
+      current_card_spacing_ +
+      (3 + (target_pile - 2)) * (current_card_width_ + current_card_spacing_);
+  double target_y = current_card_spacing_;
+
+  // Initialize animation card
+  foundation_move_card_.card = card;
+  foundation_move_card_.x = start_x;
+  foundation_move_card_.y = start_y;
+  foundation_move_card_.target_x = target_x;
+  foundation_move_card_.target_y = target_y;
+  foundation_move_card_.velocity_x = 0;
+  foundation_move_card_.velocity_y = 0;
+  foundation_move_card_.rotation = 0;
+  foundation_move_card_.rotation_velocity = 0;
+  foundation_move_card_.active = true;
+  foundation_move_card_.exploded = false;
+  foundation_move_card_.face_up = true;
+
+  // Set up animation timer
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+
+  animation_timer_id_ =
+      g_timeout_add(ANIMATION_INTERVAL, onFoundationMoveAnimationTick, this);
+
+  // Force a redraw
+  refreshDisplay();
 }
 
 gboolean SolitaireGame::onFoundationMoveAnimationTick_gl(gpointer data) {

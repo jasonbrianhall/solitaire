@@ -1030,10 +1030,7 @@ void SolitaireGame::completeDeal() {
   refreshDisplay();
 }
 
-void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card,
-                                                 int source_pile,
-                                                 int source_index,
-                                                 int target_pile) {
+void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
   // If there's already an animation running, complete it immediately
   // before starting a new one to avoid race conditions
   if (foundation_move_animation_active_) {
