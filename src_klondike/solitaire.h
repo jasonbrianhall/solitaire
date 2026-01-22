@@ -68,6 +68,8 @@ struct CardFragment {
   double velocity_y;
   double rotation;
   double rotation_velocity;
+  double target_x;  // Texture coordinate X for explosion fragments (grid column)
+  double target_y;  // Texture coordinate Y for explosion fragments (grid row)
   cairo_surface_t *surface;
   bool active;
 };
@@ -247,7 +249,7 @@ private:
   
   // OpenGL drawing helpers
   void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
-  void drawCardFragment_gl(const CardFragment &fragment, GLuint shaderProgram, GLuint VAO);
+  void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
   void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
@@ -428,6 +430,7 @@ private:
   void selectCardDown();
   void activateSelected();
   void highlightSelectedCard(cairo_t *cr);
+  void highlightSelectedCard_gl();  // OpenGL version for keyboard navigation highlighting
   bool keyboard_navigation_active_ = false;
   bool tryMoveSelectedCard();
   bool keyboard_selection_active_ =

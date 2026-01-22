@@ -361,6 +361,14 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
             fragment.rotation_velocity = (rand() % 60 - 30) / 5.0;
             fragment.surface = nullptr;
             fragment.active = true;
+            
+            // Store grid position in target_x and target_y for texture coordinate calculation
+            // These fields are not used during explosion animation
+            fragment.target_x = col / (double)grid_size;  // UV start X (0.0, 0.25, 0.5, 0.75)
+            fragment.target_y = row / (double)grid_size;  // UV start Y
+            
+            // Store card info for drawing - encode as "card_suit_rank" in face_up (as bool, so just use flag)
+            // Actually, we'll rely on finding the card through the animated_cards_ iteration
 
             card.fragments.push_back(fragment);
         }
@@ -428,13 +436,29 @@ void SolitaireGame::drawAnimatedCard_gl(const AnimatedCard &anim_card,
 }
 
 void SolitaireGame::drawCardFragment_gl(const CardFragment &fragment,
+                                        const AnimatedCard &card,
                                         GLuint shaderProgram,
                                         GLuint VAO) {
     if (!fragment.active)
         return;
 
-    // Note: CardFragment uses cairo_surface_t which isn't compatible with OpenGL
-    // For now, we'll just render the card back as a placeholder for fragments
+    // Get the card texture for this fragment
+    GLuint cardTexture = cardBackTexture_gl_;
+    auto card_image = deck_.getCardImage(card.card);
+    if (card_image && !card_image->data.empty()) {
+        std::string card_key = std::to_string((int)card.card.suit) + "_" + 
+                               std::to_string((int)card.card.rank);
+        auto it = cardTextures_gl_.find(card_key);
+        
+        if (it != cardTextures_gl_.end()) {
+            cardTexture = it->second;
+        } else {
+            cardTexture = loadTextureFromMemory(card_image->data);
+            if (cardTexture != 0) {
+                cardTextures_gl_[card_key] = cardTexture;
+            }
+        }
+    }
     
     glm::mat4 model = glm::mat4(1.0f);
     
@@ -452,15 +476,23 @@ void SolitaireGame::drawCardFragment_gl(const CardFragment &fragment,
     GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
     
-    // Bind card back texture as placeholder
+    // Bind the card front texture (not the back!)
     GLint texLoc = glGetUniformLocation(shaderProgram, "cardTexture");
     glUniform1i(texLoc, 0);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, cardBackTexture_gl_);
+    glBindTexture(GL_TEXTURE_2D, cardTexture);
     
-    // Set alpha
+    // Use the texture coordinates from the fragment (stored in target_x/target_y)
+    // These are normalized coordinates for the grid position (0-0.25, 0.25-0.5, etc.)
+    GLint texCoordLoc = glGetUniformLocation(shaderProgram, "texCoordOffset");
+    if (texCoordLoc != -1) {
+        glUniform2f(texCoordLoc, static_cast<float>(fragment.target_x), 
+                                 static_cast<float>(fragment.target_y));
+    }
+    
+    // Fragment of card is slightly transparent to show explosion effect
     GLint alphaLoc = glGetUniformLocation(shaderProgram, "alpha");
-    glUniform1f(alphaLoc, 0.8f);  // Slightly transparent
+    glUniform1f(alphaLoc, 0.9f);
     
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -476,7 +508,7 @@ void SolitaireGame::drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO) {
         } else {
             for (const auto &fragment : anim_card.fragments) {
                 if (fragment.active) {
-                    drawCardFragment_gl(fragment, shaderProgram, VAO);
+                    drawCardFragment_gl(fragment, anim_card, shaderProgram, VAO);
                 }
             }
         }
@@ -1111,6 +1143,162 @@ void SolitaireGame::drawEmptyPile_gl(int x, int y) {
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
+// Helper function to draw a highlighted rectangle around selected cards
+void SolitaireGame::highlightSelectedCard_gl() {
+    if (!keyboard_navigation_active_ || selected_pile_ == -1) {
+        return;
+    }
+    
+    int x = 0, y = 0;
+    
+    // Calculate max foundation index (depends on game mode)
+    int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
+    int first_tableau_index = max_foundation_index + 1;
+    
+    // Determine position based on pile type (matching Cairo logic)
+    if (selected_pile_ == 0) {
+        // Stock pile
+        x = current_card_spacing_;
+        y = current_card_spacing_;
+    } else if (selected_pile_ == 1) {
+        // Waste pile
+        x = 2 * current_card_spacing_ + current_card_width_;
+        y = current_card_spacing_;
+    } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
+        // Foundation piles
+        int foundation_idx = selected_pile_ - 2;
+        if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
+            x = 3 * (current_card_width_ + current_card_spacing_) + 
+                foundation_idx * (current_card_width_ + current_card_spacing_);
+            y = current_card_spacing_;
+        }
+    } else if (selected_pile_ >= first_tableau_index) {
+        // Tableau piles
+        int tableau_idx = selected_pile_ - first_tableau_index;
+        if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
+            x = current_card_spacing_ +
+                tableau_idx * (current_card_width_ + current_card_spacing_);
+            
+            const auto &tableau_pile = tableau_[tableau_idx];
+            if (tableau_pile.empty()) {
+                y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+            } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
+                y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+                    (tableau_pile.size() - 1) * current_vert_spacing_;
+            } else {
+                y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+                    selected_card_idx_ * current_vert_spacing_;
+            }
+        }
+    }
+    
+    // Draw a glowing colored rectangle outline around the card
+    // Use simple shader for colored lines
+    glUseProgram(simpleShaderProgram_gl_);
+    
+    // Setup projection matrix for line drawing
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(gl_area_, &allocation);
+    glm::mat4 projection = glm::ortho(0.0f, (float)allocation.width, 
+                                      (float)allocation.height, 0.0f, -1.0f, 1.0f);
+    GLint projLoc = glGetUniformLocation(simpleShaderProgram_gl_, "projection");
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    
+    // Choose highlight color based on whether we're selecting a card to move
+    float r, g, b, a;
+    if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
+        (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
+        // Source card is highlighted in blue
+        r = 0.0f; g = 0.5f; b = 1.0f; a = 0.7f;
+    } else {
+        // Regular selection is highlighted in yellow
+        r = 1.0f; g = 1.0f; b = 0.0f; a = 0.7f;
+    }
+    
+    GLint colorLoc = glGetUniformLocation(simpleShaderProgram_gl_, "color");
+    glUniform4f(colorLoc, r, g, b, a);
+    
+    // Draw a rectangle outline (using line strip to form a rectangle border)
+    // Offset by 2 pixels for visibility
+    float positions[] = {
+        (float)(x - 2), (float)(y - 2), 0.0f,
+        (float)(x + current_card_width_ + 2), (float)(y - 2), 0.0f,
+        (float)(x + current_card_width_ + 2), (float)(y + current_card_height_ + 2), 0.0f,
+        (float)(x - 2), (float)(y + current_card_height_ + 2), 0.0f,
+        (float)(x - 2), (float)(y - 2), 0.0f  // Close the loop
+    };
+    
+    GLuint VAO = 0, VBO = 0;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW);
+    
+    GLint posAttrib = glGetAttribLocation(simpleShaderProgram_gl_, "position");
+    glEnableVertexAttribArray(posAttrib);
+    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    
+    glLineWidth(3.0f);
+    glDrawArrays(GL_LINE_STRIP, 0, 5);
+    glLineWidth(1.0f);
+    
+    glDeleteBuffers(1, &VBO);
+    glDeleteVertexArrays(1, &VAO);
+    
+    // If we have a card selected for movement, highlight all cards below it in a tableau pile
+    if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_card_idx_ >= 0) {
+        int tableau_idx = source_pile_ - first_tableau_index;
+        if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
+            const auto &tableau_pile = tableau_[tableau_idx];
+            
+            if (!tableau_pile.empty() && source_card_idx_ < static_cast<int>(tableau_pile.size())) {
+                // Draw a rectangle covering all cards from the selected one to the bottom
+                int x2 = current_card_spacing_ +
+                    tableau_idx * (current_card_width_ + current_card_spacing_);
+                int y2 = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+                    source_card_idx_ * current_vert_spacing_;
+                
+                int stack_height =
+                    (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ +
+                    current_card_height_;
+                
+                if (stack_height > 0) {
+                    float positions2[] = {
+                        (float)(x2 - 2), (float)(y2 - 2), 0.0f,
+                        (float)(x2 + current_card_width_ + 2), (float)(y2 - 2), 0.0f,
+                        (float)(x2 + current_card_width_ + 2), (float)(y2 + stack_height + 2), 0.0f,
+                        (float)(x2 - 2), (float)(y2 + stack_height + 2), 0.0f,
+                        (float)(x2 - 2), (float)(y2 - 2), 0.0f
+                    };
+                    
+                    GLuint VAO2 = 0, VBO2 = 0;
+                    glGenVertexArrays(1, &VAO2);
+                    glGenBuffers(1, &VBO2);
+                    
+                    glBindVertexArray(VAO2);
+                    glBindBuffer(GL_ARRAY_BUFFER, VBO2);
+                    glBufferData(GL_ARRAY_BUFFER, sizeof(positions2), positions2, GL_STATIC_DRAW);
+                    
+                    glEnableVertexAttribArray(posAttrib);
+                    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+                    
+                    // Lighter blue for the stack
+                    glUniform4f(colorLoc, 0.0f, 0.5f, 1.0f, 0.3f);
+                    
+                    glLineWidth(2.0f);
+                    glDrawArrays(GL_LINE_STRIP, 0, 5);
+                    glLineWidth(1.0f);
+                    
+                    glDeleteBuffers(1, &VBO2);
+                    glDeleteVertexArrays(1, &VAO2);
+                }
+            }
+        }
+    }
+}
+
 void SolitaireGame::renderFrame_gl() {
     if (!game_fully_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
@@ -1187,6 +1375,14 @@ void SolitaireGame::renderFrame_gl() {
     
     // Draw dragged cards overlay - CRITICAL FIX FOR DRAG VISUALIZATION
     drawDraggedCards_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    
+    // Draw keyboard navigation highlight if active (matching Cairo behavior)
+    if (keyboard_navigation_active_ && !dragging_ &&
+        !deal_animation_active_ && !win_animation_active_ &&
+        !foundation_move_animation_active_ &&
+        !stock_to_waste_animation_active_) {
+        highlightSelectedCard_gl();
+    }
 }
 
 // ============================================================================
