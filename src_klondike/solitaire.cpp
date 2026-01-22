@@ -190,14 +190,12 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
   }
   #endif
 
-  if (newEngine == rendering_engine_) {
-    return true;
-  }
+  std::cerr << "DEBUG: switchRenderingEngine() called with newEngine=" << (newEngine == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
+  std::cerr << "DEBUG: current rendering_engine_=" << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
 
-  // SAFETY: Cannot switch to OpenGL until game is fully initialized
-  if (newEngine == RenderingEngine::OPENGL && !game_fully_initialized_) {
-    std::cout << "Cannot switch to OpenGL - game not fully initialized yet" << std::endl;
-    return false;
+  if (newEngine == rendering_engine_) {
+    std::cerr << "DEBUG: Already using that engine, returning\n";
+    return true;
   }
 
   #ifdef __linux__
@@ -208,6 +206,7 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
   
   // Switch rendering engine
   rendering_engine_ = newEngine;
+  std::cerr << "DEBUG: rendering_engine_ set to " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
   
   if (newEngine == RenderingEngine::OPENGL) {
     cairo_initialized_ = false;
@@ -222,12 +221,16 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
   gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), view);
   
   rendering_engine_ = newEngine;
+  std::cerr << "DEBUG: After stack switch, rendering_engine_=" << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
   
   // Grab focus to the new widget
   GtkWidget *current_widget = gtk_stack_get_visible_child(GTK_STACK(rendering_stack_));
   if (current_widget) {
     gtk_widget_grab_focus(current_widget);
+    gtk_widget_queue_draw(current_widget);
   }
+  
+  refreshDisplay();
   
   saveEnginePreference();
   std::cout << "Switched to " << getRenderingEngineName() << std::endl;
@@ -646,12 +649,16 @@ void SolitaireGame::initializeGame() {
     engine_switch_requested_ = false;
   }
 
-  // CRITICAL: Force CAIRO mode during game initialization
-  // This ensures deal() and all initialization code uses Cairo animations, not OpenGL
-  // User can switch to OpenGL AFTER game is fully initialized
-  rendering_engine_ = RenderingEngine::CAIRO;
-  cairo_initialized_ = true;
-  opengl_initialized_ = false;
+  // FIX: Don't force CAIRO mode - respect the user's rendering engine choice
+  // The rendering_engine_ is already set and should be preserved across game resets
+  // Just ensure the appropriate renderer is marked as initialized
+  if (rendering_engine_ == RenderingEngine::CAIRO) {
+    cairo_initialized_ = true;
+    opengl_initialized_ = false;
+  } else {
+    // OpenGL is already initialized if we're using it
+    // cairo_initialized_ = false;  // Don't reset Cairo, it might be needed
+  }
 
   if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {
     // Original single-deck initialization
@@ -812,8 +819,16 @@ void SolitaireGame::deal() {
             << std::endl; // Debug output
 #endif
 
-  // Start the deal animation (safe now - rendering_engine_ is forced to CAIRO)
-  startDealAnimation();
+  // Start the deal animation (call the correct version based on rendering engine)
+  // FIX: Use conditional to call the right animation function for the active renderer
+  std::cerr << "DEBUG: initializeGame() #1 - rendering_engine_ = " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    std::cerr << "DEBUG: Calling startDealAnimation_gl()\n";
+    startDealAnimation_gl();
+  } else {
+    std::cerr << "DEBUG: Calling startDealAnimation() (Cairo)\n";
+    startDealAnimation();
+  }
 }
 
 void SolitaireGame::flipTopTableauCard(int pile_index) {
@@ -1112,8 +1127,16 @@ void SolitaireGame::dealMultiDeck() {
     stock_.push_back(*card);
   }
 
-  // Start the deal animation (safe now - rendering_engine_ is forced to CAIRO)
-  startDealAnimation();
+  // Start the deal animation (call the correct version based on rendering engine)
+  // FIX: Use conditional to call the right animation function for the active renderer
+  std::cerr << "DEBUG: initializeGame() #2 - rendering_engine_ = " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    std::cerr << "DEBUG: Calling startDealAnimation_gl()\n";
+    startDealAnimation_gl();
+  } else {
+    std::cerr << "DEBUG: Calling startDealAnimation() (Cairo)\n";
+    startDealAnimation();
+  }
 }
 
 bool SolitaireGame::checkWinCondition() const {
@@ -1136,8 +1159,15 @@ bool SolitaireGame::checkWinCondition() const {
 
 // Function to refresh the display
 void SolitaireGame::refreshDisplay() {
-  if (game_area_) {
-    gtk_widget_queue_draw(game_area_);
+  // FIX: Refresh the correct widget based on the active rendering engine
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    if (gl_area_) {
+      gtk_widget_queue_draw(gl_area_);
+    }
+  } else {
+    if (game_area_) {
+      gtk_widget_queue_draw(game_area_);
+    }
   }
 }
 
@@ -2117,7 +2147,12 @@ void SolitaireGame::processNextAutoFinishMove() {
 
     // Check if the player has won
     if (checkWinCondition()) {
-      startWinAnimation();
+      // FIX: Use conditional to call the right animation function for the active renderer
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        startWinAnimation_gl();
+      } else {
+        startWinAnimation();
+      }
     }
   }
 }

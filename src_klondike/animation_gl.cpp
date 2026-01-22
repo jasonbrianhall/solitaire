@@ -664,9 +664,10 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
 // ============================================================================
 
 void SolitaireGame::startDealAnimation_gl() {
+    printf("GL");
     if (deal_animation_active_)
         return;
-
+    printf("Here\n");
     deal_animation_active_ = true;
     cards_dealt_ = 0;
     deal_timer_ = 0;
@@ -691,6 +692,9 @@ void SolitaireGame::updateDealAnimation_gl() {
         dealNextCard_gl();
     }
 
+    // FIX: Match Cairo's deal animation physics more closely
+    bool all_cards_arrived = true;
+
     for (auto &card : deal_cards_) {
         if (!card.active)
             continue;
@@ -699,14 +703,31 @@ void SolitaireGame::updateDealAnimation_gl() {
         double dy = card.target_y - card.y;
         double distance = sqrt(dx * dx + dy * dy);
 
-        if (distance < 2.0) {
+        if (distance < 5.0) {  // Match Cairo's threshold
+            // Card has arrived at destination
+            card.x = card.target_x;
+            card.y = card.target_y;
             card.active = false;
+            playSound(GameSoundEvent::CardPlace);
         } else {
-            double speed = DEAL_SPEED;
-            card.x += dx * speed;
-            card.y += dy * speed;
-            card.rotation += 0.1;
+            // FIX: Use distance-based speed like Cairo (not fixed speed)
+            double speed = distance * 0.15 * DEAL_SPEED;
+            double move_x = dx * speed / distance;
+            double move_y = dy * speed / distance;
+
+            card.x += move_x;
+            card.y += move_y;
+
+            // FIX: Update rotation with deceleration like Cairo
+            card.rotation *= 0.95;
+
+            all_cards_arrived = false;
         }
+    }
+
+    // Check if we're done dealing and all cards have arrived
+    if (all_cards_arrived && cards_dealt_ >= 28) {
+        completeDeal_gl();
     }
 
     refreshDisplay();
@@ -728,19 +749,33 @@ void SolitaireGame::dealNextCard_gl() {
     if (cards_dealt_ >= 28)
         return;
 
-    int tableau_pile = cards_dealt_ % 7;
-    int tableau_index = cards_dealt_ / 7;
+    // FIX: Use correct diagonal dealing pattern (pile 0: 1 card, pile 1: 2 cards, etc.)
+    // NOT just cycling through piles with % and /
+    int pile_index = 0;
+    int card_index = 0;
+    int cards_so_far = 0;
+
+    // Determine the pile and card index for the current card
+    for (int i = 0; i < 7; i++) {
+        if (cards_so_far + (i + 1) > cards_dealt_) {
+            pile_index = i;
+            card_index = cards_dealt_ - cards_so_far;
+            break;
+        }
+        cards_so_far += (i + 1);
+    }
 
     AnimatedCard anim_card;
-    anim_card.card = tableau_[tableau_pile][tableau_index].card;
-    anim_card.face_up = tableau_[tableau_pile][tableau_index].face_up;
+    anim_card.card = tableau_[pile_index][card_index].card;
+    anim_card.face_up = tableau_[pile_index][card_index].face_up;
     anim_card.x = current_card_spacing_;
     anim_card.y = current_card_spacing_;
     anim_card.target_x = current_card_spacing_ +
-                         tableau_pile * (current_card_width_ + current_card_spacing_);
+                         pile_index * (current_card_width_ + current_card_spacing_);
     anim_card.target_y = (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
-                         tableau_index * current_vert_spacing_;
-    anim_card.rotation = 0;
+                         card_index * current_vert_spacing_;
+    // FIX: Add random initial rotation so cards spin like in Cairo version
+    anim_card.rotation = (rand() % 1256) / 100.0 - 6.28;
     anim_card.rotation_velocity = 0;
     anim_card.active = true;
     anim_card.exploded = false;
@@ -748,7 +783,10 @@ void SolitaireGame::dealNextCard_gl() {
     deal_cards_.push_back(anim_card);
     cards_dealt_++;
 
-    playSound(GameSoundEvent::DealCard);
+    // FIX: Play flip sound for face-up cards like Cairo does
+    playSound(tableau_[pile_index][card_index].face_up ? 
+              GameSoundEvent::CardFlip : 
+              GameSoundEvent::DealCard);
 }
 
 void SolitaireGame::completeDeal_gl() {
