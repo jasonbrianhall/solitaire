@@ -5,13 +5,13 @@
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <direct.h>
-#include <windows.h>  // For Sleep function on Windows
+#include <windows.h>
 #include <shlobj.h>
 #include <appmodel.h>
 #include <vector>
 #else
-#include <unistd.h>   // For usleep function on Unix/Linux
-#include <dirent.h>   // For directory listing on Unix/Linux
+#include <unistd.h>
+#include <dirent.h>
 #endif
 
 #ifdef _WIN32
@@ -23,7 +23,6 @@ std::string getExecutableDir() {
 }
 #endif
 
-// Helper function to get directory structure as a string for debugging
 std::string getDirectoryStructure(const std::string &directory = ".") {
   std::string result;
   result += "=== Directory Structure ===\n";
@@ -77,7 +76,8 @@ std::string getDirectoryStructure(const std::string &directory = ".") {
 
 SolitaireGame::SolitaireGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
-      window_(nullptr), game_area_(nullptr), buffer_surface_(nullptr),
+      window_(nullptr), game_area_(nullptr), gl_area_(nullptr),
+      rendering_stack_(nullptr), buffer_surface_(nullptr),
       buffer_cr_(nullptr), draw_three_mode_(true),
       current_card_width_(BASE_CARD_WIDTH),
       current_card_height_(BASE_CARD_HEIGHT),
@@ -87,19 +87,683 @@ SolitaireGame::SolitaireGame()
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
       current_game_mode_(GameMode::STANDARD_KLONDIKE),
-      multi_deck_(1), // Initialize with 1 deck
-      sound_enabled_(true),           // Set sound to enabled by default
+      multi_deck_(1),
+      sound_enabled_(true),
+      #ifdef __linux__
+      rendering_engine_(RenderingEngine::CAIRO),
+      #else
+      rendering_engine_(RenderingEngine::CAIRO),
+      #endif
+      opengl_initialized_(false),
+      cairo_initialized_(false),
+      engine_switch_requested_(false),
+      requested_engine_(RenderingEngine::CAIRO),
 #ifdef _WIN32
       sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
 #else
       sounds_zip_path_("sound.zip"),
 #endif
-      current_seed_(0) { // Initialize to 0 temporarily
-  srand(time(NULL));  // Seed the random number generator with current time
-  current_seed_ = rand();  
+      current_seed_(0) {
+  srand(time(NULL));
+  current_seed_ = rand();
   initializeSettingsDir();
+  
+  // Load engine preference and initialize rendering
+  loadEnginePreference();
+  initializeRenderingEngine();
+  
   loadSettings();
 }
+
+// ============================================================================
+// ENGINE SWITCHING IMPLEMENTATION
+// ============================================================================
+
+bool SolitaireGame::isOpenGLSupported() const {
+  #ifdef _WIN32
+  return false;
+  #else
+  return true;
+  #endif
+}
+
+bool SolitaireGame::setRenderingEngine(RenderingEngine engine) {
+  #ifdef _WIN32
+  if (engine == RenderingEngine::OPENGL) {
+    std::cout << "OpenGL not supported on Windows. Using Cairo." << std::endl;
+    rendering_engine_ = RenderingEngine::CAIRO;
+    return true;
+  }
+  #endif
+
+  if (rendering_engine_ == engine) {
+    return true;
+  }
+
+  if (!opengl_initialized_ && !cairo_initialized_) {
+    rendering_engine_ = engine;
+    std::cout << "Rendering engine: " << getRenderingEngineName() << std::endl;
+    return true;
+  }
+
+  engine_switch_requested_ = true;
+  requested_engine_ = engine;
+  return true;
+}
+
+bool SolitaireGame::initializeRenderingEngine() {
+  #ifdef _WIN32
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    rendering_engine_ = RenderingEngine::CAIRO;
+  }
+  #endif
+
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      cairo_initialized_ = true;
+      fprintf(stderr, "✓ Using Cairo rendering (CPU-based)\n");
+      return true;
+
+    case RenderingEngine::OPENGL:
+      #ifdef __linux__
+      // ✅ OpenGL initialization is deferred to onGLRealize callback
+      // This happens when GTK GL area is realized (after gtk_widget_show_all)
+      fprintf(stderr, "✓ OpenGL will be initialized when window is ready\n");
+      return true;
+      #else
+      rendering_engine_ = RenderingEngine::CAIRO;
+      cairo_initialized_ = true;
+      return true;
+      #endif
+
+    default:
+      rendering_engine_ = RenderingEngine::CAIRO;
+      cairo_initialized_ = true;
+      return true;
+  }
+}
+
+bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
+  #ifdef _WIN32
+  if (newEngine == RenderingEngine::OPENGL) {
+    return false;
+  }
+  #endif
+
+  if (newEngine == rendering_engine_) {
+    return true;
+  }
+
+  // SAFETY: Cannot switch to OpenGL until game is fully initialized
+  if (newEngine == RenderingEngine::OPENGL && !game_fully_initialized_) {
+    std::cout << "Cannot switch to OpenGL - game not fully initialized yet" << std::endl;
+    return false;
+  }
+
+  #ifdef __linux__
+  if (!rendering_stack_) {
+    std::cout << "Rendering stack not initialized" << std::endl;
+    return false;
+  }
+  
+  // Switch rendering engine
+  rendering_engine_ = newEngine;
+  
+  if (newEngine == RenderingEngine::OPENGL) {
+    cairo_initialized_ = false;
+    // opengl_initialized will be set when GL resources are ready
+  } else {
+    opengl_initialized_ = false;
+    cairo_initialized_ = true;
+  }
+  
+  // Use GtkStack to switch - this preserves GL context
+  const char *view = (newEngine == RenderingEngine::OPENGL) ? "opengl" : "cairo";
+  gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), view);
+  
+  rendering_engine_ = newEngine;
+  
+  // Grab focus to the new widget
+  GtkWidget *current_widget = gtk_stack_get_visible_child(GTK_STACK(rendering_stack_));
+  if (current_widget) {
+    gtk_widget_grab_focus(current_widget);
+  }
+  
+  saveEnginePreference();
+  std::cout << "Switched to " << getRenderingEngineName() << std::endl;
+  return true;
+  #else
+  return false;
+  #endif
+}
+
+// ============================================================================
+// GL CONTEXT CALLBACKS - FIX FOR NO OPENGL CONTEXT ERROR
+// ============================================================================
+
+// Called by GTK when GL context is created and available
+gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  
+  // Make the GL context current
+  gtk_gl_area_make_current(area);
+  
+  fprintf(stderr, "[GL] Realize callback - initializing OpenGL resources\n");
+  
+  // DIAGNOSTIC: Check if GL context is actually available
+  const GLubyte *version = glGetString(GL_VERSION);
+  if (version == nullptr) {
+    fprintf(stderr, "[GL] ERROR: No GL context available after gtk_gl_area_make_current()\n");
+    fprintf(stderr, "[GL] This means GtkGLArea failed to create/bind the GL context\n");
+    game->rendering_engine_ = RenderingEngine::CAIRO;
+    return FALSE;
+  }
+  fprintf(stderr, "[GL] GL Context verified: %s\n", (const char*)version);
+  
+  // Initialize GL resources (NOW safe to call GL functions!)
+  if (!game->initializeOpenGLResources()) {
+    fprintf(stderr, "[GL] Failed to initialize OpenGL resources\n");
+    gtk_gl_area_set_error(area, NULL);
+    // Fall back to Cairo
+    game->rendering_engine_ = RenderingEngine::CAIRO;
+    return FALSE;
+  }
+  
+  fprintf(stderr, "[GL] OpenGL resources initialized successfully\n");
+  return TRUE;
+}
+
+// Called by GTK every frame to render
+gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
+  (void)context;
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  
+  // Ensure GL context is current before calling GL functions
+  gtk_gl_area_make_current(area);
+  
+  int window_width = gtk_widget_get_allocated_width(GTK_WIDGET(area));
+  int window_height = gtk_widget_get_allocated_height(GTK_WIDGET(area));
+  
+  if (window_width < 10 || window_height < 10) {
+    gtk_widget_queue_draw(GTK_WIDGET(area));
+    return TRUE;
+  }
+  
+  // Call the actual rendering function
+  game->renderFrame_gl();
+  
+  glFlush();
+  
+  // Request next frame
+  gtk_widget_queue_draw(GTK_WIDGET(area));
+  
+  return TRUE;
+}
+
+// ============================================================================
+// GL INITIALIZATION - DEFERRED FROM CONSTRUCTOR
+// ============================================================================
+
+// Called from realize callback - NOW has GL context
+bool SolitaireGame::initializeOpenGLResources() {
+  #ifdef __linux__
+  fprintf(stderr, "[GL] Setting up OpenGL rendering...\n");
+  
+  // Initialize GLEW (only once)
+  static gboolean glew_initialized = FALSE;
+  if (!glew_initialized) {
+    glewExperimental = GL_TRUE;
+    GLenum err = glewInit();
+    
+    fprintf(stderr, "[GL] glewInit returned: %i\n", err);
+    fprintf(stderr, "[GL] glewInit error string: %s\n", glewGetErrorString(err));
+    
+    if (err != GLEW_OK) {
+      // DIAGNOSTIC: Try to see if basic GL functions work anyway
+      const GLubyte *vendor = glGetString(GL_VENDOR);
+      if (vendor != nullptr) {
+        fprintf(stderr, "[GL] WARNING: glewInit failed but GL_VENDOR is accessible: %s\n", (const char*)vendor);
+        fprintf(stderr, "[GL] GL is functional despite glewInit error - proceeding anyway\n");
+        glew_initialized = TRUE;
+        is_glew_initialized_ = true;  // ← ALSO SET THE MEMBER VARIABLE
+      } else {
+        fprintf(stderr, "[GL] FATAL: glewInit failed and GL functions unavailable\n");
+        fprintf(stderr, "[GL] glewInit failed: %s %i\n", glewGetErrorString(err), err);
+        return false;
+      }
+    } else {
+      glew_initialized = TRUE;
+      is_glew_initialized_ = true;  // ← SET THE MEMBER VARIABLE
+      fprintf(stderr, "[GL] GLEW initialized successfully\n");
+    }
+  } else {
+    fprintf(stderr, "[GL] GLEW already initialized\n");
+  }
+  
+  // ✅ NOW safe to call GL functions - context exists!
+  
+  // Setup shaders
+  cardShaderProgram_gl_ = setupShaders_gl();
+  if (cardShaderProgram_gl_ == 0) {
+    fprintf(stderr, "[GL] Failed to setup shaders\n");
+    return false;
+  }
+  fprintf(stderr, "[GL] Shaders compiled successfully\n");
+  
+  // Setup vertex array and buffers
+  cardQuadVAO_gl_ = setupCardQuadVAO_gl();
+  if (cardQuadVAO_gl_ == 0) {
+    fprintf(stderr, "[GL] Failed to setup VAO\n");
+    return false;
+  }
+  fprintf(stderr, "[GL] VAO setup complete\n");
+  
+  // Load card textures
+  if (!initializeCardTextures_gl()) {
+    fprintf(stderr, "[GL] Failed to initialize card textures\n");
+    return false;
+  }
+  fprintf(stderr, "[GL] Card textures loaded\n");
+  
+  // Set GL state
+  glClearColor(0.0f, 0.6f, 0.0f, 1.0f);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glEnable(GL_LINE_SMOOTH);
+  glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+  glEnable(GL_MULTISAMPLE);
+  
+  opengl_initialized_ = true;
+  cairo_initialized_ = false;  // Disable Cairo when using OpenGL
+  
+  fprintf(stderr, "[GL] OpenGL initialization complete\n");
+  return true;
+  #else
+  return false;
+  #endif
+}
+
+// ============================================================================
+// WIDGET SETUP - SEPARATED INTO CAIRO AND GL
+// ============================================================================
+
+void SolitaireGame::setupCairoArea() {
+  // Create new drawing area for Cairo rendering
+  game_area_ = gtk_drawing_area_new();
+  
+  // Enable mouse event handling
+  gtk_widget_add_events(
+      game_area_,
+      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+          GDK_POINTER_MOTION_MASK |
+          GDK_STRUCTURE_MASK);
+
+  // Connect all necessary signals
+  g_signal_connect(G_OBJECT(game_area_), "draw", G_CALLBACK(onDraw), this);
+
+  g_signal_connect(G_OBJECT(game_area_), "button-press-event",
+                   G_CALLBACK(onButtonPress), this);
+
+  g_signal_connect(G_OBJECT(game_area_), "button-release-event",
+                   G_CALLBACK(onButtonRelease), this);
+
+  g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
+                   G_CALLBACK(onMotionNotify), this);
+
+  // Add size-allocate signal handler for resize events
+  g_signal_connect(
+      G_OBJECT(game_area_), "size-allocate",
+      G_CALLBACK(
+          +[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
+            SolitaireGame *game = static_cast<SolitaireGame *>(data);
+            game->updateCardDimensions(allocation->width, allocation->height);
+
+            // Recreate buffer surface with new dimensions if needed
+            if (game->buffer_surface_) {
+              cairo_surface_destroy(game->buffer_surface_);
+              cairo_destroy(game->buffer_cr_);
+            }
+
+            game->buffer_surface_ = cairo_image_surface_create(
+                CAIRO_FORMAT_ARGB32, allocation->width, allocation->height);
+            game->buffer_cr_ = cairo_create(game->buffer_surface_);
+
+            gtk_widget_queue_draw(widget);
+          }),
+      this);
+
+  // Set minimum size to prevent cards from becoming too small
+  gtk_widget_set_size_request(
+      game_area_,
+      BASE_CARD_WIDTH * 7 +
+          BASE_CARD_SPACING * 8, // Minimum width for 7 cards + spacing
+      BASE_CARD_HEIGHT * 2 +
+          BASE_VERT_SPACING * 6 // Minimum height for 2 rows + tableau
+  );
+
+  // Initialize card dimensions based on initial window size
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(window_, &allocation);
+  updateCardDimensions(allocation.width, allocation.height);
+  
+  // CREATE CAIRO BUFFER - CRITICAL!
+  buffer_surface_ = cairo_image_surface_create(
+      CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
+  buffer_cr_ = cairo_create(buffer_surface_);
+
+  // Initialize the card cache
+  initializeCardCache();
+}
+
+void SolitaireGame::setupOpenGLArea() {
+  #ifdef __linux__
+  // Create OpenGL rendering area
+  gl_area_ = gtk_gl_area_new();
+  gtk_widget_set_size_request(gl_area_, -1, -1);
+  gtk_widget_set_can_focus(gl_area_, TRUE);
+  
+  // ✅ CRITICAL: Connect realize signal BEFORE showing window
+  // This callback will be triggered when GL context is created
+  g_signal_connect(G_OBJECT(gl_area_), "realize",
+                  G_CALLBACK(onGLRealize), this);
+  
+  // ✅ Connect render signal for drawing each frame
+  g_signal_connect(G_OBJECT(gl_area_), "render",
+                  G_CALLBACK(onGLRender), this);
+  
+  // Enable event handling
+  gtk_widget_add_events(gl_area_,
+      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+      GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK |
+      GDK_KEY_RELEASE_MASK);
+  
+  g_signal_connect(G_OBJECT(gl_area_), "button-press-event",
+                  G_CALLBACK(onButtonPress), this);
+  g_signal_connect(G_OBJECT(gl_area_), "button-release-event",
+                  G_CALLBACK(onButtonRelease), this);
+  g_signal_connect(G_OBJECT(gl_area_), "motion-notify-event",
+                  G_CALLBACK(onMotionNotify), this);
+  
+  // Add size-allocate signal handler for resize events (CRITICAL FIX!)
+  g_signal_connect(
+      G_OBJECT(gl_area_), "size-allocate",
+      G_CALLBACK(+[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
+        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+        game->updateCardDimensions(allocation->width, allocation->height);
+      }), this);
+  // Set minimum size
+  gtk_widget_set_size_request(
+      gl_area_,
+      BASE_CARD_WIDTH * 7 + BASE_CARD_SPACING * 8,
+      BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 6);
+  #endif
+}
+
+void SolitaireGame::cleanupRenderingEngine() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      cleanupCardCache();
+      cairo_initialized_ = false;
+      break;
+
+    case RenderingEngine::OPENGL:
+      #ifdef __linux__
+      cleanupOpenGLResources_gl();
+      #endif
+      opengl_initialized_ = false;
+      break;
+
+    default:
+      break;
+  }
+}
+
+std::string SolitaireGame::getRenderingEngineName() const {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      return "Cairo (CPU-based)";
+    case RenderingEngine::OPENGL:
+      return "OpenGL 3.4 (GPU-accelerated)";
+    default:
+      return "Unknown";
+  }
+}
+
+void SolitaireGame::printEngineInfo() {
+  std::cout << "\n=== RENDERING ENGINE ===" << std::endl;
+  std::cout << "Current: " << getRenderingEngineName() << std::endl;
+  #ifdef __linux__
+  std::cout << "Platform: Linux (OpenGL supported)" << std::endl;
+  #else
+  std::cout << "Platform: Windows/macOS (Cairo only)" << std::endl;
+  #endif
+  std::cout << "========================\n" << std::endl;
+}
+
+void SolitaireGame::saveEnginePreference() {
+  std::string config_file = settings_dir_ + "/graphics.ini";
+  std::ofstream config(config_file);
+  if (config.is_open()) {
+    config << "[Graphics]\nengine=" 
+           << (rendering_engine_ == RenderingEngine::CAIRO ? "cairo" : "opengl") << "\n";
+    config.close();
+  }
+}
+
+void SolitaireGame::loadEnginePreference() {
+  std::string config_file = settings_dir_ + "/graphics.ini";
+  std::ifstream config(config_file);
+  if (config.is_open()) {
+    std::string line;
+    while (std::getline(config, line)) {
+      if (line.find("engine=") == 0) {
+        std::string engine_name = line.substr(7);
+        engine_name.erase(0, engine_name.find_first_not_of(" \t\r\n"));
+        engine_name.erase(engine_name.find_last_not_of(" \t\r\n") + 1);
+        
+        #ifdef __linux__
+        if (engine_name == "opengl") {
+          rendering_engine_ = RenderingEngine::OPENGL;
+        }
+        #endif
+      }
+    }
+    config.close();
+  }
+}
+
+void SolitaireGame::addEngineSelectionMenu(GtkWidget *menubar) {
+  GtkWidget *graphics_menu = gtk_menu_new();
+  GtkWidget *graphics_item = gtk_menu_item_new_with_label("Graphics");
+
+  GtkWidget *cairo_item = gtk_menu_item_new_with_label("Use Cairo (CPU)");
+  g_signal_connect(cairo_item, "activate",
+                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
+                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     game->switchRenderingEngine(RenderingEngine::CAIRO);
+                     game->refreshDisplay();
+                   }),
+                   this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), cairo_item);
+
+  #ifdef __linux__
+  GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL 3.4 (GPU)");
+  g_signal_connect(opengl_item, "activate",
+                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
+                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     game->switchRenderingEngine(RenderingEngine::OPENGL);
+                     game->refreshDisplay();
+                   }),
+                   this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), opengl_item);
+  #endif
+
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(graphics_item), graphics_menu);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), graphics_item);
+  gtk_widget_show_all(graphics_menu);
+}
+
+void SolitaireGame::renderFrame() {}
+
+// ============================================================================
+// ANIMATION DISPATCHERS
+// ============================================================================
+
+void SolitaireGame::startWinAnimation() {
+  if (engine_switch_requested_) {
+    switchRenderingEngine(requested_engine_);
+    engine_switch_requested_ = false;
+  }
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      startWinAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      startWinAnimation_gl();
+      break;
+    #endif
+    default:
+      startWinAnimation_cairo();
+  }
+}
+
+void SolitaireGame::updateWinAnimation() {
+  if (engine_switch_requested_) {
+    switchRenderingEngine(requested_engine_);
+    engine_switch_requested_ = false;
+    return;
+  }
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      updateWinAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      updateWinAnimation_gl();
+      break;
+    #endif
+    default:
+      updateWinAnimation_cairo();
+  }
+}
+
+void SolitaireGame::stopWinAnimation() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      stopWinAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      stopWinAnimation_gl();
+      break;
+    #endif
+    default:
+      stopWinAnimation_cairo();
+  }
+}
+
+void SolitaireGame::startDealAnimation() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      startDealAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      startDealAnimation_gl();
+      break;
+    #endif
+    default:
+      startDealAnimation_cairo();
+  }
+}
+
+void SolitaireGame::updateDealAnimation() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      updateDealAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      updateDealAnimation_gl();
+      break;
+    #endif
+    default:
+      updateDealAnimation_cairo();
+  }
+}
+
+void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card,
+                                                 int source_pile,
+                                                 int source_index,
+                                                 int target_pile) {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      startFoundationMoveAnimation_cairo(card, source_pile, source_index, target_pile);
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      startFoundationMoveAnimation_gl(card, source_pile, source_index, target_pile);
+      break;
+    #endif
+    default:
+      startFoundationMoveAnimation_cairo(card, source_pile, source_index, target_pile);
+  }
+}
+
+void SolitaireGame::updateFoundationMoveAnimation() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      updateFoundationMoveAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      updateFoundationMoveAnimation_gl();
+      break;
+    #endif
+    default:
+      updateFoundationMoveAnimation_cairo();
+  }
+}
+
+void SolitaireGame::startStockToWasteAnimation() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      startStockToWasteAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      startStockToWasteAnimation_gl();
+      break;
+    #endif
+    default:
+      startStockToWasteAnimation_cairo();
+  }
+}
+
+void SolitaireGame::updateStockToWasteAnimation() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      updateStockToWasteAnimation_cairo();
+      break;
+    #ifdef __linux__
+    case RenderingEngine::OPENGL:
+      updateStockToWasteAnimation_gl();
+      break;
+    #endif
+    default:
+      updateStockToWasteAnimation_cairo();
+  }
+}
+
+// ============================================================================
+// REST OF ORIGINAL SOLITAIRE.CPP
+// All Cairo animation functions renamed to *_cairo
+// Include rest of file unchanged
+// ============================================================================
+
+// NOTE: All original animation.cpp functions should be renamed to add _cairo suffix
+// Original code from solitaire.cpp continues below...
 
 void SolitaireGame::checkAndInitializeSound() {
   // Check if sound.zip file exists
@@ -129,10 +793,28 @@ void SolitaireGame::run(int argc, char **argv) {
   setupWindow();
   initializeGame();  // Initialize game after GTK is ready and window exists
   setupGameArea();
+  
+  // Show all widgets AFTER game is fully initialized
+  // This ensures GL context creation happens when game state is ready
+  gtk_widget_show_all(window_);
+  
   gtk_main();
 }
 
 void SolitaireGame::initializeGame() {
+  // Check for engine switch request
+  if (engine_switch_requested_) {
+    switchRenderingEngine(requested_engine_);
+    engine_switch_requested_ = false;
+  }
+
+  // CRITICAL: Force CAIRO mode during game initialization
+  // This ensures deal() and all initialization code uses Cairo animations, not OpenGL
+  // User can switch to OpenGL AFTER game is fully initialized
+  rendering_engine_ = RenderingEngine::CAIRO;
+  cairo_initialized_ = true;
+  opengl_initialized_ = false;
+
   if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {
     // Original single-deck initialization
     try {
@@ -193,6 +875,11 @@ void SolitaireGame::initializeGame() {
     // Multi-deck initialization
     initializeMultiDeckGame();
   }
+  
+  // CRITICAL: Mark game as fully initialized
+  // This prevents GL rendering from accessing uninitialized game state
+  game_fully_initialized_ = true;
+  std::cout << "✓ Game fully initialized - GL rendering now safe" << std::endl;
 }
 
 bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
@@ -287,7 +974,7 @@ void SolitaireGame::deal() {
             << std::endl; // Debug output
 #endif
 
-  // Start the deal animation
+  // Start the deal animation (safe now - rendering_engine_ is forced to CAIRO)
   startDealAnimation();
 }
 
@@ -587,7 +1274,7 @@ void SolitaireGame::dealMultiDeck() {
     stock_.push_back(*card);
   }
 
-  // Start the deal animation
+  // Start the deal animation (safe now - rendering_engine_ is forced to CAIRO)
   startDealAnimation();
 }
 
@@ -653,70 +1340,32 @@ void SolitaireGame::setupWindow() {
 }
 
 void SolitaireGame::setupGameArea() {
-  // Create new drawing area
-  game_area_ = gtk_drawing_area_new();
-  gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
-
-  // Enable mouse event handling
-  gtk_widget_add_events(
-      game_area_,
-      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
-          GDK_POINTER_MOTION_MASK |
-          GDK_STRUCTURE_MASK); // Enable structure events for resize
-
-  // Connect all necessary signals
-  g_signal_connect(G_OBJECT(game_area_), "draw", G_CALLBACK(onDraw), this);
-
-  g_signal_connect(G_OBJECT(game_area_), "button-press-event",
-                   G_CALLBACK(onButtonPress), this);
-
-  g_signal_connect(G_OBJECT(game_area_), "button-release-event",
-                   G_CALLBACK(onButtonRelease), this);
-
-  g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
-                   G_CALLBACK(onMotionNotify), this);
-
-  // Add size-allocate signal handler for resize events
-  g_signal_connect(
-      G_OBJECT(game_area_), "size-allocate",
-      G_CALLBACK(
-          +[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
-            SolitaireGame *game = static_cast<SolitaireGame *>(data);
-            game->updateCardDimensions(allocation->width, allocation->height);
-
-            // Recreate buffer surface with new dimensions if needed
-            if (game->buffer_surface_) {
-              cairo_surface_destroy(game->buffer_surface_);
-              cairo_destroy(game->buffer_cr_);
-            }
-
-            game->buffer_surface_ = cairo_image_surface_create(
-                CAIRO_FORMAT_ARGB32, allocation->width, allocation->height);
-            game->buffer_cr_ = cairo_create(game->buffer_surface_);
-
-            gtk_widget_queue_draw(widget);
-          }),
-      this);
-
-  // Set minimum size to prevent cards from becoming too small
-  gtk_widget_set_size_request(
-      game_area_,
-      BASE_CARD_WIDTH * 7 +
-          BASE_CARD_SPACING * 8, // Minimum width for 7 cards + spacing
-      BASE_CARD_HEIGHT * 2 +
-          BASE_VERT_SPACING * 6 // Minimum height for 2 rows + tableau
-  );
-
-  // Initialize card dimensions based on initial window size
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(window_, &allocation);
-  updateCardDimensions(allocation.width, allocation.height);
-
-  // Initialize the card cache
-  initializeCardCache();
-
-  // Make everything visible
-  gtk_widget_show_all(window_);
+  // Create Cairo rendering area
+  setupCairoArea();
+  
+  // Create OpenGL rendering area
+  setupOpenGLArea();
+  
+  // Create GtkStack to switch between rendering engines
+  rendering_stack_ = gtk_stack_new();
+  gtk_stack_set_transition_type(GTK_STACK(rendering_stack_), 
+                                GTK_STACK_TRANSITION_TYPE_NONE);
+  
+  // Add both widgets to stack
+  gtk_stack_add_named(GTK_STACK(rendering_stack_), game_area_, "cairo");
+  #ifdef __linux__
+  gtk_stack_add_named(GTK_STACK(rendering_stack_), gl_area_, "opengl");
+  #endif
+  
+  // Show appropriate rendering surface
+  // ALWAYS start with Cairo for safety - game must be fully initialized first
+  // User can switch to OpenGL from Graphics menu AFTER game loads
+  gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "cairo");
+  
+  // Pack stack into main window
+  gtk_box_pack_start(GTK_BOX(vbox_), rendering_stack_, TRUE, TRUE, 0);
+  
+  // NOTE: gtk_widget_show_all() will be called from run() AFTER game is initialized
 }
 
 void SolitaireGame::setupMenuBar() {
@@ -822,6 +1471,9 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
 
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
+
+  // ==================== GRAPHICS MENU ====================
+  addEngineSelectionMenu(menubar);
 
   // ==================== OPTIONS MENU ====================
   GtkWidget *optionsMenu = gtk_menu_new();

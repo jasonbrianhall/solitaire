@@ -156,41 +156,24 @@ private:
   // ============================================================================
 
   // Win Animation - Cairo Versions
-  void startWinAnimation_cairo();
-  void updateWinAnimation_cairo();
-  static gboolean onAnimationTick_cairo(gpointer data);
-  void stopWinAnimation_cairo();
+  static gboolean onAnimationTick(gpointer data);
   void stopWinAnimation();
 
-  void launchNextCard_cairo();
+  void launchNextCard();
 
   void startDealAnimation();
   void updateDealAnimation();
   void completeDeal();
-  void dealNextCard();
-  gboolean onDealAnimationTick(gpointer data);
 
   // Deal Animation - Cairo Versions
-  void startDealAnimation_cairo();
-  void updateDealAnimation_cairo();
-  static gboolean onDealAnimationTick_cairo(gpointer data);
-  void stopDealAnimation_cairo();
-  void dealNextCard_cairo();
-  void completeDeal_cairo();
+  static gboolean onDealAnimationTick(gpointer data);
+  void stopDealAnimation();
+  void dealNextCard();
 
   // Foundation Move Animation - Cairo Versions
-  void startFoundationMoveAnimation_cairo(const cardlib::Card &card,
-                                          int source_pile,
-                                          int source_index,
-                                          int target_pile);
-  void updateFoundationMoveAnimation_cairo();
-  static gboolean onFoundationMoveAnimationTick_cairo(gpointer data);
+  void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile);
 
   // Stock to Waste Animation - Cairo Versions
-  void startStockToWasteAnimation_cairo();
-  void updateStockToWasteAnimation_cairo();
-  static gboolean onStockToWasteAnimationTick_cairo(gpointer data);
-  void completeStockToWasteAnimation_cairo();
 
   // ============================================================================
   // OpenGL 3.4 Animation Methods - Complete Set
@@ -293,8 +276,7 @@ private:
 
   // ============================================================================
 
-  static gboolean onAutoFinishTick_cairo(gpointer data);
-  void processNextAutoFinishMove_cairo();
+  static gboolean onAutoFinishTick(gpointer data);
 
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile
@@ -414,10 +396,8 @@ private:
       0.7; // Maximum distance threshold (as percentage of screen height)
 
   void explodeCard(AnimatedCard &card);
-  void updateCardFragments(AnimatedCard &card);
   void drawCardFragment(cairo_t *cr, const CardFragment &fragment);
-  void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile,
-                                    int source_index, int target_pile);
+
   void updateFoundationMoveAnimation();
   static gboolean onFoundationMoveAnimationTick(gpointer data);
 
@@ -459,7 +439,6 @@ private:
   guint auto_finish_timer_id_ = 0;
 
   void processNextAutoFinishMove();
-  static gboolean onAutoFinishTick(gpointer data);
   void resetKeyboardNavigation();
 
   std::string sounds_zip_path_;
@@ -506,14 +485,9 @@ private:
   void drawAllAnimations();
   void drawDraggedCards();
   void drawWinAnimation();
-  void drawWinAnimation_cairo();
-  void drawDealAnimation();
   void dealMultiDeck();
-  void drawDealAnimation_cairo();
-  void explodeCard_cairo(AnimatedCard &card);
-  void drawCardFragment_cairo(cairo_t *cr, const CardFragment &fragment);
-  void updateCardFragments_cairo(AnimatedCard &card);
-  gboolean onAnimationTick(gpointer data);
+  void drawDealAnimation();
+  void updateCardFragments(AnimatedCard &card);
 
   // Game mode (number of decks)
   GameMode current_game_mode_ = GameMode::STANDARD_KLONDIKE;
