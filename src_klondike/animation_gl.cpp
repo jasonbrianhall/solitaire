@@ -1170,11 +1170,11 @@ void SolitaireGame::highlightSelectedCard_gl() {
         x = 2 * current_card_spacing_ + current_card_width_;
         y = current_card_spacing_;
     } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
-        // Foundation piles
+        // Foundation piles - match exact calculation from drawFoundationPiles()
         int foundation_idx = selected_pile_ - 2;
         if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
-            x = 3 * (current_card_width_ + current_card_spacing_) + 
-                foundation_idx * (current_card_width_ + current_card_spacing_);
+            x = current_card_spacing_ + 
+                (2 + foundation_idx) * (current_card_width_ + current_card_spacing_);
             y = current_card_spacing_;
         }
     } else if (selected_pile_ >= first_tableau_index) {
@@ -1197,56 +1197,39 @@ void SolitaireGame::highlightSelectedCard_gl() {
         }
     }
     
-    // Choose highlight color based on selection state
+    // Choose highlight color based on selection state (matching Cairo colors)
     float r, g, b, a;
     if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
         (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
-        // Source card is highlighted in BLUE
-        r = 0.0f; g = 0.0f; b = 1.0f; a = 0.8f;
+        // Source card is highlighted in semi-transparent blue
+        r = 0.0f; g = 0.5f; b = 1.0f; a = 0.5f;
     } else {
-        // Regular selection is highlighted in GREEN (matching Cairo)
-        r = 0.0f; g = 0.8f; b = 0.0f; a = 0.8f;
+        // Regular selection is highlighted in semi-transparent yellow
+        r = 1.0f; g = 1.0f; b = 0.0f; a = 0.5f;
     }
     
     // Enable blending for transparency
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
-    // Draw 4 colored line segments forming a rectangle outline
-    // We'll draw each side as a separate line with glColor and immediate vertex data
-    
-    // Use a simple approach: draw the rectangle using line strip
-    // Create vertices for the rectangle outline
-    float outline_x[] = {
-        (float)(x - 2), (float)(x + current_card_width_ + 2), 
-        (float)(x + current_card_width_ + 2), (float)(x - 2), 
-        (float)(x - 2)
-    };
-    float outline_y[] = {
-        (float)(y - 2), (float)(y - 2),
-        (float)(y + current_card_height_ + 2), (float)(y + current_card_height_ + 2),
-        (float)(y - 2)
-    };
-    
-    // Build vertex array for the outline
+    // Draw filled rectangle outline (4 line segments forming a box outline)
+    // Create the 4 corners of the rectangle
     float positions[] = {
-        outline_x[0], outline_y[0], 0.0f,
-        outline_x[1], outline_y[1], 0.0f,
-        outline_x[2], outline_y[2], 0.0f,
-        outline_x[3], outline_y[3], 0.0f,
-        outline_x[4], outline_y[4], 0.0f
+        (float)(x - 2), (float)(y - 2), 0.0f,
+        (float)(x + current_card_width_ + 2), (float)(y - 2), 0.0f,
+        (float)(x + current_card_width_ + 2), (float)(y + current_card_height_ + 2), 0.0f,
+        (float)(x - 2), (float)(y + current_card_height_ + 2), 0.0f
     };
     
-    // Build color array (repeat the color for each vertex)
+    // Create color array for all 4 corners (all same color)
     float colors[] = {
-        r, g, b, a,
         r, g, b, a,
         r, g, b, a,
         r, g, b, a,
         r, g, b, a
     };
     
-    // Use a simple approach with immediate VAO/VBO
+    // Create VAO/VBO for the rectangle
     GLuint VAO = 0, VBO_pos = 0, VBO_color = 0;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO_pos);
@@ -1266,28 +1249,85 @@ void SolitaireGame::highlightSelectedCard_gl() {
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     
-    // Use the card shader but this time we'll override the texture
-    glUseProgram(cardShaderProgram_gl_);
-    
-    // Setup matrices
+    // Get window dimensions for projection
     GtkAllocation allocation;
     gtk_widget_get_allocation(gl_area_, &allocation);
+    
+    // Use simple fixed pipeline approach: disable texturing and use color directly
+    // Save current state
+    GLint oldProgram = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+    
+    // Create minimal shader for colored geometry
+    static GLuint colorShaderProgram = 0;
+    if (colorShaderProgram == 0) {
+        const char *vertShader = R"(
+            #version 330 core
+            layout(location = 0) in vec3 position;
+            layout(location = 1) in vec4 color;
+            
+            uniform mat4 projection;
+            uniform mat4 view;
+            
+            out VS_OUT {
+                vec4 color;
+            } vs_out;
+            
+            void main() {
+                gl_Position = projection * view * vec4(position, 1.0);
+                vs_out.color = color;
+            }
+        )";
+        
+        const char *fragShader = R"(
+            #version 330 core
+            in VS_OUT {
+                vec4 color;
+            } fs_in;
+            
+            out vec4 FragColor;
+            
+            void main() {
+                FragColor = fs_in.color;
+            }
+        )";
+        
+        // Compile vertex shader
+        GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vShader, 1, &vertShader, NULL);
+        glCompileShader(vShader);
+        
+        // Compile fragment shader
+        GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fShader, 1, &fragShader, NULL);
+        glCompileShader(fShader);
+        
+        // Create program
+        colorShaderProgram = glCreateProgram();
+        glAttachShader(colorShaderProgram, vShader);
+        glAttachShader(colorShaderProgram, fShader);
+        glLinkProgram(colorShaderProgram);
+        
+        glDeleteShader(vShader);
+        glDeleteShader(fShader);
+    }
+    
+    // Use the color shader program
+    glUseProgram(colorShaderProgram);
+    
+    // Set up matrices
     glm::mat4 projection = glm::ortho(0.0f, (float)allocation.width, 
                                       (float)allocation.height, 0.0f, -1.0f, 1.0f);
     glm::mat4 view = glm::mat4(1.0f);
-    glm::mat4 model = glm::mat4(1.0f);
     
-    GLint projLoc = glGetUniformLocation(cardShaderProgram_gl_, "projection");
-    GLint viewLoc = glGetUniformLocation(cardShaderProgram_gl_, "view");
-    GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
-    
+    GLint projLoc = glGetUniformLocation(colorShaderProgram, "projection");
+    GLint viewLoc = glGetUniformLocation(colorShaderProgram, "view");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
     
-    // Draw the outline as line strip with 3 pixel width
+    // Draw the rectangle outline as line loop with increased line width
     glLineWidth(3.0f);
-    glDrawArrays(GL_LINE_STRIP, 0, 5);
+    glDrawArrays(GL_LINE_LOOP, 0, 4);
     glLineWidth(1.0f);
     
     glDeleteBuffers(1, &VBO_pos);
@@ -1316,16 +1356,14 @@ void SolitaireGame::highlightSelectedCard_gl() {
                         (float)(x2 - 2), (float)(y2 - 2), 0.0f,
                         (float)(x2 + current_card_width_ + 2), (float)(y2 - 2), 0.0f,
                         (float)(x2 + current_card_width_ + 2), (float)(y2 + stack_height + 2), 0.0f,
-                        (float)(x2 - 2), (float)(y2 + stack_height + 2), 0.0f,
-                        (float)(x2 - 2), (float)(y2 - 2), 0.0f
+                        (float)(x2 - 2), (float)(y2 + stack_height + 2), 0.0f
                     };
                     
                     float colors2[] = {
-                        r, g, b, 0.4f,  // Lighter
-                        r, g, b, 0.4f,
-                        r, g, b, 0.4f,
-                        r, g, b, 0.4f,
-                        r, g, b, 0.4f
+                        r, g, b, 0.3f,  // Lighter blue for stack
+                        r, g, b, 0.3f,
+                        r, g, b, 0.3f,
+                        r, g, b, 0.3f
                     };
                     
                     GLuint VAO2 = 0, VBO2_pos = 0, VBO2_color = 0;
@@ -1345,8 +1383,11 @@ void SolitaireGame::highlightSelectedCard_gl() {
                     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
                     glEnableVertexAttribArray(1);
                     
+                    // Use the same color shader program as the main highlight
+                    glUseProgram(colorShaderProgram);
+                    
                     glLineWidth(3.0f);
-                    glDrawArrays(GL_LINE_STRIP, 0, 5);
+                    glDrawArrays(GL_LINE_LOOP, 0, 4);
                     glLineWidth(1.0f);
                     
                     glDeleteBuffers(1, &VBO2_pos);
