@@ -625,7 +625,7 @@ void SolitaireGame::updateDealAnimation_gl() {
 
     // Check if we're done dealing and all cards have arrived
     if (all_cards_arrived && cards_dealt_ >= 28) {
-        completeDeal_gl();
+        completeDeal();
     }
 
     refreshDisplay();
@@ -684,22 +684,6 @@ void SolitaireGame::dealNextCard_gl() {
     playSound(tableau_[pile_index][card_index].face_up ? 
               GameSoundEvent::CardFlip : 
               GameSoundEvent::DealCard);
-}
-
-void SolitaireGame::completeDeal_gl() {
-    deal_animation_active_ = false;
-
-    if (animation_timer_id_ > 0) {
-        g_source_remove(animation_timer_id_);
-        animation_timer_id_ = 0;
-    }
-
-    deal_cards_.clear();
-    refreshDisplay();
-}
-
-void SolitaireGame::stopDealAnimation_gl() {
-    completeDeal_gl();
 }
 
 // ============================================================================

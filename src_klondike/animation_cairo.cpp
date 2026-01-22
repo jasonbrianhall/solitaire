@@ -648,20 +648,6 @@ void SolitaireGame::dealNextCard() {
   cards_dealt_++;
 }
 
-void SolitaireGame::completeDeal() {
-  deal_animation_active_ = false;
-
-  if (animation_timer_id_ > 0) {
-    g_source_remove(animation_timer_id_);
-    animation_timer_id_ = 0;
-  }
-
-  deal_cards_.clear();
-  cards_dealt_ = 0;
-
-  refreshDisplay();
-}
-
 void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
   // If there's already an animation running, complete it immediately
   // before starting a new one to avoid race conditions
