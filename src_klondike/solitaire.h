@@ -7,8 +7,13 @@
 #include <optional>
 #include <unordered_map>
 #include <vector>
-
-
+#ifndef _WIN32
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#endif
 
 class SolitaireGame {
 public:
@@ -17,6 +22,29 @@ public:
   bool setSoundsZipPath(const std::string &path);
 
   void run(int argc, char **argv);
+
+  // ========================================================================
+  // RENDERING ENGINE SELECTION
+  // ========================================================================
+  enum class RenderingEngine {
+    CAIRO,    // CPU-based 2D rendering (original)
+    OPENGL    // GPU-accelerated 3D rendering
+  };
+
+  // Engine control methods
+  bool setRenderingEngine(RenderingEngine engine);
+  RenderingEngine getRenderingEngine() const { return rendering_engine_; }
+  bool isOpenGLSupported() const;
+  bool initializeRenderingEngine();
+  bool switchRenderingEngine(RenderingEngine newEngine);
+  void cleanupRenderingEngine();
+  std::string getRenderingEngineName() const;
+  void printEngineInfo();
+  void addEngineSelectionMenu(GtkWidget *menubar);
+  void saveEnginePreference();
+  void loadEnginePreference();
+  void renderFrame();
+
 
   enum class GameMode {
     STANDARD_KLONDIKE,  // Single deck
@@ -42,6 +70,8 @@ struct CardFragment {
   double velocity_y;
   double rotation;
   double rotation_velocity;
+  double target_x;  // Texture coordinate X for explosion fragments (grid column)
+  double target_y;  // Texture coordinate Y for explosion fragments (grid row)
   cairo_surface_t *surface;
   bool active;
 };
@@ -72,6 +102,16 @@ struct TableauCard {
 };
 
 private:
+  // ========================================================================
+  // RENDERING ENGINE STATE
+  // ========================================================================
+  RenderingEngine rendering_engine_;
+  bool opengl_initialized_;
+  bool cairo_initialized_;
+  bool engine_switch_requested_;
+  RenderingEngine requested_engine_;
+  bool is_glew_initialized_ = false;
+
   // Game state
   static constexpr int BASE_WINDOW_WIDTH = 1024;
   static constexpr int BASE_WINDOW_HEIGHT = 768;
@@ -115,19 +155,145 @@ private:
   static constexpr double DEAL_INTERVAL = 30; // Time between dealing cards (ms)
   static constexpr double DEAL_SPEED = 1.3;   // Speed multiplier for dealing
 
-  // Animation methods
-  void startWinAnimation();
-  void updateWinAnimation();
+  // ============================================================================
+  // Cairo Animation Methods
+  // ============================================================================
+
+  // Win Animation - Cairo Versions
   static gboolean onAnimationTick(gpointer data);
   void stopWinAnimation();
+
   void launchNextCard();
 
   void startDealAnimation();
   void updateDealAnimation();
+  void completeDeal();
+
+  // Deal Animation - Cairo Versions
   static gboolean onDealAnimationTick(gpointer data);
   void stopDealAnimation();
   void dealNextCard();
-  void completeDeal();
+
+  // Foundation Move Animation - Cairo Versions
+  void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile);
+
+  // Stock to Waste Animation - Cairo Versions
+
+#ifdef USEOPENGL
+  // ============================================================================
+  // OpenGL 3.4 Animation Methods - Complete Set
+  // ============================================================================
+
+  // OpenGL 3.4 Rendering Components
+  GLuint cardShaderProgram_gl_       = 0;  // Main card rendering shader
+  GLuint simpleShaderProgram_gl_     = 0;  // Simple color rendering shader
+  GLuint cardQuadVAO_gl_             = 0;  // Vertex Array Object for card quad
+  GLuint cardQuadVBO_gl_             = 0;  // Vertex Buffer Object
+  GLuint cardQuadEBO_gl_             = 0;  // Element Buffer Object
+  
+  std::unordered_map<std::string, GLuint> cardTextures_gl_;  // Texture cache
+  GLuint cardBackTexture_gl_         = 0;  // Card back texture
+#endif
+
+  void startWinAnimation();
+  void updateWinAnimation();
+
+
+  // Win Animation - OpenGL 3.4 Versions
+  void updateWinAnimation_gl();
+  void startWinAnimation_gl();
+  void stopWinAnimation_gl();
+  static gboolean onAnimationTick_gl(gpointer data);
+  void launchNextCard_gl();
+  void explodeCard_gl(AnimatedCard &card);
+  void updateCardFragments_gl(AnimatedCard &card);
+
+  // Deal Animation - OpenGL 3.4 Versions
+  void startDealAnimation_gl();
+  void updateDealAnimation_gl();
+  static gboolean onDealAnimationTick_gl(gpointer data);
+  void dealNextCard_gl();
+  void completeDeal_gl();
+  void stopDealAnimation_gl();
+
+  // Foundation Move Animation - OpenGL 3.4 Versions
+  void startFoundationMoveAnimation_gl(const cardlib::Card &card,
+                                       int source_pile,
+                                       int source_index,
+                                       int target_pile);
+  void updateFoundationMoveAnimation_gl();
+  static gboolean onFoundationMoveAnimationTick_gl(gpointer data);
+
+  // Stock to Waste Animation - OpenGL 3.4 Versions
+  void startStockToWasteAnimation_gl();
+  void updateStockToWasteAnimation_gl();
+  static gboolean onStockToWasteAnimationTick_gl(gpointer data);
+  void completeStockToWasteAnimation_gl();
+
+#ifdef USEOPENGL
+  // OpenGL 3.4 Setup Functions
+  GLuint setupShaders_gl();
+  GLuint setupCardQuadVAO_gl();
+  bool initializeCardTextures_gl();
+  void cleanupOpenGLResources_gl();
+  void draw_comet_buster_gl(void *vis_ptr, void *other);
+  bool loadCardTexture_gl(const std::string &cardKey, const cardlib::Card &card);
+  bool reloadCustomCardBackTexture_gl();
+  
+  // OpenGL context validation and initialization
+  bool validateOpenGLContext();
+  bool initializeGLEW();
+  bool checkOpenGLCapabilities();
+  void logOpenGLInfo();
+  bool initializeRenderingEngine_gl();
+  void renderFrame_gl();
+  
+#endif
+  
+  // OpenGL auto-finish functions
+  static gboolean onAutoFinishTick_gl(gpointer data);
+  void processNextAutoFinishMove_gl();
+  
+#ifdef USEOPENGL
+  // OpenGL drawing helpers
+  void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
+  void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
+  void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
+  
+  // GL Drawing functions for game piles
+  void drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up);
+  void drawStockPile_gl();
+  void drawWastePile_gl();
+  void drawFoundationPiles_gl();
+  void drawTableauPiles_gl();
+  GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
+
+  // ============================================================================
+  // GL CONTEXT CALLBACKS (NEW - FIX FOR NO CONTEXT ERROR)
+  // ============================================================================
+  // Called when GL context is created (after widget realization)
+  static gboolean onGLRealize(GtkGLArea *area, gpointer data);
+  // Called every frame for rendering
+  static gboolean onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data);
+  // Deferred GL initialization (called from realize callback)
+  bool initializeOpenGLResources();
+  // Setup GL widget separately
+  void setupOpenGLArea();
+
+  void drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+
+
+#endif
+  void setupCairoArea();
+
+  // ============================================================================
+
+  static gboolean onAutoFinishTick(gpointer data);
 
   cardlib::Deck deck_;
   std::vector<cardlib::Card> stock_; // Draw pile
@@ -155,7 +321,9 @@ private:
 
   // GTK widgets
   GtkWidget *window_;
-  GtkWidget *game_area_;
+  GtkWidget *game_area_;        // Cairo rendering area
+  GtkWidget *gl_area_;          // OpenGL rendering area (NEW - FIX)
+  GtkWidget *rendering_stack_;  // Stack to switch between them (NEW - FIX)
   std::vector<GtkWidget *> card_widgets_;
 
   // Card dimensions and spacing
@@ -245,10 +413,8 @@ private:
       0.7; // Maximum distance threshold (as percentage of screen height)
 
   void explodeCard(AnimatedCard &card);
-  void updateCardFragments(AnimatedCard &card);
   void drawCardFragment(cairo_t *cr, const CardFragment &fragment);
-  void startFoundationMoveAnimation(const cardlib::Card &card, int source_pile,
-                                    int source_index, int target_pile);
+
   void updateFoundationMoveAnimation();
   static gboolean onFoundationMoveAnimationTick(gpointer data);
 
@@ -278,6 +444,7 @@ private:
   void selectCardDown();
   void activateSelected();
   void highlightSelectedCard(cairo_t *cr);
+  void highlightSelectedCard_gl();  // OpenGL version for keyboard navigation highlighting
   bool keyboard_navigation_active_ = false;
   bool tryMoveSelectedCard();
   bool keyboard_selection_active_ =
@@ -290,7 +457,6 @@ private:
   guint auto_finish_timer_id_ = 0;
 
   void processNextAutoFinishMove();
-  static gboolean onAutoFinishTick(gpointer data);
   void resetKeyboardNavigation();
 
   std::string sounds_zip_path_;
@@ -313,14 +479,16 @@ private:
 
   unsigned int current_seed_;
   void drawEmptyPile(cairo_t *cr, int x, int y);
+  void drawEmptyPile_gl(int x, int y);
+  
+  // Track if game is fully initialized (used to prevent GL rendering before game state is ready)
+  bool game_fully_initialized_ = false;
 
-void showHowToPlay();
-void showKeyboardShortcuts();
-void showDirectoryStructureDialog(const std::string &directory);
-void showMissingFileDialog(const std::string &filename, const std::string &details);
-void showErrorDialog(const std::string &title, const std::string &message);
-
-// In the private: section of the SolitaireGame class in solitaire.h
+  void showHowToPlay();
+  void showKeyboardShortcuts();
+  void showDirectoryStructureDialog(const std::string &directory);
+  void showMissingFileDialog(const std::string &filename, const std::string &details);
+  void showErrorDialog(const std::string &title, const std::string &message);
 
   // Drawing-related methods
   void initializeOrResizeBuffer(int width, int height);
@@ -335,11 +503,14 @@ void showErrorDialog(const std::string &title, const std::string &message);
   void drawAllAnimations();
   void drawDraggedCards();
   void drawWinAnimation();
-  void drawDealAnimation();
   void dealMultiDeck();
+  void drawDealAnimation();
+  void updateCardFragments(AnimatedCard &card);
+
   // Game mode (number of decks)
   GameMode current_game_mode_ = GameMode::STANDARD_KLONDIKE;
   void updateWindowTitle();
+
   // Replace the single deck with a MultiDeck
   cardlib::MultiDeck multi_deck_;
   
@@ -349,12 +520,9 @@ void showErrorDialog(const std::string &title, const std::string &message);
   // Initialization method for multiple decks
   void initializeMultiDeckGame();
 
-
   bool extractFileFromZip(const std::string &zipFilePath,
                           const std::string &fileName,
                           std::vector<uint8_t> &fileData);
 };
-
-
 
 #endif // SOLITAIRE_H
