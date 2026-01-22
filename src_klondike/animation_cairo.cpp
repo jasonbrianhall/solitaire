@@ -1365,8 +1365,6 @@ void SolitaireGame::refreshCardCache() {
     }
 
     // Also reload custom back texture for OpenGL mode
-    if (rendering_engine_ == RenderingEngine::OPENGL && !custom_back_path_.empty()) {
-      reloadCustomCardBackTexture_gl();
-    }
+    reloadCustomCardBackTexture_gl();
   }
 }
