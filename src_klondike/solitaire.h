@@ -7,11 +7,13 @@
 #include <optional>
 #include <unordered_map>
 #include <vector>
+#ifndef _WIN32
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#endif
 
 class SolitaireGame {
 public:
@@ -177,6 +179,7 @@ private:
 
   // Stock to Waste Animation - Cairo Versions
 
+#ifndef _WIN32
   // ============================================================================
   // OpenGL 3.4 Animation Methods - Complete Set
   // ============================================================================
@@ -190,6 +193,7 @@ private:
   
   std::unordered_map<std::string, GLuint> cardTextures_gl_;  // Texture cache
   GLuint cardBackTexture_gl_         = 0;  // Card back texture
+#endif
 
   void startWinAnimation();
   void updateWinAnimation();
@@ -226,6 +230,7 @@ private:
   static gboolean onStockToWasteAnimationTick_gl(gpointer data);
   void completeStockToWasteAnimation_gl();
 
+#ifndef _WIN32
   // OpenGL 3.4 Setup Functions
   GLuint setupShaders_gl();
   GLuint setupCardQuadVAO_gl();
@@ -242,6 +247,8 @@ private:
   void logOpenGLInfo();
   bool initializeRenderingEngine_gl();
   void renderFrame_gl();
+  
+#endif
   
   // OpenGL auto-finish functions
   static gboolean onAutoFinishTick_gl(gpointer data);
