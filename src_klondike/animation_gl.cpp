@@ -1197,59 +1197,101 @@ void SolitaireGame::highlightSelectedCard_gl() {
         }
     }
     
-    // Use simple shader for colored rectangles
-    glUseProgram(simpleShaderProgram_gl_);
-    
-    // Setup projection matrix
-    GtkAllocation allocation;
-    gtk_widget_get_allocation(gl_area_, &allocation);
-    glm::mat4 projection = glm::ortho(0.0f, (float)allocation.width, 
-                                      (float)allocation.height, 0.0f, -1.0f, 1.0f);
-    GLint projLoc = glGetUniformLocation(simpleShaderProgram_gl_, "projection");
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-    
     // Choose highlight color based on selection state
     float r, g, b, a;
     if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
         (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
-        // Source card is highlighted in BLUE with good visibility
-        r = 0.0f; g = 0.0f; b = 1.0f; a = 0.35f;  // More opaque blue
+        // Source card is highlighted in BLUE
+        r = 0.0f; g = 0.0f; b = 1.0f; a = 0.8f;
     } else {
-        // Regular selection is highlighted in GREEN (matches cairo "mystical green")
-        r = 0.0f; g = 0.8f; b = 0.0f; a = 0.35f;  // Bright green
+        // Regular selection is highlighted in GREEN (matching Cairo)
+        r = 0.0f; g = 0.8f; b = 0.0f; a = 0.8f;
     }
-    
-    GLint colorLoc = glGetUniformLocation(simpleShaderProgram_gl_, "color");
-    glUniform4f(colorLoc, r, g, b, a);
     
     // Enable blending for transparency
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
-    // Draw filled rectangle
-    float positions[] = {
-        (float)x, (float)y, 0.0f,
-        (float)(x + current_card_width_), (float)y, 0.0f,
-        (float)(x + current_card_width_), (float)(y + current_card_height_), 0.0f,
-        (float)x, (float)(y + current_card_height_), 0.0f
+    // Draw 4 colored line segments forming a rectangle outline
+    // We'll draw each side as a separate line with glColor and immediate vertex data
+    
+    // Use a simple approach: draw the rectangle using line strip
+    // Create vertices for the rectangle outline
+    float outline_x[] = {
+        (float)(x - 2), (float)(x + current_card_width_ + 2), 
+        (float)(x + current_card_width_ + 2), (float)(x - 2), 
+        (float)(x - 2)
+    };
+    float outline_y[] = {
+        (float)(y - 2), (float)(y - 2),
+        (float)(y + current_card_height_ + 2), (float)(y + current_card_height_ + 2),
+        (float)(y - 2)
     };
     
-    GLuint VAO = 0, VBO = 0;
+    // Build vertex array for the outline
+    float positions[] = {
+        outline_x[0], outline_y[0], 0.0f,
+        outline_x[1], outline_y[1], 0.0f,
+        outline_x[2], outline_y[2], 0.0f,
+        outline_x[3], outline_y[3], 0.0f,
+        outline_x[4], outline_y[4], 0.0f
+    };
+    
+    // Build color array (repeat the color for each vertex)
+    float colors[] = {
+        r, g, b, a,
+        r, g, b, a,
+        r, g, b, a,
+        r, g, b, a,
+        r, g, b, a
+    };
+    
+    // Use a simple approach with immediate VAO/VBO
+    GLuint VAO = 0, VBO_pos = 0, VBO_color = 0;
     glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &VBO_pos);
+    glGenBuffers(1, &VBO_color);
     
     glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    
+    // Position buffer
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_pos);
     glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
     
-    GLint posAttrib = glGetAttribLocation(simpleShaderProgram_gl_, "position");
-    glEnableVertexAttribArray(posAttrib);
-    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    // Color buffer
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_color);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
     
-    // Draw filled rectangle as triangle strip
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    // Use the card shader but this time we'll override the texture
+    glUseProgram(cardShaderProgram_gl_);
     
-    glDeleteBuffers(1, &VBO);
+    // Setup matrices
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(gl_area_, &allocation);
+    glm::mat4 projection = glm::ortho(0.0f, (float)allocation.width, 
+                                      (float)allocation.height, 0.0f, -1.0f, 1.0f);
+    glm::mat4 view = glm::mat4(1.0f);
+    glm::mat4 model = glm::mat4(1.0f);
+    
+    GLint projLoc = glGetUniformLocation(cardShaderProgram_gl_, "projection");
+    GLint viewLoc = glGetUniformLocation(cardShaderProgram_gl_, "view");
+    GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+    
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Draw the outline as line strip with 3 pixel width
+    glLineWidth(3.0f);
+    glDrawArrays(GL_LINE_STRIP, 0, 5);
+    glLineWidth(1.0f);
+    
+    glDeleteBuffers(1, &VBO_pos);
+    glDeleteBuffers(1, &VBO_color);
     glDeleteVertexArrays(1, &VAO);
     
     // If we have a card selected for movement, also highlight all cards below it in tableau
@@ -1269,30 +1311,46 @@ void SolitaireGame::highlightSelectedCard_gl() {
                     current_card_height_;
                 
                 if (stack_height > 0) {
-                    // Lighter blue for the multi-card selection
-                    glUniform4f(colorLoc, 0.0f, 0.0f, 1.0f, 0.2f);
-                    
+                    // Lighter alpha for multi-card selection (still blue)
                     float positions2[] = {
-                        (float)x2, (float)y2, 0.0f,
-                        (float)(x2 + current_card_width_), (float)y2, 0.0f,
-                        (float)(x2 + current_card_width_), (float)(y2 + stack_height), 0.0f,
-                        (float)x2, (float)(y2 + stack_height), 0.0f
+                        (float)(x2 - 2), (float)(y2 - 2), 0.0f,
+                        (float)(x2 + current_card_width_ + 2), (float)(y2 - 2), 0.0f,
+                        (float)(x2 + current_card_width_ + 2), (float)(y2 + stack_height + 2), 0.0f,
+                        (float)(x2 - 2), (float)(y2 + stack_height + 2), 0.0f,
+                        (float)(x2 - 2), (float)(y2 - 2), 0.0f
                     };
                     
-                    GLuint VAO2 = 0, VBO2 = 0;
+                    float colors2[] = {
+                        r, g, b, 0.4f,  // Lighter
+                        r, g, b, 0.4f,
+                        r, g, b, 0.4f,
+                        r, g, b, 0.4f,
+                        r, g, b, 0.4f
+                    };
+                    
+                    GLuint VAO2 = 0, VBO2_pos = 0, VBO2_color = 0;
                     glGenVertexArrays(1, &VAO2);
-                    glGenBuffers(1, &VBO2);
+                    glGenBuffers(1, &VBO2_pos);
+                    glGenBuffers(1, &VBO2_color);
                     
                     glBindVertexArray(VAO2);
-                    glBindBuffer(GL_ARRAY_BUFFER, VBO2);
+                    
+                    glBindBuffer(GL_ARRAY_BUFFER, VBO2_pos);
                     glBufferData(GL_ARRAY_BUFFER, sizeof(positions2), positions2, GL_STATIC_DRAW);
+                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+                    glEnableVertexAttribArray(0);
                     
-                    glEnableVertexAttribArray(posAttrib);
-                    glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+                    glBindBuffer(GL_ARRAY_BUFFER, VBO2_color);
+                    glBufferData(GL_ARRAY_BUFFER, sizeof(colors2), colors2, GL_STATIC_DRAW);
+                    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+                    glEnableVertexAttribArray(1);
                     
-                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                    glLineWidth(3.0f);
+                    glDrawArrays(GL_LINE_STRIP, 0, 5);
+                    glLineWidth(1.0f);
                     
-                    glDeleteBuffers(1, &VBO2);
+                    glDeleteBuffers(1, &VBO2_pos);
+                    glDeleteBuffers(1, &VBO2_color);
                     glDeleteVertexArrays(1, &VAO2);
                 }
             }
