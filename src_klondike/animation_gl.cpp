@@ -1030,34 +1030,53 @@ void SolitaireGame::drawWastePile_gl() {
 }
 
 void SolitaireGame::drawFoundationPiles_gl() {
-    int start_x = current_card_spacing_ + (current_card_width_ + current_card_spacing_) * 3;
-    int y = current_card_spacing_;
-    
-    for (size_t i = 0; i < foundation_.size(); i++) {
-        int x = start_x + (int)(i * (current_card_width_ + current_card_spacing_));
-        
-        if (foundation_[i].empty()) {
-            // Draw empty foundation placeholder
-            drawEmptyPile_gl(x, y);
-        } else {
-            // Check if the top card is being dragged from this foundation pile
-            bool top_card_dragging =
-                (dragging_ && drag_source_pile_ == static_cast<int>(i) + 2 &&
-                 !foundation_[i].empty() && drag_cards_.size() == 1 &&
-                 drag_cards_[0].suit == foundation_[i].back().suit &&
-                 drag_cards_[0].rank == foundation_[i].back().rank);
+  int x = 3 * (current_card_width_ + current_card_spacing_);
+  int y = current_card_spacing_;
+  
+  for (size_t i = 0; i < foundation_.size(); i++) {
+    // Always draw the empty foundation pile outline
+    drawEmptyPile_gl(x, y);
 
-            if (!top_card_dragging) {
-                // Draw top card normally
-                drawCard_gl(foundation_[i].back(), x, y, true);
-            } else if (foundation_[i].size() > 1) {
-                // Draw the second-to-top card (reveal it when top is dragged)
-                const auto &second_card = foundation_[i][foundation_[i].size() - 2];
-                drawCard_gl(second_card, x, y, true);
-            }
-            // If top card is dragged and it's the only card, draw nothing
-        }
+    const auto &pile = foundation_[i];
+    if (!pile.empty()) {
+      if (win_animation_active_) {
+        drawFoundationDuringWinAnimation_gl(i, pile, x, y);
+      } else {
+        drawNormalFoundationPile_gl(i, pile, x, y);
+      }
     }
+    x += current_card_width_ + current_card_spacing_;
+  }
+}
+
+// Draw foundation pile during win animation
+void SolitaireGame::drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+  // Only draw the topmost non-animated card
+  for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
+    if (!animated_foundation_cards_[pile_index][j]) {
+      drawCard_gl(pile[j], x, y, true);
+      break;
+    }
+  }
+}
+
+// Draw foundation pile during normal gameplay
+void SolitaireGame::drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+  // Check if the top card is being dragged from foundation
+  bool top_card_dragging =
+      (dragging_ && drag_source_pile_ == pile_index + 2 &&
+       !pile.empty() && drag_cards_.size() == 1 &&
+       drag_cards_[0].suit == pile.back().suit &&
+       drag_cards_[0].rank == pile.back().rank);
+
+  if (!top_card_dragging) {
+    const auto &top_card = pile.back();
+    drawCard_gl(top_card, x, y, true);
+  } else if (pile.size() > 1) {
+    // Draw the second-to-top card
+    const auto &second_card = pile[pile.size() - 2];
+    drawCard_gl(second_card, x, y, true);
+  }
 }
 
 void SolitaireGame::drawTableauPiles_gl() {
@@ -1150,65 +1169,94 @@ void SolitaireGame::drawEmptyPile_gl(int x, int y) {
 
 // Helper function to draw a highlighted rectangle around selected cards
 void SolitaireGame::highlightSelectedCard_gl() {
-    if (!keyboard_navigation_active_ || selected_pile_ == -1) {
-        return;
+  if (!keyboard_navigation_active_ || selected_pile_ == -1) {
+    return;
+  }
+
+  int x = 0, y = 0;
+
+  // Calculate max foundation index (depends on game mode)
+  int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
+  int first_tableau_index = max_foundation_index + 1;
+
+  // Validate keyboard selection
+  if (keyboard_selection_active_) {
+    bool invalid_source = false;
+    
+    if (source_pile_ < 0) {
+      invalid_source = true;
+    } else if (source_pile_ >= first_tableau_index) {
+      int tableau_idx = source_pile_ - first_tableau_index;
+      if (tableau_idx < 0 || tableau_idx >= static_cast<int>(tableau_.size())) {
+        invalid_source = true;
+      }
+    } else if (source_pile_ == 1 && waste_.empty()) {
+      invalid_source = true;
+    } else if (source_pile_ >= 2 && source_pile_ <= max_foundation_index) {
+      int foundation_idx = source_pile_ - 2;
+      if (foundation_idx < 0 || foundation_idx >= static_cast<int>(foundation_.size())) {
+        invalid_source = true;
+      }
     }
     
-    int x = 0, y = 0;
-    
-    // Calculate max foundation index (depends on game mode)
-    int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
-    int first_tableau_index = max_foundation_index + 1;
-    
-    // Determine position based on pile type (matching Cairo logic)
-    if (selected_pile_ == 0) {
-        // Stock pile
-        x = current_card_spacing_;
-        y = current_card_spacing_;
-    } else if (selected_pile_ == 1) {
-        // Waste pile
-        x = 2 * current_card_spacing_ + current_card_width_;
-        y = current_card_spacing_;
-    } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
-        // Foundation piles - accounts for gap between waste pile and foundations
-        int foundation_idx = selected_pile_ - 2;
-        
-        // Make sure foundation_idx is valid
-        if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
-            x = current_card_spacing_ + 
-                (2 + foundation_idx) * (current_card_width_ + current_card_spacing_);
-            y = current_card_spacing_;
-        }
-    } else if (selected_pile_ >= first_tableau_index) {
-        // Tableau piles
-        int tableau_idx = selected_pile_ - first_tableau_index;
-        if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
-            x = current_card_spacing_ +
-                tableau_idx * (current_card_width_ + current_card_spacing_);
-            
-            const auto &tableau_pile = tableau_[tableau_idx];
-            if (tableau_pile.empty()) {
-                y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-            } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
-                y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-                    (tableau_pile.size() - 1) * current_vert_spacing_;
-            } else {
-                y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-                    selected_card_idx_ * current_vert_spacing_;
-            }
-        }
+    if (invalid_source) {
+      // Invalid source pile, reset selection state
+      keyboard_selection_active_ = false;
+      source_pile_ = -1;
+      source_card_idx_ = -1;
+      return;
     }
+  }
+
+  // Determine position based on pile type (matching Cairo logic)
+  if (selected_pile_ == 0) {
+    // Stock pile
+    x = current_card_spacing_;
+    y = current_card_spacing_;
+  } else if (selected_pile_ == 1) {
+    // Waste pile
+    x = 2 * current_card_spacing_ + current_card_width_;
+    y = current_card_spacing_;
+  } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
+    // Foundation piles - match the exact calculation from drawFoundationPiles()
+    int foundation_idx = selected_pile_ - 2;
     
-    // Choose highlight color based on selection state (matching Cairo colors)
-    float r, g, b, a;
-    if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
-        (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
-        // Source card is highlighted in semi-transparent blue
-        r = 0.0f; g = 0.5f; b = 1.0f; a = 0.5f;
-    } else {
-        // Regular selection is highlighted in semi-transparent yellow
-        r = 1.0f; g = 1.0f; b = 0.0f; a = 0.5f;
+    // Make sure foundation_idx is valid
+    if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
+      x = 3 * (current_card_width_ + current_card_spacing_) + 
+          foundation_idx * (current_card_width_ + current_card_spacing_);
+      y = current_card_spacing_;
     }
+  } else if (selected_pile_ >= first_tableau_index) {
+    // Tableau piles
+    int tableau_idx = selected_pile_ - first_tableau_index;
+    if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
+      x = current_card_spacing_ +
+          tableau_idx * (current_card_width_ + current_card_spacing_);
+      
+      const auto &tableau_pile = tableau_[tableau_idx];
+      if (tableau_pile.empty()) {
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+      } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            (tableau_pile.size() - 1) * current_vert_spacing_;
+      } else {
+        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+            selected_card_idx_ * current_vert_spacing_;
+      }
+    }
+  }
+
+  // Choose highlight color based on selection state (matching Cairo colors)
+  float r, g, b, a;
+  if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
+      (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
+    // Source card is highlighted in semi-transparent blue
+    r = 0.0f; g = 0.5f; b = 1.0f; a = 0.5f;
+  } else {
+    // Regular selection is highlighted in semi-transparent yellow
+    r = 1.0f; g = 1.0f; b = 0.0f; a = 0.5f;
+  }
     
     // Enable blending for transparency
     glEnable(GL_BLEND);
