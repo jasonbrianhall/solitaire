@@ -639,6 +639,19 @@ void SolitaireGame::run(int argc, char **argv) {
   // This ensures GL context creation happens when game state is ready
   gtk_widget_show_all(window_);
   
+  // NOW switch to OpenGL if that's the configured preference
+  // This MUST happen AFTER gtk_widget_show_all() so the GL widget is properly realized
+  #ifdef __linux__
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    std::cout << "Switching to OpenGL mode (from graphics.ini) after widget realization..." << std::endl;
+    gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "opengl");
+    // Force processing of pending events to trigger realize callback
+    while (gtk_events_pending()) {
+      gtk_main_iteration();
+    }
+  }
+  #endif
+  
   gtk_main();
 }
 
@@ -1214,15 +1227,15 @@ void SolitaireGame::setupGameArea() {
   gtk_stack_add_named(GTK_STACK(rendering_stack_), gl_area_, "opengl");
   #endif
   
-  // Show appropriate rendering surface
-  // ALWAYS start with Cairo for safety - game must be fully initialized first
-  // User can switch to OpenGL from Graphics menu AFTER game loads
+  // Always start with Cairo initially - will switch to OpenGL after show_all()
+  // This ensures proper GTK widget realization before GL context creation
   gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "cairo");
   
   // Pack stack into main window
   gtk_box_pack_start(GTK_BOX(vbox_), rendering_stack_, TRUE, TRUE, 0);
   
-  // NOTE: gtk_widget_show_all() will be called from run() AFTER game is initialized
+  // NOTE: After gtk_widget_show_all() is called from run(), we will switch to
+  // OpenGL if that's the configured preference (in run() method)
 }
 
 void SolitaireGame::setupMenuBar() {
