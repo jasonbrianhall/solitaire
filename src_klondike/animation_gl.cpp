@@ -368,62 +368,6 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
 }
 
 // ============================================================================
-// Deal Animation Functions - OpenGL Version
-// ============================================================================
-
-void SolitaireGame::updateDealAnimation_gl() {
-    if (!deal_animation_active_)
-        return;
-
-    deal_timer_ += ANIMATION_INTERVAL;
-
-    if (deal_timer_ >= DEAL_INTERVAL) {
-        deal_timer_ = 0;
-        dealNextCard();
-    }
-
-    // Track whether all cards have arrived
-    bool all_cards_arrived = true;
-
-    for (auto &card : deal_cards_) {
-        if (!card.active)
-            continue;
-
-        double dx = card.target_x - card.x;
-        double dy = card.target_y - card.y;
-        double distance = sqrt(dx * dx + dy * dy);
-
-        if (distance < 5.0) {  // Match Cairo's threshold
-            // Card has arrived at destination
-            card.x = card.target_x;
-            card.y = card.target_y;
-            card.active = false;
-            playSound(GameSoundEvent::CardPlace);
-        } else {
-            // Use distance-based speed like Cairo
-            double speed = distance * 0.15 * DEAL_SPEED;
-            double move_x = (dx / distance) * speed;
-            double move_y = (dy / distance) * speed;
-
-            card.x += move_x;
-            card.y += move_y;
-
-            // Decelerate rotation like Cairo
-            card.rotation *= 0.95;
-
-            all_cards_arrived = false;
-        }
-    }
-
-    // Check if we're done dealing and all cards have arrived
-    if (all_cards_arrived && cards_dealt_ >= 28) {
-        completeDeal();
-    }
-
-    refreshDisplay();
-}
-
-// ============================================================================
 // Drawing Functions - OpenGL Version
 // ============================================================================
 
