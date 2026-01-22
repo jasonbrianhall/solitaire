@@ -120,7 +120,7 @@ SolitaireGame::SolitaireGame()
 // ============================================================================
 
 bool SolitaireGame::isOpenGLSupported() const {
-  #ifdef _WIN32
+  #ifndef USEOPENGL
   return false;
   #else
   return true;
@@ -128,7 +128,7 @@ bool SolitaireGame::isOpenGLSupported() const {
 }
 
 bool SolitaireGame::setRenderingEngine(RenderingEngine engine) {
-  #ifdef _WIN32
+  #ifdef USEOPENGL
   if (engine == RenderingEngine::OPENGL) {
     std::cout << "OpenGL not supported on Windows. Using Cairo." << std::endl;
     rendering_engine_ = RenderingEngine::CAIRO;
@@ -152,7 +152,7 @@ bool SolitaireGame::setRenderingEngine(RenderingEngine engine) {
 }
 
 bool SolitaireGame::initializeRenderingEngine() {
-  #ifdef _WIN32
+  #ifndef USEOPENGL
   if (rendering_engine_ == RenderingEngine::OPENGL) {
     rendering_engine_ = RenderingEngine::CAIRO;
   }
@@ -184,7 +184,7 @@ bool SolitaireGame::initializeRenderingEngine() {
 }
 
 bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
-  #ifdef _WIN32
+  #ifndef USEOPENGL
   if (newEngine == RenderingEngine::OPENGL) {
     return false;
   }
@@ -244,7 +244,7 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
 // GL CONTEXT CALLBACKS - FIX FOR NO OPENGL CONTEXT ERROR
 // ============================================================================
 
-#ifndef _WIN32
+#ifdef USEOPENGL
 // Called by GTK when GL context is created and available
 gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -278,7 +278,7 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
 }
 #endif
 
-#ifndef _WIN32
+#ifdef USEOPENGL
 // Called by GTK every frame to render
 gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
   (void)context;
@@ -311,7 +311,7 @@ gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpoin
 // GL INITIALIZATION - DEFERRED FROM CONSTRUCTOR
 // ============================================================================
 
-#ifndef _WIN32
+#ifdef USEOPENGL
 // Called from realize callback - NOW has GL context
 bool SolitaireGame::initializeOpenGLResources() {
   #ifdef __linux__
@@ -464,7 +464,7 @@ void SolitaireGame::setupCairoArea() {
   initializeCardCache();
 }
 
-#ifndef _WIN32
+#ifdef USEOPENGL
 void SolitaireGame::setupOpenGLArea() {
   #ifdef __linux__
   // Create OpenGL rendering area
@@ -1222,7 +1222,7 @@ void SolitaireGame::setupGameArea() {
   setupCairoArea();
   
   // Create OpenGL rendering area
-#ifndef _WIN32
+#ifdef USEOPENGL
   setupOpenGLArea();
 #endif
   
