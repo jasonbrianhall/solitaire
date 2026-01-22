@@ -1364,7 +1364,7 @@ void SolitaireGame::refreshCardCache() {
       }
     }
 
-#ifdef OPENGL
+#ifndef _WIN32
     // Also reload custom back texture for OpenGL mode
     reloadCustomCardBackTexture_gl();
 #endif

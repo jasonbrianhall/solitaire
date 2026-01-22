@@ -179,7 +179,7 @@ private:
 
   // Stock to Waste Animation - Cairo Versions
 
-#ifdef OPENGL
+#ifndef _WIN32
   // ============================================================================
   // OpenGL 3.4 Animation Methods - Complete Set
   // ============================================================================
@@ -230,7 +230,7 @@ private:
   static gboolean onStockToWasteAnimationTick_gl(gpointer data);
   void completeStockToWasteAnimation_gl();
 
-#ifdef OPENGL
+#ifndef _WIN32
   // OpenGL 3.4 Setup Functions
   GLuint setupShaders_gl();
   GLuint setupCardQuadVAO_gl();
@@ -254,7 +254,7 @@ private:
   static gboolean onAutoFinishTick_gl(gpointer data);
   void processNextAutoFinishMove_gl();
   
-#ifdef OPENGL
+#ifndef _WIN32
   // OpenGL drawing helpers
   void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
   void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
