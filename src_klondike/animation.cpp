@@ -7,6 +7,65 @@
 #include <direct.h>
 #endif
 
+gboolean SolitaireGame::onAnimationTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  game->updateWinAnimation();
+  return game->win_animation_active_ ? TRUE : FALSE;
+}
+
+void SolitaireGame::updateCardFragments(AnimatedCard &card) {
+  if (!card.exploded)
+    return;
+
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(game_area_, &allocation);
+
+  // Simple approach: just update existing fragments without creating new ones
+  for (auto &fragment : card.fragments) {
+    if (!fragment.active)
+      continue;
+
+    // Update position
+    fragment.x += fragment.velocity_x;
+    fragment.y += fragment.velocity_y;
+    fragment.velocity_y += GRAVITY;
+
+    // Update rotation
+    fragment.rotation += fragment.rotation_velocity;
+
+    // Check if fragment is in the lower part of the screen for potential "bounce" effect
+    const double min_height = allocation.height * 0.5;
+    if (fragment.y > min_height && fragment.y < allocation.height - fragment.height &&
+        fragment.velocity_y > 0 && // Only when moving downward
+        (rand() % 1000 < 5)) { // 0.5% chance per frame
+      
+      // Instead of creating new fragments, just give this one an upward boost
+      // and maybe change its direction slightly
+      fragment.velocity_y = -fragment.velocity_y * 0.8; // Reverse with reduced energy
+      
+      // Add a slight horizontal randomization
+      fragment.velocity_x += (rand() % 11 - 5); // -5 to +5 adjustment
+      
+      // Increase rotation for visual effect
+      fragment.rotation_velocity *= 1.5;
+      
+      // Play a sound for the "bounce"
+      playSound(GameSoundEvent::Firework);
+    }
+    
+    // Check if fragment is off screen
+    if (fragment.x < -fragment.width || fragment.x > allocation.width ||
+        fragment.y > allocation.height + fragment.height) {
+      // Free the surface if it exists
+      if (fragment.surface) {
+        cairo_surface_destroy(fragment.surface);
+        fragment.surface = nullptr;
+      }
+      fragment.active = false;
+    }
+  }
+}
+
 void SolitaireGame::updateWinAnimation() {
   if (!win_animation_active_)
     return;
@@ -86,19 +145,14 @@ void SolitaireGame::updateWinAnimation() {
       }
     }
   }
-
-  // Stop animation if all cards are done and we've launched them all
-  /*if (all_cards_finished && cards_launched_ >= 52) {
-    stopWinAnimation();
-  } */
   
   if (all_cards_finished) {
   // Reset tracking for animated cards to allow reusing the piles
-  for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
-    std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
-  }
-  // Reset cards_launched_ counter to allow showing which cards we've used
-  cards_launched_ = 0;
+      for (size_t i = 0; i < animated_foundation_cards_.size(); i++) {
+          std::fill(animated_foundation_cards_[i].begin(), animated_foundation_cards_[i].end(), false);
+      }
+      // Reset cards_launched_ counter to allow showing which cards we've used
+      cards_launched_ = 0;
   }
 
   refreshDisplay();
@@ -304,3 +358,41 @@ void SolitaireGame::launchNextCard() {
   animated_cards_.push_back(anim_card);
   cards_launched_++;
 }
+
+void SolitaireGame::stopWinAnimation() {
+  if (!win_animation_active_)
+    return;
+
+  win_animation_active_ = false;
+
+  // First, stop the animation timer
+  if (animation_timer_id_ > 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+
+  // Clean up fragment surfaces to prevent memory leaks
+  for (auto &card : animated_cards_) {
+    for (auto &fragment : card.fragments) {
+      if (fragment.surface) {
+        // Only destroy if the surface is valid
+        if (cairo_surface_status(fragment.surface) == CAIRO_STATUS_SUCCESS) {
+          cairo_surface_destroy(fragment.surface);
+        }
+        fragment.surface = nullptr;
+      }
+    }
+    card.fragments.clear();
+  }
+
+  animated_cards_.clear();
+  animated_foundation_cards_.clear();
+  cards_launched_ = 0;
+  launch_timer_ = 0;
+
+  // Start new game
+  initializeGame();
+  refreshDisplay();
+}
+
+
