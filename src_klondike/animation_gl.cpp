@@ -664,10 +664,9 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
 // ============================================================================
 
 void SolitaireGame::startDealAnimation_gl() {
-    printf("GL");
     if (deal_animation_active_)
         return;
-    printf("Here\n");
+
     deal_animation_active_ = true;
     cards_dealt_ = 0;
     deal_timer_ = 0;
@@ -679,6 +678,12 @@ void SolitaireGame::startDealAnimation_gl() {
     }
 
     animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onDealAnimationTick_gl, this);
+    
+    // FIX: Deal the first card immediately like Cairo does
+    dealNextCard_gl();
+    
+    // FIX: Force a redraw to start the animation
+    refreshDisplay();
 }
 
 void SolitaireGame::updateDealAnimation_gl() {
@@ -692,7 +697,7 @@ void SolitaireGame::updateDealAnimation_gl() {
         dealNextCard_gl();
     }
 
-    // FIX: Match Cairo's deal animation physics more closely
+    // Track whether all cards have arrived
     bool all_cards_arrived = true;
 
     for (auto &card : deal_cards_) {
@@ -710,15 +715,15 @@ void SolitaireGame::updateDealAnimation_gl() {
             card.active = false;
             playSound(GameSoundEvent::CardPlace);
         } else {
-            // FIX: Use distance-based speed like Cairo (not fixed speed)
+            // Use distance-based speed like Cairo
             double speed = distance * 0.15 * DEAL_SPEED;
-            double move_x = dx * speed / distance;
-            double move_y = dy * speed / distance;
+            double move_x = (dx / distance) * speed;
+            double move_y = (dy / distance) * speed;
 
             card.x += move_x;
             card.y += move_y;
 
-            // FIX: Update rotation with deceleration like Cairo
+            // Decelerate rotation like Cairo
             card.rotation *= 0.95;
 
             all_cards_arrived = false;
@@ -749,8 +754,7 @@ void SolitaireGame::dealNextCard_gl() {
     if (cards_dealt_ >= 28)
         return;
 
-    // FIX: Use correct diagonal dealing pattern (pile 0: 1 card, pile 1: 2 cards, etc.)
-    // NOT just cycling through piles with % and /
+    // FIX: Use correct diagonal dealing pattern, not modulo cycling!
     int pile_index = 0;
     int card_index = 0;
     int cards_so_far = 0;
@@ -774,7 +778,7 @@ void SolitaireGame::dealNextCard_gl() {
                          pile_index * (current_card_width_ + current_card_spacing_);
     anim_card.target_y = (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
                          card_index * current_vert_spacing_;
-    // FIX: Add random initial rotation so cards spin like in Cairo version
+    // FIX: Add random initial rotation
     anim_card.rotation = (rand() % 1256) / 100.0 - 6.28;
     anim_card.rotation_velocity = 0;
     anim_card.active = true;
@@ -783,7 +787,7 @@ void SolitaireGame::dealNextCard_gl() {
     deal_cards_.push_back(anim_card);
     cards_dealt_++;
 
-    // FIX: Play flip sound for face-up cards like Cairo does
+    // FIX: Play flip sound for face-up cards
     playSound(tableau_[pile_index][card_index].face_up ? 
               GameSoundEvent::CardFlip : 
               GameSoundEvent::DealCard);
