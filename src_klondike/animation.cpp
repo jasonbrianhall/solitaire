@@ -112,13 +112,17 @@ void SolitaireGame::updateWinAnimation() {
       // Check if card should explode (increase random chance from 2% to 5%)
       if (card.y > explosion_min && card.y < explosion_max &&
           (rand() % 100 < 5)) {
+#ifndef _WIN32
         if (rendering_engine_ == RenderingEngine::OPENGL) {
             explodeCard_gl(card);
         } else {
             explodeCard(card);
         }
+#else
+            explodeCard(card);
+#endif
       }
-
+     
       // Check if card is off screen
       if (card.x < -current_card_width_ || card.x > allocation.width ||
           card.y > allocation.height + current_card_height_) {

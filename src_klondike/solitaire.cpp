@@ -244,6 +244,7 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
 // GL CONTEXT CALLBACKS - FIX FOR NO OPENGL CONTEXT ERROR
 // ============================================================================
 
+#ifndef _WIN32
 // Called by GTK when GL context is created and available
 gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -275,7 +276,9 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
   fprintf(stderr, "[GL] OpenGL resources initialized successfully\n");
   return TRUE;
 }
+#endif
 
+#ifndef _WIN32
 // Called by GTK every frame to render
 gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
   (void)context;
@@ -302,11 +305,13 @@ gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpoin
   
   return TRUE;
 }
+#endif
 
 // ============================================================================
 // GL INITIALIZATION - DEFERRED FROM CONSTRUCTOR
 // ============================================================================
 
+#ifndef _WIN32
 // Called from realize callback - NOW has GL context
 bool SolitaireGame::initializeOpenGLResources() {
   #ifdef __linux__
@@ -385,6 +390,7 @@ bool SolitaireGame::initializeOpenGLResources() {
   return false;
   #endif
 }
+#endif
 
 // ============================================================================
 // WIDGET SETUP - SEPARATED INTO CAIRO AND GL
@@ -458,6 +464,7 @@ void SolitaireGame::setupCairoArea() {
   initializeCardCache();
 }
 
+#ifndef _WIN32
 void SolitaireGame::setupOpenGLArea() {
   #ifdef __linux__
   // Create OpenGL rendering area
@@ -501,6 +508,7 @@ void SolitaireGame::setupOpenGLArea() {
       BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 6);
   #endif
 }
+#endif
 
 void SolitaireGame::cleanupRenderingEngine() {
   switch (rendering_engine_) {
@@ -1214,7 +1222,9 @@ void SolitaireGame::setupGameArea() {
   setupCairoArea();
   
   // Create OpenGL rendering area
+#ifndef _WIN32
   setupOpenGLArea();
+#endif
   
   // Create GtkStack to switch between rendering engines
   rendering_stack_ = gtk_stack_new();

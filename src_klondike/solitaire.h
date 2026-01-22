@@ -254,6 +254,7 @@ private:
   static gboolean onAutoFinishTick_gl(gpointer data);
   void processNextAutoFinishMove_gl();
   
+#ifndef _WIN32
   // OpenGL drawing helpers
   void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
   void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
@@ -282,6 +283,7 @@ private:
   bool initializeOpenGLResources();
   // Setup GL widget separately
   void setupOpenGLArea();
+#endif
   void setupCairoArea();
 
   // ============================================================================
