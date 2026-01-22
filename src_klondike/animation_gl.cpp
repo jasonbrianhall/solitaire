@@ -1170,8 +1170,10 @@ void SolitaireGame::highlightSelectedCard_gl() {
         x = 2 * current_card_spacing_ + current_card_width_;
         y = current_card_spacing_;
     } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
-        // Foundation piles - match exact calculation from drawFoundationPiles()
+        // Foundation piles - accounts for gap between waste pile and foundations
         int foundation_idx = selected_pile_ - 2;
+        
+        // Make sure foundation_idx is valid
         if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
             x = current_card_spacing_ + 
                 (2 + foundation_idx) * (current_card_width_ + current_card_spacing_);

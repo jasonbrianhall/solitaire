@@ -283,6 +283,11 @@ private:
   bool initializeOpenGLResources();
   // Setup GL widget separately
   void setupOpenGLArea();
+
+  void drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+
+
 #endif
   void setupCairoArea();
 
