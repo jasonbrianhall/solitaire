@@ -1072,6 +1072,11 @@ void SolitaireGame::drawTableauPiles_gl() {
         int x = current_card_spacing_ + (int)(pile * (current_card_width_ + current_card_spacing_));
         int y = base_y;
         
+        // Draw empty pile placeholder for empty tableau piles (matching Cairo behavior)
+        if (tableau_[pile].empty()) {
+            drawEmptyPile_gl(x, y);
+        }
+        
         for (size_t card_idx = 0; card_idx < tableau_[pile].size(); card_idx++) {
             // Skip cards that are being dragged from THIS tableau pile
             // This reveals the card underneath when dragging
@@ -1192,11 +1197,10 @@ void SolitaireGame::highlightSelectedCard_gl() {
         }
     }
     
-    // Draw a glowing colored rectangle outline around the card
-    // Use simple shader for colored lines
+    // Use simple shader for colored rectangles
     glUseProgram(simpleShaderProgram_gl_);
     
-    // Setup projection matrix for line drawing
+    // Setup projection matrix
     GtkAllocation allocation;
     gtk_widget_get_allocation(gl_area_, &allocation);
     glm::mat4 projection = glm::ortho(0.0f, (float)allocation.width, 
@@ -1204,28 +1208,30 @@ void SolitaireGame::highlightSelectedCard_gl() {
     GLint projLoc = glGetUniformLocation(simpleShaderProgram_gl_, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
     
-    // Choose highlight color based on whether we're selecting a card to move
+    // Choose highlight color based on selection state
     float r, g, b, a;
     if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
         (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
-        // Source card is highlighted in blue
-        r = 0.0f; g = 0.5f; b = 1.0f; a = 0.7f;
+        // Source card is highlighted in BLUE with good visibility
+        r = 0.0f; g = 0.0f; b = 1.0f; a = 0.35f;  // More opaque blue
     } else {
-        // Regular selection is highlighted in yellow
-        r = 1.0f; g = 1.0f; b = 0.0f; a = 0.7f;
+        // Regular selection is highlighted in GREEN (matches cairo "mystical green")
+        r = 0.0f; g = 0.8f; b = 0.0f; a = 0.35f;  // Bright green
     }
     
     GLint colorLoc = glGetUniformLocation(simpleShaderProgram_gl_, "color");
     glUniform4f(colorLoc, r, g, b, a);
     
-    // Draw a rectangle outline (using line strip to form a rectangle border)
-    // Offset by 2 pixels for visibility
+    // Enable blending for transparency
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // Draw filled rectangle
     float positions[] = {
-        (float)(x - 2), (float)(y - 2), 0.0f,
-        (float)(x + current_card_width_ + 2), (float)(y - 2), 0.0f,
-        (float)(x + current_card_width_ + 2), (float)(y + current_card_height_ + 2), 0.0f,
-        (float)(x - 2), (float)(y + current_card_height_ + 2), 0.0f,
-        (float)(x - 2), (float)(y - 2), 0.0f  // Close the loop
+        (float)x, (float)y, 0.0f,
+        (float)(x + current_card_width_), (float)y, 0.0f,
+        (float)(x + current_card_width_), (float)(y + current_card_height_), 0.0f,
+        (float)x, (float)(y + current_card_height_), 0.0f
     };
     
     GLuint VAO = 0, VBO = 0;
@@ -1240,21 +1246,19 @@ void SolitaireGame::highlightSelectedCard_gl() {
     glEnableVertexAttribArray(posAttrib);
     glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     
-    glLineWidth(3.0f);
-    glDrawArrays(GL_LINE_STRIP, 0, 5);
-    glLineWidth(1.0f);
+    // Draw filled rectangle as triangle strip
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     
     glDeleteBuffers(1, &VBO);
     glDeleteVertexArrays(1, &VAO);
     
-    // If we have a card selected for movement, highlight all cards below it in a tableau pile
+    // If we have a card selected for movement, also highlight all cards below it in tableau
     if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_card_idx_ >= 0) {
         int tableau_idx = source_pile_ - first_tableau_index;
         if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
             const auto &tableau_pile = tableau_[tableau_idx];
             
             if (!tableau_pile.empty() && source_card_idx_ < static_cast<int>(tableau_pile.size())) {
-                // Draw a rectangle covering all cards from the selected one to the bottom
                 int x2 = current_card_spacing_ +
                     tableau_idx * (current_card_width_ + current_card_spacing_);
                 int y2 = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
@@ -1265,12 +1269,14 @@ void SolitaireGame::highlightSelectedCard_gl() {
                     current_card_height_;
                 
                 if (stack_height > 0) {
+                    // Lighter blue for the multi-card selection
+                    glUniform4f(colorLoc, 0.0f, 0.0f, 1.0f, 0.2f);
+                    
                     float positions2[] = {
-                        (float)(x2 - 2), (float)(y2 - 2), 0.0f,
-                        (float)(x2 + current_card_width_ + 2), (float)(y2 - 2), 0.0f,
-                        (float)(x2 + current_card_width_ + 2), (float)(y2 + stack_height + 2), 0.0f,
-                        (float)(x2 - 2), (float)(y2 + stack_height + 2), 0.0f,
-                        (float)(x2 - 2), (float)(y2 - 2), 0.0f
+                        (float)x2, (float)y2, 0.0f,
+                        (float)(x2 + current_card_width_), (float)y2, 0.0f,
+                        (float)(x2 + current_card_width_), (float)(y2 + stack_height), 0.0f,
+                        (float)x2, (float)(y2 + stack_height), 0.0f
                     };
                     
                     GLuint VAO2 = 0, VBO2 = 0;
@@ -1284,12 +1290,7 @@ void SolitaireGame::highlightSelectedCard_gl() {
                     glEnableVertexAttribArray(posAttrib);
                     glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
                     
-                    // Lighter blue for the stack
-                    glUniform4f(colorLoc, 0.0f, 0.5f, 1.0f, 0.3f);
-                    
-                    glLineWidth(2.0f);
-                    glDrawArrays(GL_LINE_STRIP, 0, 5);
-                    glLineWidth(1.0f);
+                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
                     
                     glDeleteBuffers(1, &VBO2);
                     glDeleteVertexArrays(1, &VAO2);
@@ -1297,6 +1298,9 @@ void SolitaireGame::highlightSelectedCard_gl() {
             }
         }
     }
+    
+    // Disable blending
+    glDisable(GL_BLEND);
 }
 
 void SolitaireGame::renderFrame_gl() {
