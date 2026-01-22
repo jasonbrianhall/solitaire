@@ -81,13 +81,6 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
     return TRUE;
   }
 
-  // Queue redraw on the correct widget based on rendering engine
-  if (game->rendering_engine_ == RenderingEngine::OPENGL && game->gl_area_) {
-    gtk_widget_queue_draw(game->gl_area_);
-  } else if (game->game_area_) {
-    gtk_widget_queue_draw(game->game_area_);
-  }
-
   return TRUE;
 }
 
@@ -179,25 +172,14 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
         if (game->checkWinCondition()) {
           game->startWinAnimation(); // Start animation instead of showing dialog
         }
-        // Queue redraw on correct widget
-        if (game->rendering_engine_ == RenderingEngine::OPENGL && game->gl_area_) {
-          gtk_widget_queue_draw(game->gl_area_);
-        } else if (game->game_area_) {
-          gtk_widget_queue_draw(game->game_area_);
-        }
+        gtk_widget_queue_draw(game->game_area_);
       }
     }
 
     game->dragging_ = false;
     game->drag_cards_.clear();
     game->drag_source_pile_ = -1;
-    
-    // Queue redraw on correct widget
-    if (game->rendering_engine_ == RenderingEngine::OPENGL && game->gl_area_) {
-      gtk_widget_queue_draw(game->gl_area_);
-    } else if (game->game_area_) {
-      gtk_widget_queue_draw(game->game_area_);
-    }
+    gtk_widget_queue_draw(game->game_area_);
   }
 
   return TRUE;
@@ -241,13 +223,7 @@ gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
   if (game->dragging_) {
     game->drag_start_x_ = event->x;
     game->drag_start_y_ = event->y;
-    
-    // Queue redraw on correct widget based on rendering engine
-    if (game->rendering_engine_ == RenderingEngine::OPENGL && game->gl_area_) {
-      gtk_widget_queue_draw(game->gl_area_);
-    } else if (game->game_area_) {
-      gtk_widget_queue_draw(game->game_area_);
-    }
+    gtk_widget_queue_draw(game->game_area_);
   }
 
   return TRUE;
