@@ -631,18 +631,6 @@ void SolitaireGame::updateDealAnimation_gl() {
     refreshDisplay();
 }
 
-gboolean SolitaireGame::onDealAnimationTick_gl(gpointer data) {
-    SolitaireGame *game = static_cast<SolitaireGame *>(data);
-    game->updateDealAnimation_gl();
-    
-    // Force redraw after animation update
-    if (game->gl_area_) {
-        gtk_widget_queue_draw(game->gl_area_);
-    }
-    
-    return game->deal_animation_active_ ? TRUE : FALSE;
-}
-
 // ============================================================================
 // Drawing Functions - OpenGL Version
 // ============================================================================

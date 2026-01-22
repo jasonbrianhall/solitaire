@@ -501,12 +501,7 @@ void SolitaireGame::startDealAnimation() {
 
 gboolean SolitaireGame::onDealAnimationTick(gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
-  if(game->rendering_engine_ == RenderingEngine::OPENGL)
-  {
-      game->updateDealAnimation_gl();
-  } else {
-      game->updateDealAnimation();
-  }
+  game->updateDealAnimation();
   return game->deal_animation_active_ ? TRUE : FALSE;
 }
 
