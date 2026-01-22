@@ -524,9 +524,9 @@ void SolitaireGame::cleanupRenderingEngine() {
 std::string SolitaireGame::getRenderingEngineName() const {
   switch (rendering_engine_) {
     case RenderingEngine::CAIRO:
-      return "Cairo (CPU-based)";
+      return "Cairo";
     case RenderingEngine::OPENGL:
-      return "OpenGL 3.4 (GPU-accelerated)";
+      return "OpenGL";
     default:
       return "Unknown";
   }
@@ -590,7 +590,7 @@ void SolitaireGame::addEngineSelectionMenu(GtkWidget *menubar) {
   gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), cairo_item);
 
   #ifdef __linux__
-  GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL 3.4 (GPU)");
+  GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL");
   g_signal_connect(opengl_item, "activate",
                    G_CALLBACK(+[](GtkWidget *w, gpointer data) {
                      SolitaireGame *game = static_cast<SolitaireGame *>(data);
@@ -656,8 +656,9 @@ void SolitaireGame::initializeGame() {
     cairo_initialized_ = true;
     opengl_initialized_ = false;
   } else {
-    // OpenGL is already initialized if we're using it
-    // cairo_initialized_ = false;  // Don't reset Cairo, it might be needed
+     cairo_initialized_ = false;
+     opengl_initialized_ = true;
+
   }
 
   if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {

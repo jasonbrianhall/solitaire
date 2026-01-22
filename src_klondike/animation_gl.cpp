@@ -671,7 +671,7 @@ void SolitaireGame::startDealAnimation_gl() {
     cards_dealt_ = 0;
     deal_timer_ = 0;
     deal_cards_.clear();
-
+    printf("animation_timer_id_ %i\n", animation_timer_id_);
     if (animation_timer_id_ > 0) {
         g_source_remove(animation_timer_id_);
         animation_timer_id_ = 0;
