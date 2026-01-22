@@ -2087,7 +2087,12 @@ void SolitaireGame::processNextAutoFinishMove() {
         playSound(GameSoundEvent::CardPlace);
         
         // Use the animation to move the card
-        startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+            startFoundationMoveAnimation_gl(waste_card, 1, 0, f + 2);
+        } else {
+            startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
+        }
+
         // Remove card from waste pile
         waste_.pop_back();
 
@@ -2112,8 +2117,11 @@ void SolitaireGame::processNextAutoFinishMove() {
             playSound(GameSoundEvent::CardPlace);
             
             // Use the animation to move the card
-            startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1,
-                                         f + 2);
+            if (rendering_engine_ == RenderingEngine::OPENGL) {
+                startFoundationMoveAnimation_gl(top_card, t + 6, pile.size() - 1, f + 2);
+            } else {   
+                startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1, f + 2);
+            }
 
             // Remove card from tableau
             pile.pop_back();
