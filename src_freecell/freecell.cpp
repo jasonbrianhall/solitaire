@@ -767,7 +767,9 @@ void FreecellGame::setupMenuBar() {
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
 
   // ==================== GRAPHICS MENU ====================
+#ifdef USEOPENGL
   addEngineSelectionMenu(menubar);
+#endif
 
   //=======================================================
   // OPTIONS MENU - Visual and appearance options
@@ -1333,6 +1335,7 @@ void FreecellGame::renderFrame() {
     #endif
   }
 }
+
 void FreecellGame::addEngineSelectionMenu(GtkWidget *menubar) {
   GtkWidget *graphics_menu = gtk_menu_new();
   GtkWidget *graphics_item = gtk_menu_item_new_with_label("Graphics");
