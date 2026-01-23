@@ -19,7 +19,7 @@ SRCS_WIN_SPIDER = src_spider/windowsaudioplayer.cpp
 
 # Source files for FreeCell
 SRCS_COMMON_FREECELL = src_freecell/freecell.cpp src_freecell/cardlib.cpp src_freecell/keyboard.cpp src_freecell/mouse.cpp src_freecell/animation.cpp src_freecell/sound.cpp src_freecell/audiomanager.cpp
-SRCS_LINUX_FREECELL = src_freecell/pulseaudioplayer.cpp
+SRCS_LINUX_FREECELL = src_freecell/pulseaudioplayer.cpp src_freecell/animation_gl.cpp
 SRCS_WIN_FREECELL = src_freecell/windowsaudioplayer.cpp
 
 # Use pkg-config for dependencies
