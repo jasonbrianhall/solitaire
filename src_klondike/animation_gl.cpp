@@ -1017,41 +1017,6 @@ void SolitaireGame::drawNormalFoundationPile_gl(size_t pile_index, const std::ve
   }
 }
 
-void SolitaireGame::drawTableauPiles_gl() {
-    int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-    
-    // Calculate pile index offsets to match Cairo's logic
-    // Pile indices: 0=stock, 1=waste, 2-5=foundation, 6+=tableau
-    int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
-    int first_tableau_index = max_foundation_index + 1;
-    
-    for (size_t pile = 0; pile < tableau_.size(); pile++) {
-        int x = current_card_spacing_ + (int)(pile * (current_card_width_ + current_card_spacing_));
-        int y = base_y;
-        
-        // Draw empty pile placeholder for empty tableau piles (matching Cairo behavior)
-        if (tableau_[pile].empty()) {
-            drawEmptyPile_gl(x, y);
-        }
-        
-        for (size_t card_idx = 0; card_idx < tableau_[pile].size(); card_idx++) {
-            // Skip cards that are being dragged from THIS tableau pile
-            // This reveals the card underneath when dragging
-            if (dragging_ && 
-                drag_source_pile_ >= first_tableau_index && 
-                drag_source_pile_ - first_tableau_index == static_cast<int>(pile) &&
-                card_idx >= tableau_[pile].size() - drag_cards_.size()) {
-                continue;  // Skip this card - it's being dragged!
-            }
-            
-            const TableauCard &tc = tableau_[pile][card_idx];
-            int card_y = y + (int)(card_idx * current_vert_spacing_);
-            
-            drawCard_gl(tc.card, x, card_y, tc.face_up);
-        }
-    }
-}
-
 // Helper function to draw empty pile placeholders (light gray rectangle like Cairo)
 void SolitaireGame::drawEmptyPile_gl(int x, int y) {
     // Draw light gray rectangle placeholder for empty pile
