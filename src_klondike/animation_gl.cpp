@@ -987,26 +987,6 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void SolitaireGame::drawFoundationPiles_gl() {
-  int x = 3 * (current_card_width_ + current_card_spacing_);
-  int y = current_card_spacing_;
-  
-  for (size_t i = 0; i < foundation_.size(); i++) {
-    // Always draw the empty foundation pile outline
-    drawEmptyPile_gl(x, y);
-
-    const auto &pile = foundation_[i];
-    if (!pile.empty()) {
-      if (win_animation_active_) {
-        drawFoundationDuringWinAnimation_gl(i, pile, x, y);
-      } else {
-        drawNormalFoundationPile_gl(i, pile, x, y);
-      }
-    }
-    x += current_card_width_ + current_card_spacing_;
-  }
-}
-
 // Draw foundation pile during win animation
 void SolitaireGame::drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
   // Only draw the topmost non-animated card
@@ -1464,7 +1444,7 @@ void SolitaireGame::renderFrame_gl() {
     // Draw all game piles
     drawStockPile();
     drawWastePile();
-    drawFoundationPiles_gl();
+    drawFoundationPiles();
     drawTableauPiles_gl();
     
     // Disable blending after drawing

@@ -478,3 +478,35 @@ void SolitaireGame::drawWastePile() {
     }
   }
 }
+
+// Draw the foundation piles (where aces build up to kings)
+void SolitaireGame::drawFoundationPiles() {
+  int x = 3 * (current_card_width_ + current_card_spacing_);
+  int y = current_card_spacing_;
+  
+  for (size_t i = 0; i < foundation_.size(); i++) {
+    // Always draw the empty foundation pile outline
+    if( rendering_engine_ == RenderingEngine::CAIRO) {
+        drawEmptyPile(buffer_cr_, x, y);
+    } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawEmptyPile_gl(x, y);
+    }
+    const auto &pile = foundation_[i];
+    if (!pile.empty()) {
+      if (win_animation_active_) {
+        if (rendering_engine_ == RenderingEngine::CAIRO) {
+            drawFoundationDuringWinAnimation(i, pile, x, y);
+        } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawFoundationDuringWinAnimation_gl(i, pile, x, y);
+        }
+      } else {
+        if (rendering_engine_ == RenderingEngine::CAIRO) {
+            drawNormalFoundationPile(i, pile, x, y);
+        } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawNormalFoundationPile_gl(i, pile, x, y);
+        }
+      }
+    }
+    x += current_card_width_ + current_card_spacing_;
+  }
+}
