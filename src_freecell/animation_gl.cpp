@@ -580,16 +580,56 @@ void FreecellGame::drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint sha
 
   glUseProgram(shaderProgram);
 
-  // Setup matrices
+  // Apply the same rotation logic as Cairo's drawAnimatedCard()
   glm::mat4 model = glm::mat4(1.0f);
-  model = glm::translate(model, glm::vec3(anim_card.x, anim_card.y, 0.0f));
+  
+  // Move to card center for rotation
+  model = glm::translate(model, glm::vec3(anim_card.x + current_card_width_ / 2.0f,
+                                          anim_card.y + current_card_height_ / 2.0f, 0.0f));
+  // Rotate around center
   model = glm::rotate(model, static_cast<float>(anim_card.rotation), glm::vec3(0.0f, 0.0f, 1.0f));
+  // Translate back
+  model = glm::translate(model, glm::vec3(-current_card_width_ / 2.0f,
+                                          -current_card_height_ / 2.0f, 0.0f));
+  // Scale for card size
+  model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
 
   GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
   glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
+  // Get texture (reuse logic from drawCard_gl)
+  GLuint texture = cardBackTexture_gl_;
+  if (anim_card.face_up) {
+    auto card_image = deck_.getCardImage(anim_card.card);
+    if (card_image && !card_image->data.empty()) {
+      std::string card_key = std::to_string((int)anim_card.card.suit) + "_" + std::to_string((int)anim_card.card.rank);
+      auto it = cardTextures_gl_.find(card_key);
+      
+      if (it != cardTextures_gl_.end()) {
+        texture = it->second;
+      } else {
+        texture = loadTextureFromMemory(card_image->data);
+        if (texture != 0) {
+          cardTextures_gl_[card_key] = texture;
+        } else {
+          texture = cardBackTexture_gl_;
+        }
+      }
+    }
+  }
+
+  // Set texture and alpha
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  GLint texLoc = glGetUniformLocation(shaderProgram, "cardTexture");
+  glUniform1i(texLoc, 0);
+  
+  GLint alphaLoc = glGetUniformLocation(shaderProgram, "alpha");
+  glUniform1f(alphaLoc, 1.0f);
+
   // Draw the card
-  drawCard_gl(anim_card.card, static_cast<int>(anim_card.x), static_cast<int>(anim_card.y), anim_card.face_up);
+  glBindVertexArray(VAO);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
 void FreecellGame::drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO) {
@@ -1017,8 +1057,6 @@ GLuint loadTextureFromMemory(const std::vector<unsigned char> &data) {
         std::cerr << "  ✗ Error: Failed to load image from memory: " << stbi_failure_reason() << std::endl;
         return 0;
     }
-    
-    std::cout << "  ✓ Image loaded from memory: " << width << "x" << height << " (" << channels << " channels)" << std::endl;
     
     GLuint texture;
     glGenTextures(1, &texture);
