@@ -196,112 +196,6 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
   throw std::out_of_range("Invalid pile index");
 }
 
-void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
-                             const cardlib::Card *card, bool face_up) {
-  if (face_up && card) {
-
-    std::string key = std::to_string(static_cast<int>(card->suit)) +
-                      std::to_string(static_cast<int>(card->rank));
-    auto it = card_surface_cache_.find(key);
-
-    if (it == card_surface_cache_.end()) {
-      if (auto img = deck_.getCardImage(*card)) {
-        GError *error = nullptr;
-        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-
-        if (!gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
-                                     &error)) {
-          if (error)
-            g_error_free(error);
-          g_object_unref(loader);
-          return;
-        }
-
-        if (!gdk_pixbuf_loader_close(loader, &error)) {
-          if (error)
-            g_error_free(error);
-          g_object_unref(loader);
-          return;
-        }
-
-        GdkPixbuf *original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-        if (original_pixbuf) {
-          GdkPixbuf *scaled_pixbuf = gdk_pixbuf_scale_simple(
-              original_pixbuf,
-              current_card_width_, // Use current dimensions
-              current_card_height_, GDK_INTERP_BILINEAR);
-
-          if (scaled_pixbuf) {
-            cairo_surface_t *surface = cairo_image_surface_create(
-                CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
-            cairo_t *surface_cr = cairo_create(surface);
-
-            gdk_cairo_set_source_pixbuf(surface_cr, scaled_pixbuf, 0, 0);
-            cairo_paint(surface_cr);
-            cairo_destroy(surface_cr);
-
-            card_surface_cache_[key] = surface;
-
-            g_object_unref(scaled_pixbuf);
-          }
-        }
-        g_object_unref(loader);
-
-        it = card_surface_cache_.find(key);
-      }
-    }
-
-    if (it != card_surface_cache_.end()) {
-      // Scale the surface to the current card dimensions
-      cairo_save(cr);
-      cairo_scale(cr,
-                  (double)current_card_width_ /
-                      cairo_image_surface_get_width(it->second),
-                  (double)current_card_height_ /
-                      cairo_image_surface_get_height(it->second));
-      cairo_set_source_surface(cr, it->second,
-                               x * cairo_image_surface_get_width(it->second) /
-                                   current_card_width_,
-                               y * cairo_image_surface_get_height(it->second) /
-                                   current_card_height_);
-      cairo_paint(cr);
-      cairo_restore(cr);
-    }
-  } else {
-    auto custom_it = card_surface_cache_.find("custom_back");
-    auto default_it = card_surface_cache_.find("back");
-    cairo_surface_t *back_surface = nullptr;
-
-    if (!custom_back_path_.empty() && custom_it != card_surface_cache_.end()) {
-      back_surface = custom_it->second;
-    } else if (default_it != card_surface_cache_.end()) {
-      back_surface = default_it->second;
-    }
-
-    if (back_surface) {
-      // Scale the surface to the current card dimensions
-      cairo_save(cr);
-      cairo_scale(cr,
-                  (double)current_card_width_ /
-                      cairo_image_surface_get_width(back_surface),
-                  (double)current_card_height_ /
-                      cairo_image_surface_get_height(back_surface));
-      cairo_set_source_surface(
-          cr, back_surface,
-          x * cairo_image_surface_get_width(back_surface) / current_card_width_,
-          y * cairo_image_surface_get_height(back_surface) /
-              current_card_height_);
-      cairo_paint(cr);
-      cairo_restore(cr);
-    } else {
-      // Draw a placeholder rectangle if no back image is available
-      cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
-      cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
-      cairo_stroke(cr);
-    }
-  }
-}
-
 void SolitaireGame::deal() {
   // Determine number of decks based on difficulty
   int num_suits = number_of_suits;  // Default to single suit (difficult)
@@ -823,80 +717,11 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-void SolitaireGame::initializeCardCache() {
-  // Pre-load all card images into cairo surfaces with current dimensions
-  cleanupCardCache();
-
-  for (const auto &card : deck_.getAllCards()) {
-    if (auto img = deck_.getCardImage(card)) {
-      GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-      gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
-                              nullptr);
-      gdk_pixbuf_loader_close(loader, nullptr);
-
-      GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-      GdkPixbuf *scaled =
-          gdk_pixbuf_scale_simple(pixbuf, current_card_width_,
-                                  current_card_height_, GDK_INTERP_BILINEAR);
-
-      cairo_surface_t *surface = cairo_image_surface_create(
-          CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
-      cairo_t *cr = cairo_create(surface);
-      gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
-      cairo_paint(cr);
-      cairo_destroy(cr);
-
-      std::string key = std::to_string(static_cast<int>(card.suit)) +
-                        std::to_string(static_cast<int>(card.rank));
-      card_surface_cache_[key] = surface;
-
-      g_object_unref(scaled);
-      g_object_unref(loader);
-    }
-  }
-
-  // Cache card back
-  if (auto back_img = deck_.getCardBackImage()) {
-    GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-    gdk_pixbuf_loader_write(loader, back_img->data.data(),
-                            back_img->data.size(), nullptr);
-    gdk_pixbuf_loader_close(loader, nullptr);
-
-    GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-    GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-        pixbuf, current_card_width_, current_card_height_, GDK_INTERP_BILINEAR);
-
-    cairo_surface_t *surface = cairo_image_surface_create(
-        CAIRO_FORMAT_ARGB32, current_card_width_, current_card_height_);
-    cairo_t *cr = cairo_create(surface);
-    gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
-    cairo_paint(cr);
-    cairo_destroy(cr);
-
-    card_surface_cache_["back"] = surface;
-
-    g_object_unref(scaled);
-    g_object_unref(loader);
-  }
-}
-
 void SolitaireGame::cleanupCardCache() {
   for (auto &[key, surface] : card_surface_cache_) {
     cairo_surface_destroy(surface);
   }
   card_surface_cache_.clear();
-}
-
-cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
-  std::string key = std::to_string(static_cast<int>(card.suit)) +
-                    std::to_string(static_cast<int>(card.rank));
-  auto it = card_surface_cache_.find(key);
-  return it != card_surface_cache_.end() ? it->second : nullptr;
-}
-
-cairo_surface_t *SolitaireGame::getCardBackSurface() {
-  auto it = card_surface_cache_.find("back");
-  return it != card_surface_cache_.end() ? it->second : nullptr;
 }
 
 void SolitaireGame::setupWindow() {
@@ -1826,60 +1651,6 @@ void SolitaireGame::clearCustomBack() {
   saveSettings();
 }
 
-void SolitaireGame::refreshCardCache() {
-  // Clean up existing cache
-  cleanupCardCache();
-
-  // Rebuild the cache
-  initializeCardCache();
-
-  // If we have a custom back, reload it
-  if (!custom_back_path_.empty()) {
-
-    std::ifstream file(custom_back_path_, std::ios::binary | std::ios::ate);
-    if (file.is_open()) {
-      std::streamsize size = file.tellg();
-      file.seekg(0, std::ios::beg);
-
-      std::vector<char> buffer(size);
-      if (file.read(buffer.data(), size)) {
-        GError *error = nullptr;
-        GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-
-        if (gdk_pixbuf_loader_write(loader, (const guchar *)buffer.data(), size,
-                                    &error)) {
-          gdk_pixbuf_loader_close(loader, &error);
-
-          GdkPixbuf *original_pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-          if (original_pixbuf) {
-            GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-                original_pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
-
-            if (scaled) {
-              cairo_surface_t *surface = cairo_image_surface_create(
-                  CAIRO_FORMAT_ARGB32, CARD_WIDTH, CARD_HEIGHT);
-              cairo_t *surface_cr = cairo_create(surface);
-
-              gdk_cairo_set_source_pixbuf(surface_cr, scaled, 0, 0);
-              cairo_paint(surface_cr);
-              cairo_destroy(surface_cr);
-
-              card_surface_cache_["custom_back"] = surface;
-
-              g_object_unref(scaled);
-            }
-          }
-        }
-
-        if (error) {
-          g_error_free(error);
-        }
-        g_object_unref(loader);
-      }
-    }
-  }
-}
-
 void SolitaireGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
   game->toggleFullscreen();
@@ -2418,42 +2189,6 @@ void SolitaireGame::promptForSeed() {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y, bool isStockPile = false) {
-  // Draw a placeholder for an empty pile with a different color for stock pile
-  cairo_save(cr);
-  
-  // Draw a rounded rectangle with a thin border
-  double radius = 10.0;
-  double degrees = G_PI / 180.0;
-  
-  cairo_new_sub_path(cr);
-  cairo_arc(cr, x + current_card_width_ - radius, y + radius, radius, -90 * degrees, 0 * degrees);
-  cairo_arc(cr, x + current_card_width_ - radius, y + current_card_height_ - radius, radius, 0 * degrees, 90 * degrees);
-  cairo_arc(cr, x + radius, y + current_card_height_ - radius, radius, 90 * degrees, 180 * degrees);
-  cairo_arc(cr, x + radius, y + radius, radius, 180 * degrees, 270 * degrees);
-  cairo_close_path(cr);
-  
-  if (isStockPile) {
-    // Use a different color for stock pile (e.g., light blue)
-    cairo_set_source_rgb(cr, 0.4, 0.6, 0.8); // Light blue background
-    cairo_fill_preserve(cr);
-    
-    // Darker blue border
-    cairo_set_source_rgb(cr, 0.2, 0.4, 0.7);
-  } else {
-    // Green for foundation and tableau piles
-    cairo_set_source_rgb(cr, 0.5, 0.8, 0.5); // Light green background
-    cairo_fill_preserve(cr);
-    
-    // Slightly darker green border
-    cairo_set_source_rgb(cr, 0.4, 0.7, 0.4);
-  }
-  
-  cairo_set_line_width(cr, 1.5);
-  cairo_stroke(cr);
-  
-  cairo_restore(cr);
-}
 
 bool SolitaireGame::checkForCompletedSequence(int tableau_index) {
     if (tableau_index < 0 || tableau_index >= tableau_.size()) {
