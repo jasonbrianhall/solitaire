@@ -31,7 +31,12 @@ SolitaireGame::SolitaireGame()
       selected_pile_(-1), selected_card_idx_(-1),
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
-      sound_enabled_(true),           // Set sound to enabled by default
+      sound_enabled_(true),
+      rendering_engine_(RenderingEngine::CAIRO),
+      opengl_initialized_(false),
+      cairo_initialized_(false),
+      engine_switch_requested_(false),
+      requested_engine_(RenderingEngine::CAIRO),
 #ifdef _WIN32
       sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
 #else
@@ -39,11 +44,16 @@ SolitaireGame::SolitaireGame()
 #endif
       number_of_suits(1),
       relaxed_rules_mode_(false),
-      current_seed_(0) { // Initialize to 0 temporarily
-  srand(time(NULL));  // Seed the random number generator with current time
-  current_seed_ = rand();  // Generate random seed
+      current_seed_(0) {
+  srand(time(NULL));
+  current_seed_ = rand();
   initializeGame();
   initializeSettingsDir();
+  
+  // Load engine preference and initialize rendering
+  loadEnginePreference();
+  initializeRenderingEngine();
+  
   initializeAudio();
   loadSettings();
 }
@@ -113,6 +123,212 @@ void SolitaireGame::initializeGame() {
               << std::endl;
     exit(1);
   }
+}
+
+// ============================================================================
+// RENDERING ENGINE IMPLEMENTATION
+// ============================================================================
+
+bool SolitaireGame::isOpenGLSupported() const {
+  #ifndef USEOPENGL
+  return false;
+  #else
+  return true;
+  #endif
+}
+
+bool SolitaireGame::setRenderingEngine(RenderingEngine engine) {
+  #ifdef USEOPENGL
+  if (engine == RenderingEngine::OPENGL) {
+    std::cout << "OpenGL not supported on Windows. Using Cairo." << std::endl;
+    rendering_engine_ = RenderingEngine::CAIRO;
+    return true;
+  }
+  #endif
+
+  if (rendering_engine_ == engine) {
+    return true;
+  }
+
+  if (!opengl_initialized_ && !cairo_initialized_) {
+    rendering_engine_ = engine;
+    std::cout << "Rendering engine: " << getRenderingEngineName() << std::endl;
+    return true;
+  }
+
+  engine_switch_requested_ = true;
+  requested_engine_ = engine;
+  return true;
+}
+
+bool SolitaireGame::initializeRenderingEngine() {
+  #ifndef USEOPENGL
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    rendering_engine_ = RenderingEngine::CAIRO;
+  }
+  #endif
+
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      cairo_initialized_ = true;
+      fprintf(stderr, "✓ Using Cairo rendering (CPU-based)\n");
+      return true;
+
+    case RenderingEngine::OPENGL:
+      #ifdef __linux__
+      fprintf(stderr, "✓ OpenGL will be initialized when window is ready\n");
+      return true;
+      #else
+      rendering_engine_ = RenderingEngine::CAIRO;
+      cairo_initialized_ = true;
+      return true;
+      #endif
+
+    default:
+      rendering_engine_ = RenderingEngine::CAIRO;
+      cairo_initialized_ = true;
+      return true;
+  }
+}
+
+bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
+  #ifndef USEOPENGL
+  if (newEngine == RenderingEngine::OPENGL) {
+    return false;
+  }
+  #endif
+
+  if (newEngine == rendering_engine_) {
+    return true;
+  }
+
+  #ifdef __linux__
+  if (!rendering_stack_) {
+    std::cout << "Rendering stack not initialized" << std::endl;
+    return false;
+  }
+  
+  cache_dirty_ = true;
+  
+  rendering_engine_ = newEngine;
+  
+  if (newEngine == RenderingEngine::OPENGL) {
+    cairo_initialized_ = false;
+    opengl_initialized_ = true;
+  } else {
+    opengl_initialized_ = false;
+    cairo_initialized_ = true;
+  }
+  
+  const char *view = (newEngine == RenderingEngine::OPENGL) ? "opengl" : "cairo";
+  gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), view);
+  
+  rendering_engine_ = newEngine;
+  std::cout << "Switched to " << getRenderingEngineName() << std::endl;
+  saveEnginePreference();
+  return true;
+  #else
+  return false;
+  #endif
+}
+
+void SolitaireGame::cleanupRenderingEngine() {
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    #ifdef USEOPENGL
+    cleanupOpenGLResources_gl();
+    #endif
+  } else {
+    cleanupCardCache();
+  }
+}
+
+std::string SolitaireGame::getRenderingEngineName() const {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      return "Cairo";
+    case RenderingEngine::OPENGL:
+      return "OpenGL";
+    default:
+      return "Unknown";
+  }
+}
+
+void SolitaireGame::renderFrame() {
+  switch (rendering_engine_) {
+    case RenderingEngine::CAIRO:
+      refreshDisplay();
+      break;
+    case RenderingEngine::OPENGL:
+      #ifdef USEOPENGL
+      renderFrame_gl();
+      #endif
+      break;
+    default:
+      refreshDisplay();
+  }
+}
+
+void SolitaireGame::saveEnginePreference() {
+  std::string config_file = settings_dir_ + "/graphics.ini";
+  std::ofstream config(config_file);
+  if (config.is_open()) {
+    config << "[Graphics]\nengine=" 
+           << (rendering_engine_ == RenderingEngine::CAIRO ? "cairo" : "opengl") << "\n";
+    config.close();
+  }
+}
+
+void SolitaireGame::loadEnginePreference() {
+  std::string config_file = settings_dir_ + "/graphics.ini";
+  std::ifstream config(config_file);
+  if (config.is_open()) {
+    std::string line;
+    while (std::getline(config, line)) {
+      if (line.find("engine=") == 0) {
+        std::string engine_name = line.substr(7);
+        engine_name.erase(0, engine_name.find_first_not_of(" \t\r\n"));
+        engine_name.erase(engine_name.find_last_not_of(" \t\r\n") + 1);
+        
+        #ifdef __linux__
+        if (engine_name == "opengl") {
+          rendering_engine_ = RenderingEngine::OPENGL;
+        }
+        #endif
+      }
+    }
+    config.close();
+  }
+}
+
+void SolitaireGame::addEngineSelectionMenu(GtkWidget *menubar) {
+  GtkWidget *graphics_menu = gtk_menu_new();
+  GtkWidget *graphics_item = gtk_menu_item_new_with_label("Graphics");
+
+  GtkWidget *cairo_item = gtk_menu_item_new_with_label("Use Cairo (CPU)");
+  g_signal_connect(cairo_item, "activate",
+                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
+                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     game->switchRenderingEngine(RenderingEngine::CAIRO);
+                     game->refreshDisplay();
+                   }),
+                   this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), cairo_item);
+
+  #ifdef __linux__
+  GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL (GPU)");
+  g_signal_connect(opengl_item, "activate",
+                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
+                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     game->switchRenderingEngine(RenderingEngine::OPENGL);
+                     game->refreshDisplay();
+                   }),
+                   this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), opengl_item);
+  #endif
+
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(graphics_item), graphics_menu);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), graphics_item);
+  gtk_widget_show_all(graphics_menu);
 }
 
 bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
@@ -1217,6 +1433,9 @@ void SolitaireGame::setupMenuBar() {
   g_signal_connect(G_OBJECT(aboutItem), "activate", G_CALLBACK(onAbout), this);
   gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), aboutItem);
 
+  // Add Graphics menu for rendering engine selection (before Help menu)
+  addEngineSelectionMenu(menubar);
+
   // Add Help menu to menubar
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), helpMenuItem);
 
@@ -2256,3 +2475,197 @@ void SolitaireGame::promptForNewGame(const std::string& difficulty) {
     restartGame();
   }
 }
+
+// ============================================================================
+// OPENGL RENDERING BACKEND IMPLEMENTATION (STUB METHODS)
+// ============================================================================
+// These methods are called when USEOPENGL is defined and OpenGL rendering
+// is enabled. They follow the same rendering pipeline as Cairo methods.
+
+#ifdef USEOPENGL
+
+void SolitaireGame::setupOpenGLArea() {
+  // OpenGL area setup deferred until rendering needed
+}
+
+bool SolitaireGame::initializeOpenGLResources() {
+  if (!initializeGLEW()) {
+    return false;
+  }
+  
+  if (!checkOpenGLCapabilities()) {
+    return false;
+  }
+  
+  logOpenGLInfo();
+  
+  if (!initializeCardTextures_gl()) {
+    return false;
+  }
+  
+  opengl_initialized_ = true;
+  return true;
+}
+
+bool SolitaireGame::initializeGLEW() {
+  glewExperimental = GL_TRUE;
+  GLenum err = glewInit();
+  if (err != GLEW_OK) {
+    std::cerr << "GLEW initialization failed: " << glewGetErrorString(err) << std::endl;
+    return false;
+  }
+  is_glew_initialized_ = true;
+  return true;
+}
+
+bool SolitaireGame::checkOpenGLCapabilities() {
+  const GLubyte *renderer = glGetString(GL_RENDERER);
+  const GLubyte *version = glGetString(GL_VERSION);
+  const GLubyte *glsl_version = glGetString(GL_SHADING_LANGUAGE_VERSION);
+  
+  std::cout << "GPU: " << (renderer ? (const char*)renderer : "Unknown") << std::endl;
+  std::cout << "OpenGL Version: " << (version ? (const char*)version : "Unknown") << std::endl;
+  std::cout << "GLSL Version: " << (glsl_version ? (const char*)glsl_version : "Unknown") << std::endl;
+  
+  // Check for minimum required OpenGL version 3.3
+  int major, minor;
+  glGetIntegerv(GL_MAJOR_VERSION, &major);
+  glGetIntegerv(GL_MINOR_VERSION, &minor);
+  
+  if (major < 3 || (major == 3 && minor < 3)) {
+    std::cerr << "OpenGL 3.3 or higher required. Got " << major << "." << minor << std::endl;
+    return false;
+  }
+  
+  return true;
+}
+
+void SolitaireGame::logOpenGLInfo() {
+  std::cout << "\n=== OPENGL INITIALIZATION ===" << std::endl;
+  std::cout << "GPU: " << glGetString(GL_RENDERER) << std::endl;
+  std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
+  std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+  std::cout << "==============================\n" << std::endl;
+}
+
+gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  gtk_gl_area_make_current(area);
+  
+  if (game->initializeOpenGLResources()) {
+    game->cardShaderProgram_gl_ = game->setupShaders_gl();
+    game->cardQuadVAO_gl_ = game->setupCardQuadVAO_gl();
+    return TRUE;
+  }
+  return FALSE;
+}
+
+gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  gtk_gl_area_make_current(area);
+  game->renderFrame_gl();
+  return TRUE;
+}
+
+void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up) {
+  // Stub: OpenGL card rendering
+}
+
+void SolitaireGame::drawEmptyPile_gl(int x, int y) {
+  // Stub: Draw empty pile outline in OpenGL
+}
+
+void SolitaireGame::drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO) {
+  // Stub: Draw animated card with OpenGL
+}
+
+void SolitaireGame::drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO) {
+  // Stub: Draw card fragment in OpenGL
+}
+
+void SolitaireGame::drawStockPile_gl() {
+  // Stub: Draw stock pile in OpenGL
+}
+
+void SolitaireGame::drawFoundationPiles_gl() {
+  // Stub: Draw foundation piles in OpenGL
+}
+
+void SolitaireGame::drawTableauPiles_gl() {
+  // Stub: Draw tableau piles in OpenGL
+}
+
+void SolitaireGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
+  // Stub: Draw dragged cards in OpenGL
+}
+
+void SolitaireGame::renderFrame_gl() {
+  glClearColor(0.2f, 0.5f, 0.3f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  
+  // Basic rendering setup
+  glViewport(0, 0, current_card_width_ * 7, current_card_height_ * 4);
+}
+
+GLuint SolitaireGame::setupShaders_gl() {
+  return 0; // Stub
+}
+
+GLuint SolitaireGame::setupCardQuadVAO_gl() {
+  return 0; // Stub
+}
+
+bool SolitaireGame::initializeCardTextures_gl() {
+  return true; // Stub: Return success
+}
+
+bool SolitaireGame::loadCardTexture_gl(const std::string &cardKey, const cardlib::Card &card) {
+  return true; // Stub: Return success
+}
+
+void SolitaireGame::cleanupOpenGLResources_gl() {
+  if (cardShaderProgram_gl_ != 0) {
+    glDeleteProgram(cardShaderProgram_gl_);
+    cardShaderProgram_gl_ = 0;
+  }
+  if (simpleShaderProgram_gl_ != 0) {
+    glDeleteProgram(simpleShaderProgram_gl_);
+    simpleShaderProgram_gl_ = 0;
+  }
+  if (cardQuadVAO_gl_ != 0) {
+    glDeleteVertexArrays(1, &cardQuadVAO_gl_);
+    cardQuadVAO_gl_ = 0;
+  }
+  if (cardQuadVBO_gl_ != 0) {
+    glDeleteBuffers(1, &cardQuadVBO_gl_);
+    cardQuadVBO_gl_ = 0;
+  }
+  if (cardQuadEBO_gl_ != 0) {
+    glDeleteBuffers(1, &cardQuadEBO_gl_);
+    cardQuadEBO_gl_ = 0;
+  }
+  
+  for (auto &pair : cardTextures_gl_) {
+    glDeleteTextures(1, &pair.second);
+  }
+  cardTextures_gl_.clear();
+  
+  if (cardBackTexture_gl_ != 0) {
+    glDeleteTextures(1, &cardBackTexture_gl_);
+    cardBackTexture_gl_ = 0;
+  }
+}
+
+bool SolitaireGame::validateOpenGLContext() {
+  return is_glew_initialized_ && opengl_initialized_;
+}
+
+bool SolitaireGame::reloadCustomCardBackTexture_gl() {
+  return true; // Stub: Return success
+}
+
+GLuint SolitaireGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
+  return 0; // Stub
+}
+
+#endif // USEOPENGL
