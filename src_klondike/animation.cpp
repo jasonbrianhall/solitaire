@@ -412,3 +412,25 @@ void SolitaireGame::completeDeal() {
 
   refreshDisplay();
 }
+
+// Draw the stock pile (face-down cards to draw from)
+void SolitaireGame::drawStockPile() {
+  int x = current_card_spacing_;
+  int y = current_card_spacing_;
+  
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+      if (!stock_.empty()) {
+        drawCard_gl(stock_.back(), x, y, false);
+      } else {
+        // Draw empty stock pile outline
+        drawEmptyPile_gl(x, y);
+      }
+   } else if( rendering_engine_ == RenderingEngine::CAIRO) {
+      if (!stock_.empty()) {
+        drawCard(buffer_cr_, x, y, nullptr, false);
+      } else {
+        // Draw empty stock pile outline
+        drawEmptyPile(buffer_cr_, x, y);
+      }
+   }
+}

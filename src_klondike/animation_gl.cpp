@@ -987,19 +987,6 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void SolitaireGame::drawStockPile_gl() {
-    int x = current_card_spacing_;
-    int y = current_card_spacing_;
-    
-    if (stock_.empty()) {
-        // Draw empty stock pile placeholder
-        drawEmptyPile_gl(x, y);
-    } else {
-        // Draw only the top card of stock
-        drawCard_gl(stock_.back(), x, y, false);
-    }
-}
-
 void SolitaireGame::drawWastePile_gl() {
     int x = current_card_spacing_ + (current_card_width_ + current_card_spacing_);
     int y = current_card_spacing_;
@@ -1504,7 +1491,7 @@ void SolitaireGame::renderFrame_gl() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     // Draw all game piles
-    drawStockPile_gl();
+    drawStockPile();
     drawWastePile_gl();
     drawFoundationPiles_gl();
     drawTableauPiles_gl();

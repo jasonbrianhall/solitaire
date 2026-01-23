@@ -95,19 +95,6 @@ void SolitaireGame::initializeOrResizeBuffer(int width, int height) {
   }
 }
 
-// Draw the stock pile (face-down cards to draw from)
-void SolitaireGame::drawStockPile() {
-  int x = current_card_spacing_;
-  int y = current_card_spacing_;
-  
-  if (!stock_.empty()) {
-    drawCard(buffer_cr_, x, y, nullptr, false);
-  } else {
-    // Draw empty stock pile outline
-    drawEmptyPile(buffer_cr_, x, y);
-  }
-}
-
 // Draw the waste pile (cards drawn from stock)
 void SolitaireGame::drawWastePile() {
   int x = current_card_spacing_ + current_card_width_ + current_card_spacing_;
