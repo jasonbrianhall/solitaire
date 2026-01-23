@@ -483,6 +483,12 @@ private:
   // Track if game is fully initialized (used to prevent GL rendering before game state is ready)
   bool game_fully_initialized_ = false;
 
+  // Cache state tracking
+  bool cache_dirty_ = false;  // Flag to indicate caches need to be cleared and rebuilt
+  
+  // Method to clear and rebuild all caches
+  void clearAndRebuildCaches();
+
   void showHowToPlay();
   void showKeyboardShortcuts();
   void showDirectoryStructureDialog(const std::string &directory);

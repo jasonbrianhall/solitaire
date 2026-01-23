@@ -1052,9 +1052,16 @@ void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
 }
 
 void SolitaireGame::initializeCardCache() {
+  std::cerr << "DEBUG [initializeCardCache]: Starting cache initialization\n";
+  std::cerr << "DEBUG [initializeCardCache]: Current card dimensions: " << current_card_width_ << "x" << current_card_height_ << "\n";
+  std::cerr << "DEBUG [initializeCardCache]: Deck size: " << deck_.getAllCards().size() << " cards\n";
+  
   // Pre-load all card images into cairo surfaces with current dimensions
   cleanupCardCache();
+  
+  std::cerr << "DEBUG [initializeCardCache]: Cleaned up previous cache\n";
 
+  int cards_loaded = 0;
   for (const auto &card : deck_.getAllCards()) {
     if (auto img = deck_.getCardImage(card)) {
       GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
@@ -1077,13 +1084,17 @@ void SolitaireGame::initializeCardCache() {
       std::string key = std::to_string(static_cast<int>(card.suit)) +
                         std::to_string(static_cast<int>(card.rank));
       card_surface_cache_[key] = surface;
+      cards_loaded++;
 
       g_object_unref(scaled);
       g_object_unref(loader);
     }
   }
+  
+  std::cerr << "DEBUG [initializeCardCache]: Loaded " << cards_loaded << " cards into cache\n";
 
   // Cache card back
+  std::cerr << "DEBUG [initializeCardCache]: Loading card back image\n";
   if (auto back_img = deck_.getCardBackImage()) {
     GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
     gdk_pixbuf_loader_write(loader, back_img->data.data(),
@@ -1102,17 +1113,31 @@ void SolitaireGame::initializeCardCache() {
     cairo_destroy(cr);
 
     card_surface_cache_["back"] = surface;
+    std::cerr << "DEBUG [initializeCardCache]: Card back loaded\n";
 
     g_object_unref(scaled);
     g_object_unref(loader);
+  } else {
+    std::cerr << "WARNING [initializeCardCache]: Failed to get card back image\n";
   }
+  
+  std::cerr << "DEBUG [initializeCardCache]: Cache initialization complete. Total cache size: " << card_surface_cache_.size() << " surfaces\n";
 }
 
 void SolitaireGame::cleanupCardCache() {
+  std::cerr << "DEBUG [cleanupCardCache]: Starting cleanup\n";
+  std::cerr << "DEBUG [cleanupCardCache]: Cache size before cleanup: " << card_surface_cache_.size() << " surfaces\n";
+  
+  int destroyed_count = 0;
   for (auto &[key, surface] : card_surface_cache_) {
-    cairo_surface_destroy(surface);
+    if (surface) {
+      std::cerr << "DEBUG [cleanupCardCache]: Destroying surface " << (void*)surface << " (key: " << key << ")\n";
+      cairo_surface_destroy(surface);
+      destroyed_count++;
+    }
   }
   card_surface_cache_.clear();
+  std::cerr << "DEBUG [cleanupCardCache]: Destroyed " << destroyed_count << " surfaces, cache size now: " << card_surface_cache_.size() << "\n";
 }
 
 cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
@@ -1240,4 +1265,75 @@ void SolitaireGame::refreshCardCache() {
     reloadCustomCardBackTexture_gl();
 #endif
   }
+}
+
+void SolitaireGame::clearAndRebuildCaches() {
+  std::cerr << "\n===== CACHE REBUILD START =====\n";
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Called\n";
+  
+  // Clear and rebuild Cairo card surface cache
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Clearing Cairo surface cache\n";
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Current Cairo cache size: " << card_surface_cache_.size() << " surfaces\n";
+  
+  cleanupCardCache();
+  
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Cairo cache cleared, size now: " << card_surface_cache_.size() << " surfaces\n";
+  
+#ifdef USEOPENGL
+  // Clear and rebuild OpenGL card texture cache
+  std::cerr << "DEBUG [clearAndRebuildCaches]: USEOPENGL is defined, clearing OpenGL textures\n";
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Current OpenGL texture count: " << cardTextures_gl_.size() << "\n";
+  
+  if (cardTextures_gl_.size() > 0) {
+    std::cerr << "DEBUG [clearAndRebuildCaches]: Deleting " << cardTextures_gl_.size() << " OpenGL textures\n";
+    int deleted_count = 0;
+    for (auto &[key, texture] : cardTextures_gl_) {
+      if (texture != 0) {
+        std::cerr << "DEBUG [clearAndRebuildCaches]: Deleting texture " << texture << " (key: " << key << ")\n";
+        glDeleteTextures(1, &texture);
+        deleted_count++;
+      }
+    }
+    std::cerr << "DEBUG [clearAndRebuildCaches]: Deleted " << deleted_count << " textures\n";
+    cardTextures_gl_.clear();
+    std::cerr << "DEBUG [clearAndRebuildCaches]: Cleared cardTextures_gl_ map, size now: " << cardTextures_gl_.size() << "\n";
+  } else {
+    std::cerr << "DEBUG [clearAndRebuildCaches]: No OpenGL textures to delete\n";
+  }
+  
+  // Clear OpenGL card back texture
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Card back texture ID: " << cardBackTexture_gl_ << "\n";
+  if (cardBackTexture_gl_ != 0) {
+    std::cerr << "DEBUG [clearAndRebuildCaches]: Deleting card back texture " << cardBackTexture_gl_ << "\n";
+    glDeleteTextures(1, &cardBackTexture_gl_);
+    cardBackTexture_gl_ = 0;
+    std::cerr << "DEBUG [clearAndRebuildCaches]: Card back texture deleted\n";
+  } else {
+    std::cerr << "DEBUG [clearAndRebuildCaches]: No card back texture to delete\n";
+  }
+  
+  std::cerr << "DEBUG [clearAndRebuildCaches]: About to rebuild OpenGL textures\n";
+  // Rebuild OpenGL textures
+  bool opengl_init_result = initializeCardTextures_gl();
+  std::cerr << "DEBUG [clearAndRebuildCaches]: initializeCardTextures_gl() returned " << (opengl_init_result ? "true" : "false") << "\n";
+  std::cerr << "DEBUG [clearAndRebuildCaches]: OpenGL textures after rebuild: " << cardTextures_gl_.size() << " textures\n";
+#else
+  std::cerr << "DEBUG [clearAndRebuildCaches]: USEOPENGL is NOT defined, skipping OpenGL cleanup\n";
+#endif
+  
+  // Rebuild Cairo cache
+  std::cerr << "DEBUG [clearAndRebuildCaches]: About to rebuild Cairo surface cache\n";
+  initializeCardCache();
+  
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Cairo cache rebuilt, size now: " << card_surface_cache_.size() << " surfaces\n";
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Cairo buffer surfaces - buffer_surface_: " << (buffer_surface_ ? "valid" : "NULL") << ", buffer_cr_: " << (buffer_cr_ ? "valid" : "NULL") << "\n";
+  
+  // Reset the cache dirty flag
+  cache_dirty_ = false;
+  std::cerr << "DEBUG [clearAndRebuildCaches]: Cache rebuild complete, cache_dirty_ = " << cache_dirty_ << "\n";
+  
+  // Force complete redraw of the entire screen
+  std::cerr << "DEBUG [clearAndRebuildCaches]: About to call refreshDisplay() for final redraw\n";
+  refreshDisplay();
+  std::cerr << "===== CACHE REBUILD COMPLETE =====\n\n";
 }
