@@ -1445,7 +1445,7 @@ void SolitaireGame::renderFrame_gl() {
     drawStockPile();
     drawWastePile();
     drawFoundationPiles();
-    drawTableauPiles_gl();
+    drawTableauPiles();
     
     // Disable blending after drawing
     glDisable(GL_BLEND);
