@@ -1058,6 +1058,8 @@ GLuint loadTextureFromMemory(const std::vector<unsigned char> &data) {
         return 0;
     }
     
+    //std::cout << "  ✓ Image loaded from memory: " << width << "x" << height << " (" << channels << " channels)" << std::endl;
+    
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
