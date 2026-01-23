@@ -74,26 +74,7 @@ FreecellGame::~FreecellGame() {
 void FreecellGame::run(int argc, char **argv) {
   gtk_init(&argc, &argv);
   setupWindow();
-  initializeGame();  // Initialize game after GTK is ready and window exists
   setupGameArea();
-  
-  // Show all widgets AFTER game is fully initialized
-  // This ensures GL context creation happens when game state is ready
-  gtk_widget_show_all(window_);
-  
-  // NOW switch to OpenGL if that's the configured preference
-  // This MUST happen AFTER gtk_widget_show_all() so the GL widget is properly realized
-  #ifdef __linux__
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
-    std::cout << "Switching to OpenGL mode (from saved preference) after widget realization..." << std::endl;
-    gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "opengl");
-    // Force processing of pending events to trigger realize callback
-    while (gtk_events_pending()) {
-      gtk_main_iteration();
-    }
-  }
-  #endif
-  
   game_fully_initialized_ = true;
   gtk_main();
 }
@@ -530,34 +511,32 @@ void FreecellGame::setupWindow() {
 }
 
 void FreecellGame::setupGameArea() {
-  // Create Cairo rendering area
-  setupCairoArea();
-  
-  // Create OpenGL rendering area
-#ifdef USEOPENGL
-  setupOpenGLArea();
-#endif
-  
-  // Create GtkStack to switch between rendering engines
-  rendering_stack_ = gtk_stack_new();
-  gtk_stack_set_transition_type(GTK_STACK(rendering_stack_), 
-                                GTK_STACK_TRANSITION_TYPE_NONE);
-  
-  // Add both widgets to stack
-  gtk_stack_add_named(GTK_STACK(rendering_stack_), game_area_, "cairo");
   #ifdef __linux__
-  gtk_stack_add_named(GTK_STACK(rendering_stack_), gl_area_, "opengl");
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    // Create stack to switch between Cairo and OpenGL
+    rendering_stack_ = gtk_stack_new();
+    gtk_box_pack_start(GTK_BOX(vbox_), rendering_stack_, TRUE, TRUE, 0);
+    
+    setupCairoArea();
+    setupOpenGLArea();
+    
+    // Add both areas to the stack
+    gtk_stack_add_named(GTK_STACK(rendering_stack_), game_area_, "cairo");
+    gtk_stack_add_named(GTK_STACK(rendering_stack_), gl_area_, "opengl");
+    
+    // Show the appropriate one
+    const char *initial_view = (rendering_engine_ == RenderingEngine::OPENGL) ? "opengl" : "cairo";
+    gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), initial_view);
+  } else {
+    setupCairoArea();
+    gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
+  }
+  #else
+  setupCairoArea();
+  gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
   #endif
   
-  // Always start with Cairo initially - will switch to OpenGL after show_all() if needed
-  // This ensures proper GTK widget realization before GL context creation
-  gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "cairo");
-  
-  // Pack stack into main window
-  gtk_box_pack_start(GTK_BOX(vbox_), rendering_stack_, TRUE, TRUE, 0);
-  
-  // NOTE: After gtk_widget_show_all() is called from run(), we will switch to
-  // OpenGL if that's the configured preference (in run() method)
+  gtk_widget_show_all(window_);
 }
 
 void FreecellGame::setupCairoArea() {
@@ -765,11 +744,6 @@ void FreecellGame::setupMenuBar() {
 
   // Add Game menu to menubar
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
-
-  // ==================== GRAPHICS MENU ====================
-#ifdef USEOPENGL
-  addEngineSelectionMenu(menubar);
-#endif
 
   //=======================================================
   // OPTIONS MENU - Visual and appearance options
@@ -1328,6 +1302,51 @@ void FreecellGame::clearAndRebuildCaches() {
 // Note: Full implementations should follow the solitaire.cpp pattern
 
 #ifdef USEOPENGL
+GLuint FreecellGame::setupShaders_gl() {
+  // TODO: Implement shader compilation
+  // See solitaire.cpp for complete implementation
+  return 0;
+}
+
+GLuint FreecellGame::setupCardQuadVAO_gl() {
+  // TODO: Implement VAO setup
+  // See solitaire.cpp for complete implementation
+  return 0;
+}
+
+bool FreecellGame::initializeCardTextures_gl() {
+  // TODO: Implement texture loading
+  // See solitaire.cpp for complete implementation
+  return false;
+}
+
+void FreecellGame::cleanupOpenGLResources_gl() {
+  // TODO: Implement cleanup
+}
+
+void FreecellGame::renderFrame_gl() {
+  // TODO: Implement frame rendering
+  // See solitaire.cpp for complete implementation
+}
+
+void FreecellGame::startWinAnimation_gl() {}
+void FreecellGame::updateWinAnimation_gl() {}
+void FreecellGame::stopWinAnimation_gl() {}
+void FreecellGame::launchNextCard_gl() {}
+void FreecellGame::explodeCard_gl(AnimatedCard &card) { (void)card; }
+void FreecellGame::updateCardFragments_gl(AnimatedCard &card) { (void)card; }
+void FreecellGame::startDealAnimation_gl() {}
+void FreecellGame::updateDealAnimation_gl() {}
+gboolean FreecellGame::onDealAnimationTick_gl(gpointer data) { (void)data; return FALSE; }
+void FreecellGame::dealNextCard_gl() {}
+void FreecellGame::completeDeal_gl() {}
+void FreecellGame::stopDealAnimation_gl() {}
+void FreecellGame::startFoundationMoveAnimation_gl(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
+  (void)card; (void)source_pile; (void)source_index; (void)target_pile;
+}
+void FreecellGame::updateFoundationMoveAnimation_gl() {}
+gboolean FreecellGame::onFoundationMoveAnimationTick_gl(gpointer data) { (void)data; return FALSE; }
+void FreecellGame::draw_comet_buster_gl(void *vis_ptr, void *other) { (void)vis_ptr; (void)other; }
 void FreecellGame::renderFrame() {
   if (rendering_engine_ == RenderingEngine::OPENGL) {
     #ifdef USEOPENGL
@@ -1335,37 +1354,7 @@ void FreecellGame::renderFrame() {
     #endif
   }
 }
-
-void FreecellGame::addEngineSelectionMenu(GtkWidget *menubar) {
-  GtkWidget *graphics_menu = gtk_menu_new();
-  GtkWidget *graphics_item = gtk_menu_item_new_with_label("Graphics");
-
-  GtkWidget *cairo_item = gtk_menu_item_new_with_label("Use Cairo (CPU)");
-  g_signal_connect(cairo_item, "activate",
-                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
-                     FreecellGame *game = static_cast<FreecellGame *>(data);
-                     game->switchRenderingEngine(RenderingEngine::CAIRO);
-                     game->refreshDisplay();
-                   }),
-                   this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), cairo_item);
-
-  #ifdef __linux__
-  GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL");
-  g_signal_connect(opengl_item, "activate",
-                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
-                     FreecellGame *game = static_cast<FreecellGame *>(data);
-                     game->switchRenderingEngine(RenderingEngine::OPENGL);
-                     game->refreshDisplay();
-                   }),
-                   this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), opengl_item);
-  #endif
-
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(graphics_item), graphics_menu);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), graphics_item);
-  gtk_widget_show_all(graphics_menu);
-}
+void FreecellGame::addEngineSelectionMenu(GtkWidget *menubar) { (void)menubar; }
 #endif
 
 void FreecellGame::onNewGame(GtkWidget *widget, gpointer data) {
@@ -1699,6 +1688,7 @@ void FreecellGame::initializeSettingsDir() {
 
 bool FreecellGame::loadSettings() {
   if (settings_dir_.empty()) {
+    std::cerr << "Settings directory is empty" << std::endl;
     return false;
   }
 
@@ -1712,8 +1702,8 @@ bool FreecellGame::loadSettings() {
 
   std::ifstream file(settings_file);
   if (!file) {
-    // Settings file doesn't exist yet - that's OK on first run
-    return true;
+    std::cerr << "Failed to open settings file" << std::endl;
+    return false;
   }
 
   // Read settings from file (can be extended as needed)
