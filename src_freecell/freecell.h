@@ -390,10 +390,6 @@ private:
   void cleanupOpenGLResources_gl();
   void draw_comet_buster_gl(void *vis_ptr, void *other);
   void renderFrame_gl();
-#endif
-
-  // GL Context Callbacks
-#ifdef USEOPENGL
   static gboolean onGLRealize(GtkGLArea *area, gpointer data);
   static gboolean onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data);
 #endif
@@ -425,8 +421,8 @@ private:
   bool initializeRenderingEngine_gl();
   GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
   bool reloadCustomCardBackTexture_gl();
-
-  
+  GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc);
+  GLuint compileShader_gl(const char *source, GLenum shaderType);
   void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
   void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
   void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);

@@ -819,34 +819,409 @@ void FreecellGame::highlightSelectedCard_gl() {
 // ============================================================================
 
 GLuint FreecellGame::setupShaders_gl() {
-    // TODO: Implement shader compilation from VERTEX_SHADER_GL and FRAGMENT_SHADER_GL
-    // This should compile and link the shader program
-    // For now, return a placeholder value
-    std::cerr << "WARNING: setupShaders_gl() not fully implemented" << std::endl;
-    return 0;
+    std::cout << "\nSetting up shaders..." << std::endl;
+    
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ Cannot setup shaders - no OpenGL context available" << std::endl;
+        return 0;
+    }
+    
+    GLuint program = createShaderProgram_gl(VERTEX_SHADER_GL, FRAGMENT_SHADER_GL);
+    
+    if (program == 0) {
+        std::cerr << "✗ Failed to create shader program" << std::endl;
+        return 0;
+    }
+    
+    std::cout << "✓ Shaders setup complete" << std::endl;
+    return program;
+}
+
+GLuint compileShader_gl(const char *source, GLenum shaderType) {
+    std::cout << "  Compiling " << (shaderType == GL_VERTEX_SHADER ? "VERTEX" : "FRAGMENT") 
+              << " shader..." << std::endl;
+    
+    if (glGetString(GL_VERSION) == nullptr) {
+        std::cerr << "    ✗ ERROR: No OpenGL context for shader compilation" << std::endl;
+        return 0;
+    }
+    
+    GLuint shader = glCreateShader(shaderType);
+    
+    if (shader == 0) {
+        std::cerr << "    ✗ ERROR: Failed to create shader object" << std::endl;
+        std::cerr << "      GL Error Code: " << glGetError() << std::endl;
+        return 0;
+    }
+    
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+    
+    int success = 0;
+    char infoLog[1024] = {0};
+    
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    
+    if (!success) {
+        glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
+        
+        std::cerr << "    ✗ ERROR: Shader compilation failed" << std::endl;
+        std::cerr << "      Info Log:\n" << infoLog << std::endl;
+        std::cerr << "      GL Error: " << glGetError() << std::endl;
+        
+        glDeleteShader(shader);
+        return 0;
+    }
+    
+    std::cout << "    ✓ Shader compiled successfully (ID: " << shader << ")" << std::endl;
+    return shader;
+}
+
+GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
+    std::cout << "Creating shader program..." << std::endl;
+    
+    if (glGetString(GL_VERSION) == nullptr) {
+        std::cerr << "  ✗ ERROR: No OpenGL context for program creation" << std::endl;
+        return 0;
+    }
+    
+    GLuint vertexShader = compileShader_gl(vertexSrc, GL_VERTEX_SHADER);
+    if (vertexShader == 0) {
+        std::cerr << "  ✗ Failed to compile vertex shader" << std::endl;
+        return 0;
+    }
+    
+    GLuint fragmentShader = compileShader_gl(fragmentSrc, GL_FRAGMENT_SHADER);
+    if (fragmentShader == 0) {
+        std::cerr << "  ✗ Failed to compile fragment shader" << std::endl;
+        glDeleteShader(vertexShader);
+        return 0;
+    }
+    
+    GLuint program = glCreateProgram();
+    if (program == 0) {
+        std::cerr << "  ✗ ERROR: Failed to create shader program" << std::endl;
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        return 0;
+    }
+    
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+    
+    int success = 0;
+    char infoLog[1024] = {0};
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    
+    if (!success) {
+        glGetProgramInfoLog(program, sizeof(infoLog), nullptr, infoLog);
+        std::cerr << "  ✗ ERROR: Shader program linking failed" << std::endl;
+        std::cerr << "    Info Log:\n" << infoLog << std::endl;
+        
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        glDeleteProgram(program);
+        return 0;
+    }
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    
+    std::cout << "✓ Shader program created successfully (ID: " << program << ")" << std::endl;
+    return program;
 }
 
 GLuint FreecellGame::setupCardQuadVAO_gl() {
-    // TODO: Implement VAO setup for card quad rendering
-    // Create vertices for a quad covering the card rectangle
-    // This should set up cardQuadVAO_gl_, cardQuadVBO_gl_, cardQuadEBO_gl_
-    std::cerr << "WARNING: setupCardQuadVAO_gl() not fully implemented" << std::endl;
-    return 0;
+    std::cout << "\nSetting up card quad VAO..." << std::endl;
+    
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ Cannot setup VAO - no OpenGL context available" << std::endl;
+        return 0;
+    }
+    
+    if (!is_glew_initialized_) {
+        std::cerr << "✗ Cannot setup VAO - GLEW not initialized" << std::endl;
+        return 0;
+    }
+    
+    static const float quadVertices[] = {
+         0.0f,  0.0f,  0.0f, 0.0f,
+         1.0f,  0.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f,
+         0.0f,  1.0f,  0.0f, 1.0f
+    };
+    
+    static const unsigned int indices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+    
+    GLuint VAO = 0, VBO = 0, EBO = 0;
+    
+    GLenum err = glGetError();
+    while (err != GL_NO_ERROR) {
+        std::cout << "  Clearing pre-existing GL error: " << err << std::endl;
+        err = glGetError();
+    }
+    
+    std::cout << "  Generating VAO..." << std::endl;
+    glGenVertexArrays(1, &VAO);
+    err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "  ✗ glGenVertexArrays failed with error: " << err << std::endl;
+        return 0;
+    }
+    if (VAO == 0) {
+        std::cerr << "  ✗ glGenVertexArrays returned invalid VAO (0)" << std::endl;
+        return 0;
+    }
+    std::cout << "    ✓ VAO generated (ID: " << VAO << ")" << std::endl;
+    
+    std::cout << "  Generating VBO..." << std::endl;
+    glGenBuffers(1, &VBO);
+    err = glGetError();
+    if (err != GL_NO_ERROR || VBO == 0) {
+        std::cerr << "  ✗ glGenBuffers(VBO) failed with error: " << err << std::endl;
+        glDeleteVertexArrays(1, &VAO);
+        return 0;
+    }
+    std::cout << "    ✓ VBO generated (ID: " << VBO << ")" << std::endl;
+    
+    std::cout << "  Generating EBO..." << std::endl;
+    glGenBuffers(1, &EBO);
+    err = glGetError();
+    if (err != GL_NO_ERROR || EBO == 0) {
+        std::cerr << "  ✗ glGenBuffers(EBO) failed with error: " << err << std::endl;
+        glDeleteBuffers(1, &VBO);
+        glDeleteVertexArrays(1, &VAO);
+        return 0;
+    }
+    std::cout << "    ✓ EBO generated (ID: " << EBO << ")" << std::endl;
+    
+    std::cout << "  Configuring VAO..." << std::endl;
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    
+    err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "  ✗ OpenGL error during VAO configuration: " << err << std::endl;
+        glDeleteBuffers(1, &EBO);
+        glDeleteBuffers(1, &VBO);
+        glDeleteVertexArrays(1, &VAO);
+        return 0;
+    }
+    
+    std::cout << "✓ Card quad VAO setup complete (VAO ID: " << VAO << ")" << std::endl;
+    return VAO;
 }
 
 bool FreecellGame::initializeCardTextures_gl() {
-    // TODO: Implement texture loading from card images
-    // Load and cache textures for all card combinations
-    std::cerr << "WARNING: initializeCardTextures_gl() not fully implemented" << std::endl;
-    return false;
+    std::cout << "\nInitializing card textures..." << std::endl;
+    
+    if (!validateOpenGLContext()) {
+        std::cerr << "✗ Cannot initialize textures - no OpenGL context available" << std::endl;
+        return false;
+    }
+    
+    try {
+        // CRITICAL FIX: Load the actual card back image from the deck
+        if (auto back_img = deck_.getCardBackImage()) {
+            if (!back_img->data.empty()) {
+                std::cout << "  Loading actual card back image from deck..." << std::endl;
+                cardBackTexture_gl_ = loadTextureFromMemory(back_img->data);
+                if (cardBackTexture_gl_ != 0) {
+                    std::cout << "✓ Card back texture loaded successfully (Texture ID: " 
+                              << cardBackTexture_gl_ << ")" << std::endl;
+                    return true;
+                } else {
+                    std::cerr << "  ⚠ Failed to load card back from memory, creating fallback..." << std::endl;
+                }
+            }
+        }
+        
+        // Fallback: Create a placeholder texture if real card back failed to load
+        const int TEX_WIDTH = 32;
+        const int TEX_HEIGHT = 48;
+        const int TEX_CHANNELS = 4;
+        
+        std::cout << "  Creating fallback placeholder texture (" << TEX_WIDTH << "x" << TEX_HEIGHT << ")..." << std::endl;
+        
+        // Create a nice gray placeholder instead of pure white
+        unsigned char textureData[TEX_WIDTH * TEX_HEIGHT * TEX_CHANNELS];
+        memset(textureData, 200, sizeof(textureData)); // Gray color instead of white
+        
+        GLuint texture = 0;
+        glGenTextures(1, &texture);
+        
+        if (texture == 0) {
+            std::cerr << "  ✗ ERROR: Failed to generate texture object" << std::endl;
+            std::cerr << "    GL Error: " << glGetError() << std::endl;
+            return false;
+        }
+        std::cout << "    ✓ Texture object created (ID: " << texture << ")" << std::endl;
+        
+        glBindTexture(GL_TEXTURE_2D, texture);
+        
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cerr << "  ✗ ERROR: Failed to bind texture: " << err << std::endl;
+            glDeleteTextures(1, &texture);
+            return false;
+        }
+        
+        std::cout << "  Setting texture parameters..." << std::endl;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        
+        std::cout << "  Uploading texture data..." << std::endl;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, 
+                     GL_RGBA, GL_UNSIGNED_BYTE, textureData);
+        
+        err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cerr << "  ✗ ERROR: Failed to upload texture data: " << err << std::endl;
+            glDeleteTextures(1, &texture);
+            return false;
+        }
+        
+        cardBackTexture_gl_ = texture;
+        std::cout << "✓ Card textures initialized successfully (Texture ID: " << texture << ")" << std::endl;
+        return true;
+        
+    } catch (const std::exception &e) {
+        std::cerr << "✗ EXCEPTION: Failed to initialize card textures" << std::endl;
+        std::cerr << "  What: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "✗ UNKNOWN EXCEPTION: Failed to initialize card textures" << std::endl;
+        return false;
+    }
 }
 
 void FreecellGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up) {
-    // TODO: Implement card rendering in OpenGL
-    // Set model matrix for position
-    // Bind appropriate texture based on card suit/rank or card back
-    // Draw the quad
-    // This is a placeholder that does nothing currently
+    static int count = 0;
+    if (count++ == 0) fprintf(stderr, "[GL] DRAWING CARDS NOW\n");
+    
+    if (cardShaderProgram_gl_ == 0 || cardQuadVAO_gl_ == 0) {
+        return;
+    }
+    
+    // Default to card back texture
+    GLuint texture = cardBackTexture_gl_;
+    
+    if (face_up) {
+        // Try to get the face-up card image
+        auto card_image = deck_.getCardImage(card);
+        if (card_image && !card_image->data.empty()) {
+            std::string card_key = std::to_string((int)card.suit) + "_" + std::to_string((int)card.rank);
+            auto it = cardTextures_gl_.find(card_key);
+            
+            if (it != cardTextures_gl_.end()) {
+                // Use cached texture
+                texture = it->second;
+            } else {
+                // Load texture and cache it
+                texture = loadTextureFromMemory(card_image->data);
+                if (texture != 0) {
+                    cardTextures_gl_[card_key] = texture;
+                } else {
+                    // Fallback to card back if loading failed
+                    texture = cardBackTexture_gl_;
+                }
+            }
+        }
+    }
+    // For face_down cards, use the default cardBackTexture_gl_ already set above
+    
+    // Draw card at position
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3((float)x, (float)y, 0.0f));
+    model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
+    
+    GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Set alpha uniform to fully opaque
+    GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
+    glUniform1f(alphaLoc, 1.0f);
+    
+    // Set texture uniform
+    GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
+    glUniform1i(texLoc, 0);
+    glActiveTexture(GL_TEXTURE0);
+    
+    if (texture != 0) {
+        glBindTexture(GL_TEXTURE_2D, texture);
+    }
+    
+    glBindVertexArray(cardQuadVAO_gl_);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+void FreecellGame::drawEmptyPile_gl(int x, int y) {
+    // Draw light gray rectangle placeholder for empty pile
+    // This matches Cairo's appearance exactly: RGBA(0.85, 0.85, 0.85, 0.5)
+    
+    // Create light gray texture on first use (static, cached)
+    static GLuint emptyPileTexture = 0;
+    
+    if (emptyPileTexture == 0) {
+        const int WIDTH = 32;
+        const int HEIGHT = 48;
+        
+        unsigned char data[WIDTH * HEIGHT * 4];
+        for (int i = 0; i < WIDTH * HEIGHT * 4; i += 4) {
+            data[i] = (unsigned char)(0.85f * 255);     // R: 0.85
+            data[i + 1] = (unsigned char)(0.85f * 255); // G: 0.85
+            data[i + 2] = (unsigned char)(0.85f * 255); // B: 0.85
+            data[i + 3] = (unsigned char)(0.5f * 255);  // A: 0.5 (50% opacity)
+        }
+        
+        glGenTextures(1, &emptyPileTexture);
+        glBindTexture(GL_TEXTURE_2D, emptyPileTexture);
+        
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, WIDTH, HEIGHT, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, data);
+    }
+    
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3((float)x, (float)y, 0.0f));
+    model = glm::scale(model, glm::vec3((float)current_card_width_, (float)current_card_height_, 1.0f));
+    
+    GLint modelLoc = glGetUniformLocation(cardShaderProgram_gl_, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+    
+    // Set full alpha (transparency handled by texture)
+    GLint alphaLoc = glGetUniformLocation(cardShaderProgram_gl_, "alpha");
+    glUniform1f(alphaLoc, 1.0f);
+    
+    // Draw with light gray placeholder texture
+    GLint texLoc = glGetUniformLocation(cardShaderProgram_gl_, "cardTexture");
+    glUniform1i(texLoc, 0);
+    glActiveTexture(GL_TEXTURE0);
+    
+    glBindTexture(GL_TEXTURE_2D, emptyPileTexture);
+    glBindVertexArray(cardQuadVAO_gl_);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
 // ============================================================================

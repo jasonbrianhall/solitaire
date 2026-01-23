@@ -840,16 +840,28 @@ void FreecellGame::drawFreecells() {
                        
       if (freecells_[i].has_value() && !is_animated && !is_dragged) {
         // Draw the card in this freecell
-        drawCard(buffer_cr_, x, y, &(freecells_[i].value()));
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawCard_gl(freecells_[i].value(), x, y, true);
+        } else {
+          drawCard(buffer_cr_, x, y, &(freecells_[i].value()));
+        }
       } else {
         // If win animation is active, draw a card from freecell_animation_cards if available
         if (win_animation_active_ && !freecell_animation_cards_.empty() && 
             i < freecell_animation_cards_.size() && !freecell_animation_cards_[i].empty()) {
           // Draw the top card of the corresponding animation pile
-          drawCard(buffer_cr_, x, y, &(freecell_animation_cards_[i].back()));
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawCard_gl(freecell_animation_cards_[i].back(), x, y, true);
+          } else {
+            drawCard(buffer_cr_, x, y, &(freecell_animation_cards_[i].back()));
+          }
         } else {
           // Draw empty freecell
-          drawEmptyPile(buffer_cr_, x, y);
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawEmptyPile_gl(x, y);
+          } else {
+            drawEmptyPile(buffer_cr_, x, y);
+          }
         }
       }
     }
@@ -884,14 +896,26 @@ void FreecellGame::drawFoundationPiles() {
         
         if (!is_dragged) {
           // Draw top card of the foundation pile
-          drawCard(buffer_cr_, x, y, &(foundation_[i].back()));
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawCard_gl(foundation_[i].back(), x, y, true);
+          } else {
+            drawCard(buffer_cr_, x, y, &(foundation_[i].back()));
+          }
         } else {
           // Draw empty foundation pile when dragging
-          drawEmptyPile(buffer_cr_, x, y);
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawEmptyPile_gl(x, y);
+          } else {
+            drawEmptyPile(buffer_cr_, x, y);
+          }
         }
       } else {
         // Draw empty foundation pile
-        drawEmptyPile(buffer_cr_, x, y);
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawEmptyPile_gl(x, y);
+        } else {
+          drawEmptyPile(buffer_cr_, x, y);
+        }
       }
     }
     x += current_card_width_ + current_card_spacing_;
@@ -918,7 +942,11 @@ void FreecellGame::drawTableau() {
       // Draw cards in this column
       if (tableau_[i].empty()) {
         // Draw empty tableau spot
-        drawEmptyPile(buffer_cr_, x, tableau_y);
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawEmptyPile_gl(x, tableau_y);
+        } else {
+          drawEmptyPile(buffer_cr_, x, tableau_y);
+        }
       } else {
         if (deal_animation_active_) {
           drawTableauDuringDealAnimation(i, x, tableau_y);
@@ -967,7 +995,11 @@ void FreecellGame::drawTableauDuringDealAnimation(int column_index, int x, int t
     
     if (!is_animating) {
       int card_y = tableau_y + j * current_vert_spacing_;
-      drawCard(buffer_cr_, x, card_y, &tableau_[column_index][j]);
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(tableau_[column_index][j], x, card_y, true);
+      } else {
+        drawCard(buffer_cr_, x, card_y, &tableau_[column_index][j]);
+      }
     }
   }
 }
@@ -1002,7 +1034,11 @@ void FreecellGame::drawNormalTableauColumn(int column_index, int x, int tableau_
                        
     if (!should_skip && !is_animated) {
       int card_y = tableau_y + j * current_vert_spacing_;
-      drawCard(buffer_cr_, x, card_y, &tableau_[column_index][j]);
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(tableau_[column_index][j], x, card_y, true);
+      } else {
+        drawCard(buffer_cr_, x, card_y, &tableau_[column_index][j]);
+      }
     }
   }
 }
@@ -1017,11 +1053,19 @@ void FreecellGame::drawDraggedCards() {
     if (drag_source_pile_ >= 8 && drag_cards_.size() > 1) {
       for (size_t i = 0; i < drag_cards_.size(); i++) {
         int card_y = drag_y + i * current_vert_spacing_;
-        drawCard(buffer_cr_, drag_x, card_y, &drag_cards_[i]);
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawCard_gl(drag_cards_[i], drag_x, card_y, true);
+        } else {
+          drawCard(buffer_cr_, drag_x, card_y, &drag_cards_[i]);
+        }
       }
     } else {
       // Just draw the single card
-      drawCard(buffer_cr_, drag_x, drag_y, &drag_card_.value());
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(drag_card_.value(), drag_x, drag_y, true);
+      } else {
+        drawCard(buffer_cr_, drag_x, drag_y, &drag_card_.value());
+      }
     }
   }
 }
@@ -1032,14 +1076,22 @@ void FreecellGame::drawAnimations() {
   if (deal_animation_active_) {
     for (const auto &anim_card : deal_cards_) {
       if (anim_card.active) {
-        drawAnimatedCard(buffer_cr_, anim_card);
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawAnimatedCard_gl(anim_card, cardShaderProgram_gl_, cardQuadVAO_gl_);
+        } else {
+          drawAnimatedCard(buffer_cr_, anim_card);
+        }
       }
     }
   }
   
   // Draw foundation move animation if active
   if (foundation_move_animation_active_) {
-    drawAnimatedCard(buffer_cr_, foundation_move_card_);
+    if (rendering_engine_ == RenderingEngine::OPENGL) {
+      drawAnimatedCard_gl(foundation_move_card_, cardShaderProgram_gl_, cardQuadVAO_gl_);
+    } else {
+      drawAnimatedCard(buffer_cr_, foundation_move_card_);
+    }
   }
   
   // Draw win animation if active
@@ -1057,12 +1109,20 @@ void FreecellGame::drawWinAnimation() {
 
     if (!anim_card.exploded) {
       // Draw the whole card with rotation
-      drawAnimatedCard(buffer_cr_, anim_card);
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawAnimatedCard_gl(anim_card, cardShaderProgram_gl_, cardQuadVAO_gl_);
+      } else {
+        drawAnimatedCard(buffer_cr_, anim_card);
+      }
     } else {
       // Draw all the fragments for this card
       for (const auto &fragment : anim_card.fragments) {
         if (fragment.active) {
-          drawCardFragment(buffer_cr_, fragment);
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawCardFragment_gl(fragment, anim_card, cardShaderProgram_gl_, cardQuadVAO_gl_);
+          } else {
+            drawCardFragment(buffer_cr_, fragment);
+          }
         }
       }
     }
