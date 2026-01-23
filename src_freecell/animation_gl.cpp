@@ -810,6 +810,181 @@ void FreecellGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
   }
 }
 
+void FreecellGame::drawFreecells_gl(GLuint shaderProgram, GLuint VAO) {
+  int x = current_card_spacing_;
+  int y = current_card_spacing_;
+  
+  // Number of freecells depends on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  
+  for (int i = 0; i < num_freecells; i++) {
+    if (i < freecells_.size()) {
+      // Skip drawing the source card if it's being animated to foundation
+      bool is_animated = foundation_move_animation_active_ && 
+                         foundation_source_pile_ == i &&
+                         freecells_[i].has_value() &&
+                         foundation_move_card_.card.suit == freecells_[i].value().suit &&
+                         foundation_move_card_.card.rank == freecells_[i].value().rank;
+      
+      // Skip drawing if this card is being dragged
+      bool is_dragged = dragging_ && drag_source_pile_ == i &&
+                        freecells_[i].has_value() && drag_card_.has_value() &&
+                        drag_card_.value().suit == freecells_[i].value().suit &&
+                        drag_card_.value().rank == freecells_[i].value().rank;
+                       
+      if (freecells_[i].has_value() && !is_animated && !is_dragged) {
+        // Draw the card in this freecell
+        drawCard_gl(freecells_[i].value(), x, y, true);
+      } else {
+        // If win animation is active, draw a card from freecell_animation_cards if available
+        if (win_animation_active_ && !freecell_animation_cards_.empty() && 
+            i < freecell_animation_cards_.size() && !freecell_animation_cards_[i].empty()) {
+          // Draw the top card of the corresponding animation pile
+          drawCard_gl(freecell_animation_cards_[i].back(), x, y, true);
+        } else {
+          // Draw empty freecell
+          drawEmptyPile_gl(x, y);
+        }
+      }
+    }
+    x += current_card_width_ + current_card_spacing_;
+  }
+}
+
+void FreecellGame::drawFoundationPiles_gl(GLuint shaderProgram, GLuint VAO) {
+  GtkAllocation alloc = allocation;
+  
+  // Number of foundation piles is always 4
+  int foundation_start_x = alloc.width - 4 * (current_card_width_ + current_card_spacing_);
+  
+  int x = foundation_start_x;
+  int y = current_card_spacing_;
+  
+  for (int i = 0; i < 4; i++) {
+    if (i < foundation_.size()) {
+      if (!foundation_[i].empty()) {
+        // Skip drawing if this card is being dragged
+        bool is_dragged = dragging_ && drag_source_pile_ == (i + 4) &&
+                          drag_card_.has_value() &&
+                          drag_card_.value().suit == foundation_[i].back().suit &&
+                          drag_card_.value().rank == foundation_[i].back().rank;
+        
+        if (!is_dragged) {
+          // Draw top card of the foundation pile
+          drawCard_gl(foundation_[i].back(), x, y, true);
+        } else {
+          // Draw empty foundation pile when dragging
+          drawEmptyPile_gl(x, y);
+        }
+      } else {
+        // Draw empty foundation pile
+        drawEmptyPile_gl(x, y);
+      }
+    }
+    x += current_card_width_ + current_card_spacing_;
+  }
+}
+
+void FreecellGame::drawNormalTableauColumn_gl(int column_index, int x, int tableau_y) {
+  // Determine pile indices based on game mode
+  int num_freecells = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 4 : 6;
+  int foundation_start = num_freecells;
+  int foundation_end = foundation_start + 4; // Always 4 foundation piles
+  int tableau_start = foundation_end;
+  
+  // Calculate this column's pile index
+  int this_pile_index = tableau_start + column_index;
+  
+  for (size_t j = 0; j < tableau_[column_index].size(); j++) {
+    // Skip dragged cards
+    // Check if this is the dragging source pile and this is a card being dragged
+    bool should_skip = false;
+    
+    if (dragging_ && drag_source_pile_ == this_pile_index && 
+        j >= drag_source_card_idx_) {
+      should_skip = true;
+    }
+    
+    // Skip cards being animated to foundation
+    bool is_animated = foundation_move_animation_active_ && 
+                       foundation_source_pile_ == this_pile_index &&
+                       j == tableau_[column_index].size() - 1 &&
+                       foundation_move_card_.card.suit == tableau_[column_index][j].suit &&
+                       foundation_move_card_.card.rank == tableau_[column_index][j].rank;
+                       
+    if (!should_skip && !is_animated) {
+      int card_y = tableau_y + j * current_vert_spacing_;
+      drawCard_gl(tableau_[column_index][j], x, card_y, true);
+    }
+  }
+}
+
+void FreecellGame::drawTableauDuringDealAnimation_gl(int column_index, int x, int tableau_y) {
+  // During animation, we need to know which cards have been dealt already
+  int cards_in_this_column;
+  
+  if (current_game_mode_ == GameMode::CLASSIC_FREECELL) {
+    cards_in_this_column = (cards_dealt_ + 7 - column_index) / 8;
+  } else {
+    // Special handling for Double FreeCell's distribution
+    if (cards_dealt_ >= 100) { // Near the end of dealing
+      cards_in_this_column = column_index < 4 ? 11 : 10;
+    } else {
+      cards_in_this_column = cards_dealt_ / 10; // Approximate cards per column
+      if (cards_in_this_column > tableau_[column_index].size()) {
+        cards_in_this_column = tableau_[column_index].size();
+      }
+    }
+  }
+  
+  // Now draw each card that's been dealt, using position to identify cards uniquely
+  for (int j = 0; j < cards_in_this_column && j < tableau_[column_index].size(); j++) {
+    bool is_animating = false;
+    
+    // For each card in the animation, check if it matches our current column and position
+    for (const auto &anim_card : deal_cards_) {
+      if (anim_card.active && 
+          // Use destination coordinates to identify the card uniquely
+          std::abs(anim_card.target_x - (x)) < 5 &&
+          std::abs(anim_card.target_y - (tableau_y + j * current_vert_spacing_)) < 5) {
+        is_animating = true;
+        break;
+      }
+    }
+    
+    if (!is_animating) {
+      int card_y = tableau_y + j * current_vert_spacing_;
+      drawCard_gl(tableau_[column_index][j], x, card_y, true);
+    }
+  }
+}
+
+void FreecellGame::drawTableau_gl(GLuint shaderProgram, GLuint VAO) {
+  int tableau_y = 2 * current_card_spacing_ + current_card_height_;
+  
+  // Number of tableau columns depends on game mode
+  int num_tableau_columns = (current_game_mode_ == GameMode::CLASSIC_FREECELL) ? 8 : 10;
+  
+  for (int i = 0; i < num_tableau_columns; i++) {
+    int x = current_card_spacing_ + i * (current_card_width_ + current_card_spacing_);
+    
+    if (i < tableau_.size()) {
+      // Draw cards in this column
+      if (tableau_[i].empty()) {
+        // Draw empty tableau spot
+        drawEmptyPile_gl(x, tableau_y);
+      } else {
+        if (deal_animation_active_) {
+          drawTableauDuringDealAnimation_gl(i, x, tableau_y);
+        } else {
+          // Normal drawing (not during animation)
+          drawNormalTableauColumn_gl(i, x, tableau_y);
+        }
+      }
+    }
+  }
+}
+
 void FreecellGame::highlightSelectedCard_gl() {
   // Placeholder for keyboard navigation highlight in OpenGL
 }
@@ -1308,12 +1483,11 @@ void FreecellGame::renderFrame_gl() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     // Draw all game piles (foundation, freecells, tableau, etc.)
-    // This would call drawFoundationPiles_gl(), drawTableau_gl(), etc.
+    drawFreecells_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    drawFoundationPiles_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
+    drawTableau_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     
-    // Disable blending after drawing
-    glDisable(GL_BLEND);
-    
-    // Draw animations if active
+    // Draw animations if active (these are drawn on top with blending still enabled)
     if (win_animation_active_) {
         drawWinAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
@@ -1333,6 +1507,9 @@ void FreecellGame::renderFrame_gl() {
         !foundation_move_animation_active_) {
         highlightSelectedCard_gl();
     }
+    
+    // Disable blending after drawing
+    glDisable(GL_BLEND);
 }
 
 // ============================================================================

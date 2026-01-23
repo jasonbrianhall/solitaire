@@ -436,6 +436,13 @@ private:
   void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
+  
+  // Game pile drawing functions - OpenGL versions
+  void drawFreecells_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationPiles_gl(GLuint shaderProgram, GLuint VAO);
+  void drawTableau_gl(GLuint shaderProgram, GLuint VAO);
+  void drawTableauDuringDealAnimation_gl(int column_index, int x, int tableau_y);
+  void drawNormalTableauColumn_gl(int column_index, int x, int tableau_y);
 };
 
 #endif // FREECELL_H
