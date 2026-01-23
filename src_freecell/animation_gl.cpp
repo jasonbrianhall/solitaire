@@ -932,6 +932,47 @@ GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
     return program;
 }
 
+GLuint loadTextureFromMemory(const std::vector<unsigned char> &data) {
+    if (data.empty()) {
+        std::cerr << "  ✗ Error: Empty image data provided to loadTextureFromMemory" << std::endl;
+        return 0;
+    }
+    
+    int width, height, channels;
+    unsigned char *img_data = stbi_load_from_memory(
+        data.data(), 
+        data.size(), 
+        &width, &height, &channels, 
+        STBI_rgb_alpha
+    );
+    
+    if (!img_data) {
+        std::cerr << "  ✗ Error: Failed to load image from memory: " << stbi_failure_reason() << std::endl;
+        return 0;
+    }
+    
+    std::cout << "  ✓ Image loaded from memory: " << width << "x" << height << " (" << channels << " channels)" << std::endl;
+    
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    // Upload texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    
+    stbi_image_free(img_data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    
+    return texture;
+}
+
 GLuint FreecellGame::setupCardQuadVAO_gl() {
     std::cout << "\nSetting up card quad VAO..." << std::endl;
     

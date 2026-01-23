@@ -67,6 +67,15 @@ struct AnimatedCard {
   double target_y;
 };
 
+// ============================================================================
+// OpenGL Helper Functions (Free Functions)
+// ============================================================================
+#ifdef USEOPENGL
+GLuint compileShader_gl(const char *source, GLenum shaderType);
+GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc);
+GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
+#endif
+
 class FreecellGame {
 public:
   FreecellGame();
@@ -419,10 +428,7 @@ private:
   bool checkOpenGLCapabilities();
   void logOpenGLInfo();
   bool initializeRenderingEngine_gl();
-  GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
   bool reloadCustomCardBackTexture_gl();
-  GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc);
-  GLuint compileShader_gl(const char *source, GLenum shaderType);
   void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
   void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
   void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
