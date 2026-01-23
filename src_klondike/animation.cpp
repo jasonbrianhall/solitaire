@@ -418,6 +418,7 @@ void SolitaireGame::drawStockPile() {
   int x = current_card_spacing_;
   int y = current_card_spacing_;
   
+#ifdef USEOPENGL
   if (rendering_engine_ == RenderingEngine::OPENGL) {
       if (!stock_.empty()) {
         drawCard_gl(stock_.back(), x, y, false);
@@ -433,6 +434,14 @@ void SolitaireGame::drawStockPile() {
         drawEmptyPile(buffer_cr_, x, y);
       }
    }
+#else
+      if (!stock_.empty()) {
+        drawCard(buffer_cr_, x, y, nullptr, false);
+      } else {
+        // Draw empty stock pile outline
+        drawEmptyPile(buffer_cr_, x, y);
+      }
+#endif
 }
 
 // Draw the waste pile (cards drawn from stock)
@@ -455,27 +464,39 @@ void SolitaireGame::drawWastePile() {
   if (top_card_dragging && waste_.size() > 1) {
     // Draw the second-to-top card
     const auto &second_card = waste_[waste_.size() - 2];
+#ifdef USEOPENGL
     if (rendering_engine_ == RenderingEngine::CAIRO) {
         drawCard(buffer_cr_, x, y, &second_card, true);
     } else if (rendering_engine_ == RenderingEngine::OPENGL) {
         drawCard_gl(second_card, x, y, true);
     }
+#else
+    drawCard(buffer_cr_, x, y, &second_card, true);
+#endif
     
   } else if (!top_card_dragging) {
     // Draw the top card if it's not being dragged
     const auto &top_card = waste_.back();
+#ifdef USEOPENGL
     if( rendering_engine_ == RenderingEngine::CAIRO) {
         drawCard(buffer_cr_, x, y, &top_card, true);
     } else if (rendering_engine_ == RenderingEngine::OPENGL) {
         drawCard_gl(top_card, x, y, true);
     }
+#else
+        drawCard(buffer_cr_, x, y, &top_card, true);
+#endif
   } else {
     // Draw an empty placeholder if top card is being dragged and there are no other cards
+#ifdef USEOPENGL
     if( rendering_engine_ == RenderingEngine::CAIRO) {
         drawEmptyPile(buffer_cr_, x, y);
     } else if( rendering_engine_ == RenderingEngine::CAIRO) {
         drawEmptyPile_gl(x, y);
     }
+#else
+        drawEmptyPile(buffer_cr_, x, y);
+#endif
   }
 }
 
@@ -488,23 +509,33 @@ void SolitaireGame::drawFoundationPiles() {
     // Always draw the empty foundation pile outline
     if( rendering_engine_ == RenderingEngine::CAIRO) {
         drawEmptyPile(buffer_cr_, x, y);
-    } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+    } 
+
+#ifdef USEOPENGL    
+    else if (rendering_engine_ == RenderingEngine::OPENGL) {
         drawEmptyPile_gl(x, y);
     }
+#endif
     const auto &pile = foundation_[i];
     if (!pile.empty()) {
       if (win_animation_active_) {
         if (rendering_engine_ == RenderingEngine::CAIRO) {
             drawFoundationDuringWinAnimation(i, pile, x, y);
-        } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        } 
+#ifdef USEOPENGL
+        else if (rendering_engine_ == RenderingEngine::OPENGL) {
             drawFoundationDuringWinAnimation_gl(i, pile, x, y);
         }
+#endif        
       } else {
         if (rendering_engine_ == RenderingEngine::CAIRO) {
             drawNormalFoundationPile(i, pile, x, y);
-        } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        } 
+#ifdef USEOPENGL        
+        else if (rendering_engine_ == RenderingEngine::OPENGL) {
             drawNormalFoundationPile_gl(i, pile, x, y);
         }
+#endif
       }
     }
     x += current_card_width_ + current_card_spacing_;
@@ -530,9 +561,12 @@ void SolitaireGame::drawTableauPiles() {
         if (pile_data.empty()) {
             if (rendering_engine_ == RenderingEngine::CAIRO) {
                 drawEmptyPile(buffer_cr_, x, y);
-            } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+            } 
+#ifdef USEOPENGL            
+            else if (rendering_engine_ == RenderingEngine::OPENGL) {
                 drawEmptyPile_gl(x, y);
             }
+#endif            
         }
         
         // Handle deal animation or normal rendering
@@ -541,7 +575,10 @@ void SolitaireGame::drawTableauPiles() {
         } else {
             if (rendering_engine_ == RenderingEngine::CAIRO) {
                 drawNormalTableauPile(pile, pile_data, x, y);
-            } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+            } 
+            
+#ifdef USEOPENGL            
+            else if (rendering_engine_ == RenderingEngine::OPENGL) {
                 // Draw cards with drag support for OpenGL
                 for (size_t card_idx = 0; card_idx < pile_data.size(); card_idx++) {
                     // Skip cards that are being dragged from THIS tableau pile
@@ -558,6 +595,7 @@ void SolitaireGame::drawTableauPiles() {
                     drawCard_gl(tc.card, x, card_y, tc.face_up);
                 }
             }
+#endif            
         }
     }
 }
@@ -599,9 +637,12 @@ void SolitaireGame::drawTableauDuringDealAnimation(size_t pile_index, const std:
       int current_y = base_y + j * current_vert_spacing_;
       if (rendering_engine_ == RenderingEngine::CAIRO) {
           drawCard(buffer_cr_, x, current_y, &pile[j].card, pile[j].face_up);
-      } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+      } 
+#ifdef USEOPENGL      
+      else if (rendering_engine_ == RenderingEngine::OPENGL) {
           drawCard_gl(pile[j].card, x, current_y, pile[j].face_up);
       }
+#endif      
     }
   }
 }

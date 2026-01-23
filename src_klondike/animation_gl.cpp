@@ -725,41 +725,27 @@ bool SolitaireGame::reloadCustomCardBackTexture_gl() {
 }
 
 bool SolitaireGame::initializeCardTextures_gl() {
-    std::cerr << "\nDEBUG [initializeCardTextures_gl]: Called\n";
     std::cout << "\nInitializing card textures..." << std::endl;
     
-    std::cerr << "DEBUG [initializeCardTextures_gl]: Validating OpenGL context\n";
     if (!validateOpenGLContext()) {
         std::cerr << "✗ Cannot initialize textures - no OpenGL context available" << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: OpenGL context validation failed, returning false\n";
         return false;
     }
-    std::cerr << "DEBUG [initializeCardTextures_gl]: OpenGL context is valid\n";
     
     try {
         // CRITICAL FIX: Load the actual card back image from the deck
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Getting card back image from deck\n";
         if (auto back_img = deck_.getCardBackImage()) {
-            std::cerr << "DEBUG [initializeCardTextures_gl]: Card back image obtained, size=" << back_img->data.size() << " bytes\n";
             if (!back_img->data.empty()) {
                 std::cout << "  Loading actual card back image from deck..." << std::endl;
-                std::cerr << "DEBUG [initializeCardTextures_gl]: Calling loadTextureFromMemory with " << back_img->data.size() << " bytes\n";
                 cardBackTexture_gl_ = loadTextureFromMemory(back_img->data);
-                std::cerr << "DEBUG [initializeCardTextures_gl]: loadTextureFromMemory returned texture ID " << cardBackTexture_gl_ << "\n";
                 if (cardBackTexture_gl_ != 0) {
                     std::cout << "✓ Card back texture loaded successfully (Texture ID: " 
                               << cardBackTexture_gl_ << ")" << std::endl;
-                    std::cerr << "DEBUG [initializeCardTextures_gl]: Card back texture loaded successfully, returning true\n";
                     return true;
                 } else {
                     std::cerr << "  ⚠ Failed to load card back from memory, creating fallback..." << std::endl;
-                    std::cerr << "DEBUG [initializeCardTextures_gl]: loadTextureFromMemory returned 0, using fallback\n";
                 }
-            } else {
-                std::cerr << "DEBUG [initializeCardTextures_gl]: Card back image data is empty\n";
             }
-        } else {
-            std::cerr << "DEBUG [initializeCardTextures_gl]: Failed to get card back image from deck\n";
         }
         
         // Fallback: Create a placeholder texture if real card back failed to load
@@ -768,73 +754,57 @@ bool SolitaireGame::initializeCardTextures_gl() {
         const int TEX_CHANNELS = 4;
         
         std::cout << "  Creating fallback placeholder texture (" << TEX_WIDTH << "x" << TEX_HEIGHT << ")..." << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Creating fallback texture\n";
         
         // Create a nice gray placeholder instead of pure white
         unsigned char textureData[TEX_WIDTH * TEX_HEIGHT * TEX_CHANNELS];
         memset(textureData, 200, sizeof(textureData)); // Gray color instead of white
         
         GLuint texture = 0;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Calling glGenTextures\n";
         glGenTextures(1, &texture);
-        std::cerr << "DEBUG [initializeCardTextures_gl]: glGenTextures returned texture ID " << texture << "\n";
         
         if (texture == 0) {
             std::cerr << "  ✗ ERROR: Failed to generate texture object" << std::endl;
-            GLenum err = glGetError();
-            std::cerr << "    GL Error: " << err << std::endl;
-            std::cerr << "DEBUG [initializeCardTextures_gl]: glGenTextures failed with error " << err << ", returning false\n";
+            std::cerr << "    GL Error: " << glGetError() << std::endl;
             return false;
         }
         std::cout << "    ✓ Texture object created (ID: " << texture << ")" << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Texture created, now binding\n";
         
         glBindTexture(GL_TEXTURE_2D, texture);
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Texture bound\n";
         
         GLenum err = glGetError();
         if (err != GL_NO_ERROR) {
             std::cerr << "  ✗ ERROR: Failed to bind texture: " << err << std::endl;
             glDeleteTextures(1, &texture);
-            std::cerr << "DEBUG [initializeCardTextures_gl]: Bind failed with error " << err << ", returning false\n";
             return false;
         }
         
         std::cout << "  Setting texture parameters..." << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Setting texture parameters\n";
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Texture parameters set\n";
         
         std::cout << "  Uploading texture data..." << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Uploading " << (TEX_WIDTH * TEX_HEIGHT * TEX_CHANNELS) << " bytes of texture data\n";
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, 
                      GL_RGBA, GL_UNSIGNED_BYTE, textureData);
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Texture data uploaded\n";
         
         err = glGetError();
         if (err != GL_NO_ERROR) {
             std::cerr << "  ✗ ERROR: Failed to upload texture data: " << err << std::endl;
             glDeleteTextures(1, &texture);
-            std::cerr << "DEBUG [initializeCardTextures_gl]: Upload failed with error " << err << ", returning false\n";
             return false;
         }
         
         cardBackTexture_gl_ = texture;
         std::cout << "✓ Card textures initialized successfully (Texture ID: " << texture << ")" << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Fallback texture created successfully, cardBackTexture_gl_=" << cardBackTexture_gl_ << ", returning true\n";
         return true;
         
     } catch (const std::exception &e) {
         std::cerr << "✗ EXCEPTION: Failed to initialize card textures" << std::endl;
         std::cerr << "  What: " << e.what() << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Exception caught: " << e.what() << "\n";
         return false;
     } catch (...) {
         std::cerr << "✗ UNKNOWN EXCEPTION: Failed to initialize card textures" << std::endl;
-        std::cerr << "DEBUG [initializeCardTextures_gl]: Unknown exception caught\n";
         return false;
     }
 }

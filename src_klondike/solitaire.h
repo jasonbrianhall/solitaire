@@ -478,7 +478,9 @@ private:
 
   unsigned int current_seed_;
   void drawEmptyPile(cairo_t *cr, int x, int y);
+#ifdef USEOPENGL
   void drawEmptyPile_gl(int x, int y);
+#endif
   
   // Track if game is fully initialized (used to prevent GL rendering before game state is ready)
   bool game_fully_initialized_ = false;

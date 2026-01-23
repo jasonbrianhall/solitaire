@@ -184,105 +184,58 @@ bool SolitaireGame::initializeRenderingEngine() {
 }
 
 bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
-  std::cerr << "\n===== SWITCH ENGINE START =====\n";
-  std::cerr << "DEBUG [switchRenderingEngine]: Called with newEngine=" << (newEngine == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-  
   #ifndef USEOPENGL
-  std::cerr << "DEBUG [switchRenderingEngine]: USEOPENGL not defined\n";
   if (newEngine == RenderingEngine::OPENGL) {
-    std::cerr << "DEBUG [switchRenderingEngine]: OpenGL requested but not compiled in, returning false\n";
     return false;
   }
-  #else
-  std::cerr << "DEBUG [switchRenderingEngine]: USEOPENGL is defined\n";
   #endif
 
-  std::cerr << "DEBUG [switchRenderingEngine]: current rendering_engine_=" << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-
   if (newEngine == rendering_engine_) {
-    std::cerr << "DEBUG [switchRenderingEngine]: Already using that engine, returning\n";
     return true;
   }
 
   #ifdef __linux__
-  std::cerr << "DEBUG [switchRenderingEngine]: Running on Linux\n";
-  
   if (!rendering_stack_) {
-    std::cerr << "ERROR [switchRenderingEngine]: rendering_stack_ is NULL!\n";
     std::cout << "Rendering stack not initialized" << std::endl;
     return false;
   }
-  std::cerr << "DEBUG [switchRenderingEngine]: rendering_stack_ is valid (" << (void*)rendering_stack_ << ")\n";
-  
-  // Check widgets exist
-  std::cerr << "DEBUG [switchRenderingEngine]: game_area_=" << (game_area_ ? "valid" : "NULL") << " (" << (void*)game_area_ << ")\n";
-  std::cerr << "DEBUG [switchRenderingEngine]: gl_area_=" << (gl_area_ ? "valid" : "NULL") << " (" << (void*)gl_area_ << ")\n";
   
   // MARK CACHE AS DIRTY - Force complete cache rebuild when switching engines
   cache_dirty_ = true;
-  std::cerr << "DEBUG [switchRenderingEngine]: Marked cache as dirty (cache_dirty_ = " << cache_dirty_ << ")\n";
   
   // Switch rendering engine
   rendering_engine_ = newEngine;
-  std::cerr << "DEBUG [switchRenderingEngine]: Set rendering_engine_ to " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
   
   if (newEngine == RenderingEngine::OPENGL) {
-    std::cerr << "DEBUG [switchRenderingEngine]: Setting cairo_initialized_ = false, opengl_initialized_ = true (switching to OpenGL)\n";
     cairo_initialized_ = false;
-    opengl_initialized_ = true;  // ✅ THIS WAS MISSING! SET IT TO TRUE!
-    // opengl_initialized will be set when GL resources are ready
+    opengl_initialized_ = true;  // ✅ CRITICAL FIX: Must set to true for rendering to work
   } else {
-    std::cerr << "DEBUG [switchRenderingEngine]: Setting opengl_initialized_ = false, cairo_initialized_ = true (switching to Cairo)\n";
     opengl_initialized_ = false;
     cairo_initialized_ = true;
   }
   
   // Use GtkStack to switch - this preserves GL context
   const char *view = (newEngine == RenderingEngine::OPENGL) ? "opengl" : "cairo";
-  std::cerr << "DEBUG [switchRenderingEngine]: Calling gtk_stack_set_visible_child_name with view='" << view << "'\n";
   gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), view);
   
-  GtkWidget *visible_after_switch = gtk_stack_get_visible_child(GTK_STACK(rendering_stack_));
-  std::cerr << "DEBUG [switchRenderingEngine]: After stack switch, visible child=" << (visible_after_switch ? "valid" : "NULL") << " (" << (void*)visible_after_switch << ")\n";
-  if (visible_after_switch == game_area_) {
-    std::cerr << "DEBUG [switchRenderingEngine]: Visible widget is game_area_ (Cairo)\n";
-  } else if (visible_after_switch == gl_area_) {
-    std::cerr << "DEBUG [switchRenderingEngine]: Visible widget is gl_area_ (OpenGL)\n";
-  } else {
-    std::cerr << "ERROR [switchRenderingEngine]: Visible widget is neither game_area_ nor gl_area_!\n";
-  }
-  
   rendering_engine_ = newEngine;
-  std::cerr << "DEBUG [switchRenderingEngine]: Confirmed rendering_engine_=" << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
   
   // Grab focus to the new widget
   GtkWidget *current_widget = gtk_stack_get_visible_child(GTK_STACK(rendering_stack_));
   if (current_widget) {
-    std::cerr << "DEBUG [switchRenderingEngine]: Got current widget (" << (void*)current_widget << "), grabbing focus\n";
     gtk_widget_grab_focus(current_widget);
-    std::cerr << "DEBUG [switchRenderingEngine]: Focus grabbed, queuing draw\n";
     gtk_widget_queue_draw(current_widget);
-    std::cerr << "DEBUG [switchRenderingEngine]: Draw queued on widget\n";
-  } else {
-    std::cerr << "ERROR [switchRenderingEngine]: current_widget is NULL, cannot grab focus or queue draw!\n";
   }
   
   // CLEAR AND REBUILD ALL CACHES - Forces complete redraw of entire screen
-  std::cerr << "DEBUG [switchRenderingEngine]: About to call clearAndRebuildCaches()\n";
   clearAndRebuildCaches();
-  std::cerr << "DEBUG [switchRenderingEngine]: clearAndRebuildCaches() completed\n";
   
-  std::cerr << "DEBUG [switchRenderingEngine]: About to call refreshDisplay()\n";
   refreshDisplay();
-  std::cerr << "DEBUG [switchRenderingEngine]: refreshDisplay() completed\n";
   
-  std::cerr << "DEBUG [switchRenderingEngine]: Saving engine preference\n";
   saveEnginePreference();
   std::cout << "Switched to " << getRenderingEngineName() << std::endl;
-  std::cerr << "===== SWITCH ENGINE SUCCESS =====\n\n";
   return true;
   #else
-  std::cerr << "ERROR [switchRenderingEngine]: Not running on Linux\n";
   return false;
   #endif
 }
@@ -330,10 +283,6 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
 gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
   (void)context;
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
-  
-  std::cerr << "DEBUG [onGLRender]: Called, rendering_engine_=" 
-            << (game->rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") 
-            << ", opengl_initialized_=" << game->opengl_initialized_ << "\n";
   
   // Ensure GL context is current before calling GL functions
   gtk_gl_area_make_current(area);
@@ -1220,35 +1169,14 @@ bool SolitaireGame::checkWinCondition() const {
 
 // Function to refresh the display
 void SolitaireGame::refreshDisplay() {
-  std::cerr << "DEBUG [refreshDisplay]: Called\n";
-  std::cerr << "DEBUG [refreshDisplay]: rendering_engine_=" << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-  
   // FIX: Refresh the correct widget based on the active rendering engine
   if (rendering_engine_ == RenderingEngine::OPENGL) {
-    std::cerr << "DEBUG [refreshDisplay]: Engine is OpenGL\n";
     if (gl_area_) {
-      std::cerr << "DEBUG [refreshDisplay]: gl_area_ is valid (" << (void*)gl_area_ << "), queuing draw\n";
-      GtkAllocation alloc;
-      gtk_widget_get_allocation(gl_area_, &alloc);
-      std::cerr << "DEBUG [refreshDisplay]: gl_area allocation: " << alloc.width << "x" << alloc.height << " at (" << alloc.x << "," << alloc.y << ")\n";
-      
       gtk_widget_queue_draw(gl_area_);
-      std::cerr << "DEBUG [refreshDisplay]: Draw queued for gl_area_\n";
-    } else {
-      std::cerr << "ERROR [refreshDisplay]: gl_area_ is NULL!\n";
     }
   } else {
-    std::cerr << "DEBUG [refreshDisplay]: Engine is Cairo\n";
     if (game_area_) {
-      std::cerr << "DEBUG [refreshDisplay]: game_area_ is valid (" << (void*)game_area_ << "), queuing draw\n";
-      GtkAllocation alloc;
-      gtk_widget_get_allocation(game_area_, &alloc);
-      std::cerr << "DEBUG [refreshDisplay]: game_area allocation: " << alloc.width << "x" << alloc.height << " at (" << alloc.x << "," << alloc.y << ")\n";
-      
       gtk_widget_queue_draw(game_area_);
-      std::cerr << "DEBUG [refreshDisplay]: Draw queued for game_area_\n";
-    } else {
-      std::cerr << "ERROR [refreshDisplay]: game_area_ is NULL!\n";
     }
   }
 }
