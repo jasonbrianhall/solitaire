@@ -944,7 +944,7 @@ GLuint FreecellGame::setupShaders_gl() {
     return program;
 }
 
-GLuint compileShader_gl(const char *source, GLenum shaderType) {
+static GLuint compileShader_gl_static(const char *source, GLenum shaderType) {
     std::cout << "  Compiling " << (shaderType == GL_VERTEX_SHADER ? "VERTEX" : "FRAGMENT") 
               << " shader..." << std::endl;
     
@@ -984,7 +984,7 @@ GLuint compileShader_gl(const char *source, GLenum shaderType) {
     return shader;
 }
 
-GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
+GLuint FreecellGame::createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
     std::cout << "Creating shader program..." << std::endl;
     
     if (glGetString(GL_VERSION) == nullptr) {
@@ -992,13 +992,13 @@ GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
         return 0;
     }
     
-    GLuint vertexShader = compileShader_gl(vertexSrc, GL_VERTEX_SHADER);
+    GLuint vertexShader = compileShader_gl_static(vertexSrc, GL_VERTEX_SHADER);
     if (vertexShader == 0) {
         std::cerr << "  ✗ Failed to compile vertex shader" << std::endl;
         return 0;
     }
     
-    GLuint fragmentShader = compileShader_gl(fragmentSrc, GL_FRAGMENT_SHADER);
+    GLuint fragmentShader = compileShader_gl_static(fragmentSrc, GL_FRAGMENT_SHADER);
     if (fragmentShader == 0) {
         std::cerr << "  ✗ Failed to compile fragment shader" << std::endl;
         glDeleteShader(vertexShader);
@@ -1039,7 +1039,7 @@ GLuint createShaderProgram_gl(const char *vertexSrc, const char *fragmentSrc) {
     return program;
 }
 
-GLuint loadTextureFromMemory(const std::vector<unsigned char> &data) {
+GLuint FreecellGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
     if (data.empty()) {
         std::cerr << "  ✗ Error: Empty image data provided to loadTextureFromMemory" << std::endl;
         return 0;
