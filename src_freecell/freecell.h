@@ -398,6 +398,13 @@ private:
   static gboolean onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data);
 #endif
 
+
+  std::string custom_back_path_;
+  void drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawEmptyPile_gl(int x, int y);
+
+
   // Initialize OpenGL resources
   bool initializeOpenGLResources();
 
@@ -407,6 +414,26 @@ private:
 
   // Track if game is fully initialized
   bool game_fully_initialized_ = false;
+  void drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up);
+  bool validateOpenGLContext();
+  void highlightSelectedCard_gl();
+  static gboolean onAutoFinishTick_gl(gpointer data);
+  void processNextAutoFinishMove_gl();
+  bool initializeGLEW();
+  bool checkOpenGLCapabilities();
+  void logOpenGLInfo();
+  bool initializeRenderingEngine_gl();
+  GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
+  bool reloadCustomCardBackTexture_gl();
+
+  
+  void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
+  void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
+  void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
 };
 
 #endif // FREECELL_H

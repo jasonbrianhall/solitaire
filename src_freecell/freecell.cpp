@@ -1326,51 +1326,6 @@ void FreecellGame::clearAndRebuildCaches() {
 // Note: Full implementations should follow the solitaire.cpp pattern
 
 #ifdef USEOPENGL
-GLuint FreecellGame::setupShaders_gl() {
-  // TODO: Implement shader compilation
-  // See solitaire.cpp for complete implementation
-  return 0;
-}
-
-GLuint FreecellGame::setupCardQuadVAO_gl() {
-  // TODO: Implement VAO setup
-  // See solitaire.cpp for complete implementation
-  return 0;
-}
-
-bool FreecellGame::initializeCardTextures_gl() {
-  // TODO: Implement texture loading
-  // See solitaire.cpp for complete implementation
-  return false;
-}
-
-void FreecellGame::cleanupOpenGLResources_gl() {
-  // TODO: Implement cleanup
-}
-
-void FreecellGame::renderFrame_gl() {
-  // TODO: Implement frame rendering
-  // See solitaire.cpp for complete implementation
-}
-
-void FreecellGame::startWinAnimation_gl() {}
-void FreecellGame::updateWinAnimation_gl() {}
-void FreecellGame::stopWinAnimation_gl() {}
-void FreecellGame::launchNextCard_gl() {}
-void FreecellGame::explodeCard_gl(AnimatedCard &card) { (void)card; }
-void FreecellGame::updateCardFragments_gl(AnimatedCard &card) { (void)card; }
-void FreecellGame::startDealAnimation_gl() {}
-void FreecellGame::updateDealAnimation_gl() {}
-gboolean FreecellGame::onDealAnimationTick_gl(gpointer data) { (void)data; return FALSE; }
-void FreecellGame::dealNextCard_gl() {}
-void FreecellGame::completeDeal_gl() {}
-void FreecellGame::stopDealAnimation_gl() {}
-void FreecellGame::startFoundationMoveAnimation_gl(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
-  (void)card; (void)source_pile; (void)source_index; (void)target_pile;
-}
-void FreecellGame::updateFoundationMoveAnimation_gl() {}
-gboolean FreecellGame::onFoundationMoveAnimationTick_gl(gpointer data) { (void)data; return FALSE; }
-void FreecellGame::draw_comet_buster_gl(void *vis_ptr, void *other) { (void)vis_ptr; (void)other; }
 void FreecellGame::renderFrame() {
   if (rendering_engine_ == RenderingEngine::OPENGL) {
     #ifdef USEOPENGL

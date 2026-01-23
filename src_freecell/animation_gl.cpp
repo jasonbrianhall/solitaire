@@ -68,7 +68,7 @@ static const char *FRAGMENT_SHADER_SIMPLE_GL = R"(
 // CONTEXT VALIDATION AND INITIALIZATION FUNCTIONS
 // ============================================================================
 
-bool SolitaireGame::validateOpenGLContext() {
+bool FreecellGame::validateOpenGLContext() {
     const GLubyte *version = glGetString(GL_VERSION);
     
     if (version == nullptr) {
@@ -89,7 +89,7 @@ bool SolitaireGame::validateOpenGLContext() {
     return true;
 }
 
-bool SolitaireGame::initializeGLEW() {
+bool FreecellGame::initializeGLEW() {
     if (is_glew_initialized_) {
         std::cout << "✓ GLEW Already Initialized" << std::endl;
         return true;
@@ -121,7 +121,7 @@ bool SolitaireGame::initializeGLEW() {
     return true;
 }
 
-bool SolitaireGame::checkOpenGLCapabilities() {
+bool FreecellGame::checkOpenGLCapabilities() {
     std::cout << "\nChecking OpenGL Capabilities..." << std::endl;
     
     if (!validateOpenGLContext()) {
@@ -176,7 +176,7 @@ bool SolitaireGame::checkOpenGLCapabilities() {
     return true;
 }
 
-void SolitaireGame::logOpenGLInfo() {
+void FreecellGame::logOpenGLInfo() {
     std::cout << "\n" << std::string(70, '-') << std::endl;
     std::cout << "GPU INFORMATION" << std::endl;
     std::cout << std::string(70, '-') << std::endl;
@@ -314,7 +314,7 @@ static const unsigned int QUAD_INDICES_GL[] = {
     2, 3, 0
 };
 
-void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
+void FreecellGame::explodeCard_gl(AnimatedCard &card) {
     card.exploded = true;
     playSound(GameSoundEvent::Firework);
 
@@ -379,7 +379,7 @@ void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
 // Drawing Functions - OpenGL Version
 // ============================================================================
 
-void SolitaireGame::drawAnimatedCard_gl(const AnimatedCard &anim_card,
+void FreecellGame::drawAnimatedCard_gl(const AnimatedCard &anim_card,
                                         GLuint shaderProgram,
                                         GLuint VAO) {
     if (!anim_card.active)
@@ -435,7 +435,7 @@ void SolitaireGame::drawAnimatedCard_gl(const AnimatedCard &anim_card,
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void SolitaireGame::drawCardFragment_gl(const CardFragment &fragment,
+void FreecellGame::drawCardFragment_gl(const CardFragment &fragment,
                                         const AnimatedCard &card,
                                         GLuint shaderProgram,
                                         GLuint VAO) {
@@ -498,7 +498,7 @@ void SolitaireGame::drawCardFragment_gl(const CardFragment &fragment,
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void SolitaireGame::drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO) {
+void FreecellGame::drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO) {
     for (const auto &anim_card : animated_cards_) {
         if (!anim_card.active)
             continue;
@@ -515,7 +515,7 @@ void SolitaireGame::drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO) {
     }
 }
 
-void SolitaireGame::drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO) {
+void FreecellGame::drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO) {
     for (const auto &anim_card : deal_cards_) {
         if (anim_card.active) {
             drawAnimatedCard_gl(anim_card, shaderProgram, VAO);
@@ -523,15 +523,9 @@ void SolitaireGame::drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO) {
     }
 }
 
-void SolitaireGame::drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO) {
+void FreecellGame::drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO) {
     if (foundation_move_animation_active_) {
         drawAnimatedCard_gl(foundation_move_card_, shaderProgram, VAO);
-    }
-}
-
-void SolitaireGame::drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO) {
-    if (stock_to_waste_animation_active_) {
-        drawAnimatedCard_gl(stock_to_waste_card_, shaderProgram, VAO);
     }
 }
 
@@ -539,7 +533,7 @@ void SolitaireGame::drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VA
 // OpenGL Drag and Drop Support - CRITICAL FIX
 // ============================================================================
 
-void SolitaireGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
+void FreecellGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
     // Draw cards being dragged  
     if (dragging_ && !drag_cards_.empty()) {
         int drag_x = static_cast<int>(drag_start_x_ - drag_offset_x_);
@@ -556,7 +550,7 @@ void SolitaireGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
 // OpenGL Setup Functions
 // ============================================================================
 
-GLuint SolitaireGame::setupCardQuadVAO_gl() {
+GLuint FreecellGame::setupCardQuadVAO_gl() {
     std::cout << "\nSetting up card quad VAO..." << std::endl;
     
     if (!validateOpenGLContext()) {
@@ -651,7 +645,7 @@ GLuint SolitaireGame::setupCardQuadVAO_gl() {
     return VAO;
 }
 
-GLuint SolitaireGame::setupShaders_gl() {
+GLuint FreecellGame::setupShaders_gl() {
     std::cout << "\nSetting up shaders..." << std::endl;
     
     if (!validateOpenGLContext()) {
@@ -670,7 +664,7 @@ GLuint SolitaireGame::setupShaders_gl() {
     return program;
 }
 
-bool SolitaireGame::reloadCustomCardBackTexture_gl() {
+bool FreecellGame::reloadCustomCardBackTexture_gl() {
     if (custom_back_path_.empty()) {
         std::cerr << "ERROR: No custom back path set" << std::endl;
         return false;
@@ -724,7 +718,7 @@ bool SolitaireGame::reloadCustomCardBackTexture_gl() {
     }
 }
 
-bool SolitaireGame::initializeCardTextures_gl() {
+bool FreecellGame::initializeCardTextures_gl() {
     std::cout << "\nInitializing card textures..." << std::endl;
     
     if (!validateOpenGLContext()) {
@@ -809,7 +803,7 @@ bool SolitaireGame::initializeCardTextures_gl() {
     }
 }
 
-bool SolitaireGame::initializeRenderingEngine_gl() {
+bool FreecellGame::initializeRenderingEngine_gl() {
     std::cout << "\n" << std::string(70, '=') << std::endl;
     std::cout << "INITIALIZING RENDERING ENGINE" << std::endl;
     std::cout << std::string(70, '=') << std::endl;
@@ -895,7 +889,7 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
 // GL DRAWING FUNCTIONS FOR GAME PILES
 // ============================================================================
 
-GLuint SolitaireGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
+GLuint FreecellGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
     if (data.empty()) return 0;
     
     // Decode PNG from memory
@@ -927,7 +921,7 @@ GLuint SolitaireGame::loadTextureFromMemory(const std::vector<unsigned char> &da
     return texture;
 }
 
-void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up) {
+void FreecellGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up) {
     static int count = 0;
     if (count++ == 0) fprintf(stderr, "[GL] DRAWING CARDS NOW\n");
     
@@ -988,7 +982,7 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
 }
 
 // Draw foundation pile during win animation
-void SolitaireGame::drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+void FreecellGame::drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
   // Only draw the topmost non-animated card
   for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
     if (!animated_foundation_cards_[pile_index][j]) {
@@ -999,7 +993,7 @@ void SolitaireGame::drawFoundationDuringWinAnimation_gl(size_t pile_index, const
 }
 
 // Draw foundation pile during normal gameplay
-void SolitaireGame::drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+void FreecellGame::drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
   // Check if the top card is being dragged from foundation
   bool top_card_dragging =
       (dragging_ && drag_source_pile_ == pile_index + 2 &&
@@ -1018,7 +1012,7 @@ void SolitaireGame::drawNormalFoundationPile_gl(size_t pile_index, const std::ve
 }
 
 // Helper function to draw empty pile placeholders (light gray rectangle like Cairo)
-void SolitaireGame::drawEmptyPile_gl(int x, int y) {
+void FreecellGame::drawEmptyPile_gl(int x, int y) {
     // Draw light gray rectangle placeholder for empty pile
     // This matches Cairo's appearance exactly: RGBA(0.85, 0.85, 0.85, 0.5)
     
@@ -1071,7 +1065,7 @@ void SolitaireGame::drawEmptyPile_gl(int x, int y) {
 }
 
 // Helper function to draw a highlighted rectangle around selected cards
-void SolitaireGame::highlightSelectedCard_gl() {
+/*void FreecellGame::highlightSelectedCard_gl() {
   if (!keyboard_navigation_active_ || selected_pile_ == -1) {
     return;
   }
@@ -1110,8 +1104,9 @@ void SolitaireGame::highlightSelectedCard_gl() {
       return;
     }
   }
-
+*/
   // Determine position based on pile type (matching Cairo logic)
+/*
   if (selected_pile_ == 0) {
     // Stock pile
     x = current_card_spacing_;
@@ -1353,10 +1348,11 @@ void SolitaireGame::highlightSelectedCard_gl() {
     
     // Disable blending
     glDisable(GL_BLEND);
-}
+    
+}*/
 
-void SolitaireGame::renderFrame_gl() {
-    if (!game_fully_initialized_) {
+void FreecellGame::renderFrame_gl() {
+    /*if (!game_fully_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return;
@@ -1380,7 +1376,7 @@ void SolitaireGame::renderFrame_gl() {
         prev_height = allocation.height;
         first = false;
     }
-    
+    */
     // Clear screen
     glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1407,16 +1403,17 @@ void SolitaireGame::renderFrame_gl() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     // Draw all game piles
-    drawStockPile();
+    /*drawStockPile();
     drawWastePile();
     drawFoundationPiles();
     drawTableauPiles();
+    */
     
     // Disable blending after drawing
     glDisable(GL_BLEND);
     
     // Draw animations if active
-    if (win_animation_active_) {
+    /*if (win_animation_active_) {
         drawWinAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
     if (deal_animation_active_) {
@@ -1427,35 +1424,35 @@ void SolitaireGame::renderFrame_gl() {
     }
     if (stock_to_waste_animation_active_) {
         drawStockToWasteAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
-    }
+    }*/
     
     // Draw dragged cards overlay - CRITICAL FIX FOR DRAG VISUALIZATION
     drawDraggedCards_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     
     // Draw keyboard navigation highlight if active (matching Cairo behavior)
-    if (keyboard_navigation_active_ && !dragging_ &&
+    /*if (keyboard_navigation_active_ && !dragging_ &&
         !deal_animation_active_ && !win_animation_active_ &&
         !foundation_move_animation_active_ &&
         !stock_to_waste_animation_active_) {
         highlightSelectedCard_gl();
-    }
+    }*/
 }
 
 // ============================================================================
 // Auto-Finish Animation - OpenGL 3.4 Version
 // ============================================================================
 
-gboolean SolitaireGame::onAutoFinishTick_gl(gpointer data) {
+/*gboolean FreecellGame::onAutoFinishTick_gl(gpointer data) {
     SolitaireGame *game = static_cast<SolitaireGame *>(data);
     game->processNextAutoFinishMove_gl();
     return game->auto_finish_active_ ? TRUE : FALSE;
-}
+}*/
 
-void SolitaireGame::processNextAutoFinishMove_gl() {
+void FreecellGame::processNextAutoFinishMove_gl() {
     // Placeholder for auto-finish logic
 }
 
-void SolitaireGame::cleanupOpenGLResources_gl() {
+void FreecellGame::cleanupOpenGLResources_gl() {
     if (cardShaderProgram_gl_ != 0) {
         glDeleteProgram(cardShaderProgram_gl_);
         cardShaderProgram_gl_ = 0;
