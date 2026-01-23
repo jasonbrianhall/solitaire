@@ -39,6 +39,8 @@ struct CardFragment {
   double velocity_y;
   double rotation;
   double rotation_velocity;
+  double target_x;  // UV coordinate X for texture mapping
+  double target_y;  // UV coordinate Y for texture mapping
   cairo_surface_t *surface;
   bool active;
 };
@@ -212,9 +214,9 @@ private:
 #ifdef USEOPENGL
   void setupOpenGLArea();
   bool initializeOpenGLResources();
-  bool initializeGLEW();
-  bool checkOpenGLCapabilities();
-  void logOpenGLInfo();
+  bool initializeGLEW_gl();
+  bool checkOpenGLCapabilities_gl();
+  void logOpenGLInfo_gl();
 #endif
 
   GtkWidget *createCardWidget(const cardlib::Card &card, bool face_up);
@@ -283,16 +285,29 @@ private:
   void drawTableauPiles_gl();
   void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
   
+  void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void highlightSelectedCard_gl();
+  void explodeCard_gl(AnimatedCard &card);
+  
   void renderFrame_gl();
   
+  bool initializeRenderingEngine_gl();
   GLuint setupShaders_gl();
   GLuint setupCardQuadVAO_gl();
   bool initializeCardTextures_gl();
   bool loadCardTexture_gl(const std::string &cardKey, const cardlib::Card &card);
   void cleanupOpenGLResources_gl();
-  bool validateOpenGLContext();
+  bool validateOpenGLContext_gl();
   bool reloadCustomCardBackTexture_gl();
   GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
+  
+  gboolean onAutoFinishTick_gl(gpointer data);
+  void processNextAutoFinishMove_gl();
 
   // OpenGL 3.4 Rendering Components
   GLuint cardShaderProgram_gl_ = 0;      // Main card rendering shader

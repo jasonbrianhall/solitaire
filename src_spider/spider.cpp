@@ -2489,15 +2489,15 @@ void SolitaireGame::setupOpenGLArea() {
 }
 
 bool SolitaireGame::initializeOpenGLResources() {
-  if (!initializeGLEW()) {
+  if (!initializeGLEW_gl()) {
     return false;
   }
   
-  if (!checkOpenGLCapabilities()) {
+  if (!checkOpenGLCapabilities_gl()) {
     return false;
   }
   
-  logOpenGLInfo();
+  logOpenGLInfo_gl();
   
   if (!initializeCardTextures_gl()) {
     return false;

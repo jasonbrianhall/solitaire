@@ -1,4 +1,4 @@
-#include "solitaire.h"
+#include "spider.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -68,7 +68,7 @@ static const char *FRAGMENT_SHADER_SIMPLE_GL = R"(
 // CONTEXT VALIDATION AND INITIALIZATION FUNCTIONS
 // ============================================================================
 
-bool SolitaireGame::validateOpenGLContext() {
+bool SolitaireGame::validateOpenGLContext_gl() {
     const GLubyte *version = glGetString(GL_VERSION);
     
     if (version == nullptr) {
@@ -89,13 +89,13 @@ bool SolitaireGame::validateOpenGLContext() {
     return true;
 }
 
-bool SolitaireGame::initializeGLEW() {
+bool SolitaireGame::initializeGLEW_gl() {
     if (is_glew_initialized_) {
         std::cout << "✓ GLEW Already Initialized" << std::endl;
         return true;
     }
     
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         std::cerr << "ERROR: Cannot initialize GLEW without OpenGL context" << std::endl;
         return false;
     }
@@ -121,10 +121,10 @@ bool SolitaireGame::initializeGLEW() {
     return true;
 }
 
-bool SolitaireGame::checkOpenGLCapabilities() {
+bool SolitaireGame::checkOpenGLCapabilities_gl() {
     std::cout << "\nChecking OpenGL Capabilities..." << std::endl;
     
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         return false;
     }
     
@@ -172,11 +172,11 @@ bool SolitaireGame::checkOpenGLCapabilities() {
     }
     std::cout << "    ✓ ARB_fragment_shader" << std::endl;
     
-    logOpenGLInfo();
+    logOpenGLInfo_gl();
     return true;
 }
 
-void SolitaireGame::logOpenGLInfo() {
+void SolitaireGame::logOpenGLInfo_gl() {
     std::cout << "\n" << std::string(70, '-') << std::endl;
     std::cout << "GPU INFORMATION" << std::endl;
     std::cout << std::string(70, '-') << std::endl;
@@ -316,7 +316,7 @@ static const unsigned int QUAD_INDICES_GL[] = {
 
 void SolitaireGame::explodeCard_gl(AnimatedCard &card) {
     card.exploded = true;
-    playSound(GameSoundEvent::Firework);
+    //playSound(GameSoundEvent::Firework);
 
     card.fragments.clear();
 
@@ -559,7 +559,7 @@ void SolitaireGame::drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO) {
 GLuint SolitaireGame::setupCardQuadVAO_gl() {
     std::cout << "\nSetting up card quad VAO..." << std::endl;
     
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         std::cerr << "✗ Cannot setup VAO - no OpenGL context available" << std::endl;
         return 0;
     }
@@ -654,7 +654,7 @@ GLuint SolitaireGame::setupCardQuadVAO_gl() {
 GLuint SolitaireGame::setupShaders_gl() {
     std::cout << "\nSetting up shaders..." << std::endl;
     
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         std::cerr << "✗ Cannot setup shaders - no OpenGL context available" << std::endl;
         return 0;
     }
@@ -676,7 +676,7 @@ bool SolitaireGame::reloadCustomCardBackTexture_gl() {
         return false;
     }
 
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         std::cerr << "ERROR: No OpenGL context available for custom back texture" << std::endl;
         return false;
     }
@@ -727,7 +727,7 @@ bool SolitaireGame::reloadCustomCardBackTexture_gl() {
 bool SolitaireGame::initializeCardTextures_gl() {
     std::cout << "\nInitializing card textures..." << std::endl;
     
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         std::cerr << "✗ Cannot initialize textures - no OpenGL context available" << std::endl;
         return false;
     }
@@ -822,7 +822,7 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
     
     std::cout << "Initializing OpenGL rendering engine..." << std::endl;
     std::cout << "\n[STEP 1/5] Validating OpenGL context..." << std::endl;
-    if (!validateOpenGLContext()) {
+    if (!validateOpenGLContext_gl()) {
         std::cerr << "✗ FATAL: OpenGL context validation failed" << std::endl;
         std::cerr << "Falling back to Cairo mode" << std::endl;
         rendering_engine_ = RenderingEngine::CAIRO;
@@ -832,7 +832,7 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
     std::cout << "✓ Context validated" << std::endl;
     
     std::cout << "\n[STEP 2/5] Initializing GLEW..." << std::endl;
-    if (!initializeGLEW()) {
+    if (!initializeGLEW_gl()) {
         std::cerr << "✗ FATAL: GLEW initialization failed" << std::endl;
         std::cerr << "Falling back to Cairo mode" << std::endl;
         rendering_engine_ = RenderingEngine::CAIRO;
@@ -842,7 +842,7 @@ bool SolitaireGame::initializeRenderingEngine_gl() {
     std::cout << "✓ GLEW initialized" << std::endl;
     
     std::cout << "\n[STEP 3/5] Checking GPU capabilities..." << std::endl;
-    if (!checkOpenGLCapabilities()) {
+    if (!checkOpenGLCapabilities_gl()) {
         std::cerr << "✗ FATAL: GPU does not meet minimum requirements (OpenGL 3.3+)" << std::endl;
         std::cerr << "Falling back to Cairo mode" << std::endl;
         rendering_engine_ = RenderingEngine::CAIRO;
@@ -1356,7 +1356,7 @@ void SolitaireGame::highlightSelectedCard_gl() {
 }
 
 void SolitaireGame::renderFrame_gl() {
-    if (!game_fully_initialized_) {
+    if (!opengl_initialized_) {
         glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return;
@@ -1407,10 +1407,10 @@ void SolitaireGame::renderFrame_gl() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     // Draw all game piles
-    drawStockPile();
-    drawWastePile();
-    drawFoundationPiles();
-    drawTableauPiles();
+    //drawStockPile_gl();
+    //drawWastePile_gl();
+    //drawFoundationPiles_gl();
+    //drawTableauPiles_gl();
     
     // Disable blending after drawing
     glDisable(GL_BLEND);
