@@ -434,3 +434,47 @@ void SolitaireGame::drawStockPile() {
       }
    }
 }
+
+// Draw the waste pile (cards drawn from stock)
+void SolitaireGame::drawWastePile() {
+  int x = current_card_spacing_ + current_card_width_ + current_card_spacing_;
+  int y = current_card_spacing_;
+  
+  if (waste_.empty()) {
+    drawEmptyPile(buffer_cr_, x, y);
+    return;
+  }
+  
+  // Check if the top card is being dragged
+  bool top_card_dragging =
+      (dragging_ && drag_source_pile_ == 1 &&
+       drag_cards_.size() == 1 && waste_.size() >= 1 &&
+       drag_cards_[0].suit == waste_.back().suit &&
+       drag_cards_[0].rank == waste_.back().rank);
+
+  if (top_card_dragging && waste_.size() > 1) {
+    // Draw the second-to-top card
+    const auto &second_card = waste_[waste_.size() - 2];
+    if (rendering_engine_ == RenderingEngine::CAIRO) {
+        drawCard(buffer_cr_, x, y, &second_card, true);
+    } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(second_card, x, y, true);
+    }
+    
+  } else if (!top_card_dragging) {
+    // Draw the top card if it's not being dragged
+    const auto &top_card = waste_.back();
+    if( rendering_engine_ == RenderingEngine::CAIRO) {
+        drawCard(buffer_cr_, x, y, &top_card, true);
+    } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(top_card, x, y, true);
+    }
+  } else {
+    // Draw an empty placeholder if top card is being dragged and there are no other cards
+    if( rendering_engine_ == RenderingEngine::CAIRO) {
+        drawEmptyPile(buffer_cr_, x, y);
+    } else if( rendering_engine_ == RenderingEngine::CAIRO) {
+        drawEmptyPile_gl(x, y);
+    }
+  }
+}

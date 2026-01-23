@@ -987,35 +987,6 @@ void SolitaireGame::drawCard_gl(const cardlib::Card &card, int x, int y, bool fa
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void SolitaireGame::drawWastePile_gl() {
-    int x = current_card_spacing_ + (current_card_width_ + current_card_spacing_);
-    int y = current_card_spacing_;
-    
-    if (waste_.empty()) {
-        // Draw empty waste pile placeholder
-        drawEmptyPile_gl(x, y);
-        return;
-    }
-    
-    // Check if the top card is being dragged
-    bool top_card_dragging =
-        (dragging_ && drag_source_pile_ == 1 &&
-         drag_cards_.size() == 1 && waste_.size() >= 1 &&
-         drag_cards_[0].suit == waste_.back().suit &&
-         drag_cards_[0].rank == waste_.back().rank);
-
-    if (top_card_dragging && waste_.size() > 1) {
-        // Draw the second-to-top card (reveal it when top is dragged)
-        const auto &second_card = waste_[waste_.size() - 2];
-        drawCard_gl(second_card, x, y, true);
-    } else if (!top_card_dragging) {
-        // Draw the top card if it's not being dragged
-        const auto &top_card = waste_.back();
-        drawCard_gl(top_card, x, y, true);
-    }
-    // If top card is being dragged and there are no other cards, draw nothing (empty placeholder)
-}
-
 void SolitaireGame::drawFoundationPiles_gl() {
   int x = 3 * (current_card_width_ + current_card_spacing_);
   int y = current_card_spacing_;
@@ -1492,7 +1463,7 @@ void SolitaireGame::renderFrame_gl() {
     
     // Draw all game piles
     drawStockPile();
-    drawWastePile_gl();
+    drawWastePile();
     drawFoundationPiles_gl();
     drawTableauPiles_gl();
     
