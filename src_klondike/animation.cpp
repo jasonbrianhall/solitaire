@@ -512,31 +512,54 @@ void SolitaireGame::drawFoundationPiles() {
 }
 
 // Draw the tableau piles (the main playing area)
-void SolitaireGame::drawTableauPiles() { 
-   const int tableau_base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-
-  for (size_t i = 0; i < tableau_.size(); i++) {
-    int x = current_card_spacing_ +
-        i * (current_card_width_ + current_card_spacing_);
-    const auto &pile = tableau_[i];
-
-    // Draw empty pile outline for empty piles
-    if (pile.empty()) {
-      if (rendering_engine_ == RenderingEngine::CAIRO) {
-          drawEmptyPile(buffer_cr_, x, tableau_base_y);
-      } else if (rendering_engine_ == RenderingEngine::OPENGL) {
-          drawEmptyPile_gl(x, tableau_base_y);
-      }
+void SolitaireGame::drawTableauPiles() {
+    const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+    
+    // Calculate pile index offsets to correctly identify tableau piles for drag handling
+    // Pile indices: 0=stock, 1=waste, 2...(2+foundation_.size()-1)=foundation, rest=tableau
+    int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
+    int first_tableau_index = max_foundation_index + 1;
+    
+    for (size_t pile = 0; pile < tableau_.size(); pile++) {
+        int x = current_card_spacing_ + (int)(pile * (current_card_width_ + current_card_spacing_));
+        int y = base_y;
+        
+        const auto &pile_data = tableau_[pile];
+        
+        // Draw empty pile outline for empty piles
+        if (pile_data.empty()) {
+            if (rendering_engine_ == RenderingEngine::CAIRO) {
+                drawEmptyPile(buffer_cr_, x, y);
+            } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+                drawEmptyPile_gl(x, y);
+            }
+        }
+        
+        // Handle deal animation or normal rendering
+        if (deal_animation_active_) {
+            drawTableauDuringDealAnimation(pile, pile_data, x, y);
+        } else {
+            if (rendering_engine_ == RenderingEngine::CAIRO) {
+                drawNormalTableauPile(pile, pile_data, x, y);
+            } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+                // Draw cards with drag support for OpenGL
+                for (size_t card_idx = 0; card_idx < pile_data.size(); card_idx++) {
+                    // Skip cards that are being dragged from THIS tableau pile
+                    // This reveals the card underneath when dragging
+                    if (dragging_ && 
+                        drag_source_pile_ >= first_tableau_index && 
+                        drag_source_pile_ - first_tableau_index == static_cast<int>(pile) &&
+                        card_idx >= pile_data.size() - drag_cards_.size()) {
+                        continue;  // Skip this card - it's being dragged!
+                    }
+                    
+                    const TableauCard &tc = pile_data[card_idx];
+                    int card_y = y + (int)(card_idx * current_vert_spacing_);
+                    drawCard_gl(tc.card, x, card_y, tc.face_up);
+                }
+            }
+        }
     }
-
-    if (deal_animation_active_) {
-       drawTableauDuringDealAnimation(i, pile, x, tableau_base_y);
-    } else {
-      if (rendering_engine_ == RenderingEngine::CAIRO) {
-          drawNormalTableauPile(i, pile, x, tableau_base_y);
-      }
-    }
-  }
 }
 
 // Draw tableau piles during the deal animation
