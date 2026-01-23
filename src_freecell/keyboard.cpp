@@ -832,7 +832,7 @@ bool FreecellGame::tryMoveFromTableau() {
 }
 
 // Check if a card can be moved to a foundation pile
-bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation_idx) {
+bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation_idx) const {
   // Foundation must be within range
   if (foundation_idx < 0 || static_cast<size_t>(foundation_idx) >= foundation_.size()) {
     return false;
@@ -874,7 +874,7 @@ bool FreecellGame::canMoveToFoundation(const cardlib::Card& card, int foundation
 
 
 // Check if a card can be moved to a tableau pile
-bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) {
+bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) const {
   // Tableau must be within range
   if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
     return false;
@@ -893,33 +893,6 @@ bool FreecellGame::canMoveToTableau(const cardlib::Card& card, int tableau_idx) 
   bool descending_rank = static_cast<int>(card.rank) + 1 == static_cast<int>(top_card.rank);
   
   return different_colors && descending_rank;
-}
-
-// Check if a stack of cards forms a valid tableau sequence
-bool FreecellGame::isValidTableauSequence(const std::vector<cardlib::Card>& cards) {
-  if (cards.size() <= 1) {
-    return true;
-  }
-  
-  for (size_t i = 0; i < cards.size() - 1; i++) {
-    const cardlib::Card& upper_card = cards[i];
-    const cardlib::Card& lower_card = cards[i + 1];
-    
-    // Cards must be in alternating colors and descending rank
-    bool different_colors = isCardRed(upper_card) != isCardRed(lower_card);
-    bool descending_rank = static_cast<int>(upper_card.rank) - 1 == static_cast<int>(lower_card.rank);
-    
-    if (!different_colors || !descending_rank) {
-      return false;
-    }
-  }
-  
-  return true;
-}
-
-// Helper to determine if a card is red
-bool FreecellGame::isCardRed(const cardlib::Card& card) {
-  return card.suit == cardlib::Suit::HEARTS || card.suit == cardlib::Suit::DIAMONDS;
 }
 
 // Draw function modification to highlight the selected card
