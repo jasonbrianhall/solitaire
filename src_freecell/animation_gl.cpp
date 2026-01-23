@@ -1458,6 +1458,7 @@ void FreecellGame::renderFrame_gl() {
     // Get actual window dimensions
     GtkAllocation allocation;
     gtk_widget_get_allocation(gl_area_, &allocation);
+    this->allocation = allocation;  // Save to member variable for drawing functions
     
     // Clear screen
     glClearColor(0.0f, 0.5f, 0.0f, 1.0f);
