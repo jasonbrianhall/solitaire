@@ -205,130 +205,6 @@ void FreecellGame::logOpenGLInfo() {
     std::cout << std::string(70, '-') << "\n" << std::endl;
 }
 
-// ============================================================================
-// WIN ANIMATION - OpenGL 3.4 Version
-// ============================================================================
-// NOTE: onAnimationTick is defined in animation.cpp and calls updateWinAnimation_gl()
-//       when rendering engine is OpenGL
-
-void FreecellGame::updateWinAnimation_gl() {
-  if (!win_animation_active_)
-    return;
-
-  // Launch new cards periodically
-  launch_timer_ += ANIMATION_INTERVAL;
-  if (launch_timer_ >= 100) { // Launch a new card every 100ms
-    launch_timer_ = 0;
-    if (rand() % 100 < 10) {
-        // Launch multiple cards in rapid succession
-        for (int i = 0; i < 4; i++) {
-            // Alternate between foundation and freecell launches
-            if (i % 2 == 0) {
-                launchNextCard_gl();        // Launch from foundation
-            } else {
-                launchCardFromFreecell(); // Launch from freecell area
-            }
-        }
-    } else {    
-       // Randomly choose launch source
-       if (rand() % 2 == 0) {
-           launchNextCard_gl();          // Launch from foundation
-       } else {
-           launchCardFromFreecell();  // Launch from freecell area
-       }
-    }
-  }
-
-  // Update physics for all active cards
-  bool all_cards_finished = true;
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(gl_area_, &allocation);
-
-  const double explosion_min = allocation.height * EXPLOSION_THRESHOLD_MIN;
-  const double explosion_max = allocation.height * EXPLOSION_THRESHOLD_MAX;
-
-  for (auto &card : animated_cards_) {
-    if (!card.active)
-      continue;
-
-    if (!card.exploded) {
-      // Update position
-      card.x += card.velocity_x;
-      card.y += card.velocity_y;
-      card.velocity_y += GRAVITY;
-
-      // Update rotation
-      card.rotation += card.rotation_velocity;
-
-      // Check if card should explode (increase random chance from 2% to 5%)
-      if (card.y > explosion_min && card.y < explosion_max &&
-          (rand() % 100 < 5)) {
-        explodeCard_gl(card);
-      }
-
-      // Check if card is off screen
-      if (card.x < -current_card_width_ || card.x > allocation.width ||
-          card.y > allocation.height + current_card_height_) {
-        card.active = false;
-      } else {
-        all_cards_finished = false;
-      }
-    } else {
-      // Update explosion fragments
-      updateCardFragments_gl(card);
-
-      // Check if all fragments are inactive
-      bool all_fragments_inactive = true;
-      for (const auto &fragment : card.fragments) {
-        if (fragment.active) {
-          all_fragments_inactive = false;
-          all_cards_finished = false;
-          break;
-        }
-      }
-
-      if (all_fragments_inactive) {
-        card.active = false;
-      }
-    }
-  }
-
-  // Clear inactive cards periodically to prevent memory bloat
-  if (animated_cards_.size() > 200) {
-    // Manual removal of inactive cards without using std::remove_if
-    std::vector<AnimatedCard> active_cards;
-    for (const auto& card : animated_cards_) {
-      if (card.active) {
-        active_cards.push_back(card);
-      }
-    }
-    animated_cards_ = active_cards;
-  }
-
-  refreshDisplay();
-}
-
-void FreecellGame::startWinAnimation_gl() {
-  win_animation_active_ = true;
-  cards_launched_ = 0;
-  launch_timer_ = 0;
-  animated_cards_.clear();
-  
-  if (animation_timer_id_ == 0) {
-    animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
-  }
-}
-
-void FreecellGame::stopWinAnimation_gl() {
-  win_animation_active_ = false;
-  if (animation_timer_id_ != 0) {
-    g_source_remove(animation_timer_id_);
-    animation_timer_id_ = 0;
-  }
-  animated_cards_.clear();
-  freecell_animation_cards_.clear();
-}
-
 void FreecellGame::launchNextCard_gl() {
   // Try each foundation pile in sequence, cycling through them
   static int current_pile_index = 0;
@@ -375,7 +251,7 @@ void FreecellGame::launchNextCard_gl() {
       anim_card.velocity_x = cos(angle) * speed;
       anim_card.velocity_y = sin(angle) * speed;
       anim_card.rotation = 0;
-      anim_card.rotation_velocity = (rand() % 20 - 10) / 10.0;
+      anim_card.rotation_velocity = (rand() % 40 - 20) / 5.0;  // -8 to +8 rad/frame (much faster spin)
       anim_card.active = true;
       anim_card.exploded = false;
       anim_card.face_up = true;
@@ -403,68 +279,50 @@ void FreecellGame::launchNextCard_gl() {
 }
 
 void FreecellGame::explodeCard_gl(AnimatedCard &card) {
-  // For OpenGL, we reuse the same explosion fragment logic
-  // Mark the card as exploded
-  card.exploded = true;
-
-  playSound(GameSoundEvent::Firework);
-
-  // Create fragments
-  card.fragments.clear();
-
-  // Split the card into smaller fragments for more dramatic effect (4x4 grid)
-  const int grid_size = 4;
-  const int fragment_width = current_card_width_ / grid_size;
-  const int fragment_height = current_card_height_ / grid_size;
-
-  for (int row = 0; row < grid_size; row++) {
-    for (int col = 0; col < grid_size; col++) {
-      CardFragment fragment;
-
-      // Initial position
-      fragment.x = card.x + col * fragment_width;
-      fragment.y = card.y + row * fragment_height;
-      fragment.width = fragment_width;
-      fragment.height = fragment_height;
-
-      // Calculate distance from center of the card
-      double center_x = card.x + current_card_width_ / 2;
-      double center_y = card.y + current_card_height_ / 2;
-      double fragment_center_x = fragment.x + fragment_width / 2;
-      double fragment_center_y = fragment.y + fragment_height / 2;
-
-      // Direction vector from center of card
-      double dir_x = fragment_center_x - center_x;
-      double dir_y = fragment_center_y - center_y;
-
-      // Normalize direction vector
-      double magnitude = sqrt(dir_x * dir_x + dir_y * dir_y);
-      if (magnitude > 0.001) {
-        dir_x /= magnitude;
-        dir_y /= magnitude;
-      } else {
-        // If fragment is at center, give it a random direction
-        double rand_angle = 2.0 * G_PI * (rand() % 1000) / 1000.0;
-        dir_x = cos(rand_angle);
-        dir_y = sin(rand_angle);
-      }
-
-      // Set velocity based on direction and random speed
-      double speed = 3.0 + (rand() % 50) / 10.0;
-      fragment.velocity_x = dir_x * speed;
-      fragment.velocity_y = dir_y * speed;
-
-      // Rotation
-      fragment.rotation = (rand() % 360);
-      fragment.rotation_velocity = (rand() % 20 - 10);
-
-      // Mark as active
-      fragment.active = true;
-      fragment.surface = nullptr;
-
-      card.fragments.push_back(fragment);
+    card.exploded = true;
+    playSound(GameSoundEvent::Firework);
+    card.fragments.clear();
+    const int grid_size = 4;
+    const int fragment_width = current_card_width_ / grid_size;
+    const int fragment_height = current_card_height_ / grid_size;
+    for (int row = 0; row < grid_size; row++) {
+        for (int col = 0; col < grid_size; col++) {
+            CardFragment fragment;
+            fragment.x = card.x + col * fragment_width;
+            fragment.y = card.y + row * fragment_height;
+            fragment.width = fragment_width;
+            fragment.height = fragment_height;
+            double center_x = card.x + current_card_width_ / 2;
+            double center_y = card.y + current_card_height_ / 2;
+            double fragment_center_x = fragment.x + fragment_width / 2;
+            double fragment_center_y = fragment.y + fragment_height / 2;
+            double dir_x = fragment_center_x - center_x;
+            double dir_y = fragment_center_y - center_y;
+            double magnitude = sqrt(dir_x * dir_x + dir_y * dir_y);
+            if (magnitude > 0.001) {
+                dir_x /= magnitude;
+                dir_y /= magnitude;
+            } else {
+                double rand_angle = 2.0 * G_PI * (rand() % 1000) / 1000.0;
+                dir_x = cos(rand_angle);
+                dir_y = sin(rand_angle);
+            }
+            double speed = 12.0 + (rand() % 8);
+            double upward_bias = -15.0 - (rand() % 10);
+            fragment.velocity_x = dir_x * speed + (rand() % 10 - 5);
+            fragment.velocity_y = dir_y * speed + upward_bias;
+            fragment.rotation = card.rotation;
+            fragment.rotation_velocity = (rand() % 60 - 30) / 5.0;
+            fragment.surface = nullptr;
+            fragment.active = true;
+            
+            // Store grid position in target_x and target_y for texture coordinate calculation
+            fragment.target_x = col / (double)grid_size;
+            fragment.target_y = row / (double)grid_size;
+            
+            card.fragments.push_back(fragment);
+        }
     }
-  }
 }
 
 void FreecellGame::updateCardFragments_gl(AnimatedCard &card) {
@@ -741,6 +599,34 @@ void FreecellGame::drawCardFragment_gl(const CardFragment &fragment, const Anima
 
   glUseProgram(shaderProgram);
 
+  // Get the card texture (same as the original card)
+  GLuint texture = cardBackTexture_gl_;
+  if (card.face_up) {
+    auto card_image = deck_.getCardImage(card.card);
+    if (card_image && !card_image->data.empty()) {
+      std::string card_key = std::to_string((int)card.card.suit) + "_" + std::to_string((int)card.card.rank);
+      auto it = cardTextures_gl_.find(card_key);
+      
+      if (it != cardTextures_gl_.end()) {
+        texture = it->second;
+      } else {
+        texture = loadTextureFromMemory(card_image->data);
+        if (texture != 0) {
+          cardTextures_gl_[card_key] = texture;
+        } else {
+          texture = cardBackTexture_gl_;
+        }
+      }
+    }
+  }
+
+  // Bind texture
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  GLint texLoc = glGetUniformLocation(shaderProgram, "cardTexture");
+  glUniform1i(texLoc, 0);
+
+  // Set up model matrix with position, rotation, and size
   glm::mat4 model = glm::mat4(1.0f);
   model = glm::translate(model, glm::vec3(fragment.x, fragment.y, 0.0f));
   model = glm::rotate(model, static_cast<float>(fragment.rotation), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -749,7 +635,11 @@ void FreecellGame::drawCardFragment_gl(const CardFragment &fragment, const Anima
   GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
   glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
-  // Draw fragment (reuse card drawing with subset)
+  // Set alpha to full opacity
+  GLint alphaLoc = glGetUniformLocation(shaderProgram, "alpha");
+  glUniform1f(alphaLoc, 1.0f);
+
+  // Draw fragment quad
   glBindVertexArray(VAO);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
@@ -784,6 +674,8 @@ void FreecellGame::drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO) {
 
 void FreecellGame::drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO) {
   if (foundation_move_animation_active_) {
+    // Ensure the foundation card is always rendered face-up
+    foundation_move_card_.face_up = true;
     drawAnimatedCard_gl(foundation_move_card_, shaderProgram, VAO);
   }
 }

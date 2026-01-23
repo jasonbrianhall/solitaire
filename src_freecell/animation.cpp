@@ -62,7 +62,15 @@ void FreecellGame::updateWinAnimation() {
       // Check if card should explode (increase random chance from 2% to 5%)
       if (card.y > explosion_min && card.y < explosion_max &&
           (rand() % 100 < 5)) {
-        explodeCard(card);
+#ifdef USEOPENGL
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+            explodeCard_gl(card);
+        } else {
+            explodeCard(card);
+        }
+#else
+            explodeCard(card);
+#endif
       }
 
       // Check if card is off screen
