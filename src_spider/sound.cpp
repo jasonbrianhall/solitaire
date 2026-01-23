@@ -1,5 +1,5 @@
 #include "audiomanager.h"
-#include "solitaire.h"
+#include "spider.h"
 #include <algorithm>
 #include <cctype> // Added for std::tolower
 #include <fstream>

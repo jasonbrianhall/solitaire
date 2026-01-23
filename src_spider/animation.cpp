@@ -1,4 +1,4 @@
-#include "solitaire.h"
+#include "spider.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
