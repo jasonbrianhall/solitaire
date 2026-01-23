@@ -203,7 +203,6 @@ private:
   void updateWinAnimation_gl();
   void startWinAnimation_gl();
   void stopWinAnimation_gl();
-  static gboolean onAnimationTick_gl(gpointer data);
   void launchNextCard_gl();
   void explodeCard_gl(AnimatedCard &card);
   void updateCardFragments_gl(AnimatedCard &card);
