@@ -3,146 +3,953 @@
 #include <fstream>
 #include <iostream>
 #include <sys/stat.h>
+#include <ctime>
+#include <zip.h>
+
 #ifdef _WIN32
 #include <direct.h>
 #include <windows.h>
 #include <shlobj.h>
-#include <appmodel.h>
-#include <vector>
 #else
 #include <unistd.h>
 #include <dirent.h>
 #endif
 
-#ifdef _WIN32
-std::string getExecutableDir() { 
-    char buffer[MAX_PATH]; 
-    GetModuleFileNameA(NULL, buffer, MAX_PATH); 
-    std::string path(buffer); size_t pos = path.find_last_of("\\/"); 
-    return (pos == std::string::npos) ? "." : path.substr(0, pos); 
-}
-#endif
+// ============================================================================
+// CONSTRUCTOR / DESTRUCTOR
+// ============================================================================
 
-std::string getDirectoryStructure(const std::string &directory = ".") {
-  std::string result;
-  result += "=== Directory Structure ===\n";
-  result += "Directory: " + directory + "\n";
-  result += "Absolute path: ";
-  
-  char cwd[1024];
-#ifdef _WIN32
-  if (_getcwd(cwd, sizeof(cwd)) != nullptr) {
-#else
-  if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-#endif
-    result += cwd;
-  } else {
-    result += "(unable to determine)";
-  }
-  result += "\n\nContents:\n";
-  
-#ifdef _WIN32
-  WIN32_FIND_DATAA findData;
-  HANDLE findHandle = FindFirstFileA((directory + "\\*").c_str(), &findData);
-  
-  if (findHandle != INVALID_HANDLE_VALUE) {
-    do {
-      std::string name = findData.cFileName;
-      std::string type = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? "[DIR]" : "[FILE]";
-      result += "  " + type + " " + name + "\n";
-    } while (FindNextFileA(findHandle, &findData));
-    FindClose(findHandle);
-  } else {
-    result += "  (unable to read directory)\n";
-  }
-#else
-  DIR *dir = opendir(directory.c_str());
-  if (dir != nullptr) {
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != nullptr) {
-      std::string name = entry->d_name;
-      std::string type = (entry->d_type == DT_DIR) ? "[DIR]" : "[FILE]";
-      result += "  " + type + " " + name + "\n";
-    }
-    closedir(dir);
-  } else {
-    result += "  (unable to read directory)\n";
-  }
-#endif
-  
-  result += "=== End Directory Structure ===\n";
-  return result;
-}
-
-SpiderGame::SpiderGame()
-    : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
-      window_(nullptr), game_area_(nullptr), gl_area_(nullptr),
-      rendering_stack_(nullptr), buffer_surface_(nullptr),
-      buffer_cr_(nullptr), draw_three_mode_(true),
+PyramidGame::PyramidGame()
+    : game_area_(nullptr), gl_area_(nullptr), rendering_stack_(nullptr),
+      buffer_surface_(nullptr), buffer_cr_(nullptr), draw_three_mode_(true),
       current_card_width_(BASE_CARD_WIDTH),
       current_card_height_(BASE_CARD_HEIGHT),
       current_card_spacing_(BASE_CARD_SPACING),
       current_vert_spacing_(BASE_VERT_SPACING), is_fullscreen_(false),
       selected_pile_(-1), selected_card_idx_(-1),
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
-      source_pile_(-1), source_card_idx_(-1),
-      current_game_mode_(GameMode::STANDARD_KLONDIKE),
-      multi_deck_(1),
+      current_game_mode_(GameMode::PYRAMID_SINGLE), multi_deck_(1),
       sound_enabled_(true),
-      #ifdef __linux__
+#ifdef __linux__
       rendering_engine_(RenderingEngine::CAIRO),
-      #else
-      rendering_engine_(RenderingEngine::CAIRO),
-      #endif
-      opengl_initialized_(false),
-      cairo_initialized_(false),
-      engine_switch_requested_(false),
-      requested_engine_(RenderingEngine::CAIRO),
-#ifdef _WIN32
-      sounds_zip_path_(getExecutableDir() + "\\sound.zip"),
 #else
-      sounds_zip_path_("sound.zip"),
+      rendering_engine_(RenderingEngine::CAIRO),
+#endif
+      opengl_initialized_(false), cairo_initialized_(false),
+      engine_switch_requested_(false), requested_engine_(RenderingEngine::CAIRO),
+#ifdef _WIN32
+      sounds_zip_path_("sounds.zip"),
+#else
+      sounds_zip_path_("sounds.zip"),
 #endif
       current_seed_(0) {
   srand(time(NULL));
   current_seed_ = rand();
   initializeSettingsDir();
-  
-  // Load engine preference and initialize rendering
   loadEnginePreference();
   initializeRenderingEngine();
-  
   loadSettings();
 }
 
-// ============================================================================
-// ENGINE SWITCHING IMPLEMENTATION
-// ============================================================================
-
-bool SpiderGame::isOpenGLSupported() const {
-  #ifndef USEOPENGL
-  return false;
-  #else
-  return true;
-  #endif
+PyramidGame::~PyramidGame() {
+  cleanupResources();
 }
 
-bool SpiderGame::setRenderingEngine(RenderingEngine engine) {
-  #ifdef USEOPENGL
-  if (engine == RenderingEngine::OPENGL) {
-    std::cout << "OpenGL not supported on Windows. Using Cairo." << std::endl;
-    rendering_engine_ = RenderingEngine::CAIRO;
+// ============================================================================
+// GAME INITIALIZATION
+// ============================================================================
+
+void PyramidGame::initializeGame() {
+  pyramid_.clear();
+  stock_.clear();
+  waste_.clear();
+
+  selected_card_row_ = -1;
+  selected_card_col_ = -1;
+  card_selected_ = false;
+
+  switch (current_game_mode_) {
+    case GameMode::PYRAMID_SINGLE:
+      multi_deck_ = cardlib::MultiDeck(1);
+      break;
+    case GameMode::PYRAMID_DOUBLE:
+      multi_deck_ = cardlib::MultiDeck(2);
+      break;
+  }
+
+  multi_deck_.shuffle(current_seed_);
+  dealInitialPyramid();
+
+  while (!multi_deck_.isEmpty()) {
+    auto card = multi_deck_.drawCard();
+    if (card.has_value()) {
+      stock_.push_back(card.value());
+    }
+  }
+
+  refreshDisplay();
+}
+
+void PyramidGame::dealInitialPyramid() {
+  // Create pyramid with 7 rows (1, 2, 3, 4, 5, 6, 7 cards)
+  for (int row = 0; row < 7; row++) {
+    std::vector<PyramidCard> row_cards;
+    for (int col = 0; col <= row; col++) {
+      auto card_opt = multi_deck_.drawCard();
+      if (card_opt.has_value()) {
+        row_cards.push_back(PyramidCard(card_opt.value(), true, false));
+      }
+    }
+    pyramid_.push_back(row_cards);
+  }
+}
+
+void PyramidGame::restartGame() {
+  initializeGame();
+  if (rendering_engine_ == RenderingEngine::CAIRO) {
+    gtk_widget_queue_draw(game_area_);
+  }
+#ifdef USEOPENGL
+  else {
+    gtk_widget_queue_draw(gl_area_);
+  }
+#endif
+}
+
+void PyramidGame::promptForSeed() {
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      "Enter Game Seed", GTK_WINDOW(window_), GTK_DIALOG_MODAL,
+      "OK", GTK_RESPONSE_OK,
+      "Cancel", GTK_RESPONSE_CANCEL, NULL);
+
+  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+
+  GtkWidget *label =
+      gtk_label_new("Enter a seed number (or leave blank for random):");
+  gtk_box_pack_start(GTK_BOX(content_area), label, FALSE, FALSE, 0);
+
+  GtkWidget *entry = gtk_entry_new();
+  gtk_box_pack_start(GTK_BOX(content_area), entry, FALSE, FALSE, 0);
+
+  gtk_widget_show_all(dialog);
+
+  gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+
+  if (result == GTK_RESPONSE_OK) {
+    const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
+    if (text && strlen(text) > 0) {
+      try {
+        current_seed_ = std::stoul(text);
+      } catch (...) {
+        current_seed_ = static_cast<unsigned int>(time(nullptr));
+      }
+    } else {
+      current_seed_ = static_cast<unsigned int>(time(nullptr));
+    }
+    restartGame();
+  }
+
+  gtk_widget_destroy(dialog);
+}
+
+// ============================================================================
+// DRAWING - CAIRO
+// ============================================================================
+
+gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+
+  int width = gtk_widget_get_allocated_width(widget);
+  int height = gtk_widget_get_allocated_height(widget);
+
+  game->game_area_width_ = width;
+  game->game_area_height_ = height;
+  game->updateCardDimensions(width, height);
+
+  game->drawGame(cr, width, height);
+
+  return FALSE;
+}
+
+void PyramidGame::drawGame(cairo_t *cr, int width, int height) {
+  // Background
+  cairo_set_source_rgb(cr, 0.0, 0.4, 0.0);
+  cairo_rectangle(cr, 0, 0, width, height);
+  cairo_fill(cr);
+
+  // Title
+  cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+  cairo_set_font_size(cr, 20);
+  cairo_move_to(cr, 20, 30);
+  cairo_show_text(cr, "Pyramid Solitaire");
+
+  // Stats
+  cairo_set_font_size(cr, 14);
+  cairo_move_to(cr, 20, 55);
+  std::string stats = "Removed: " + std::to_string(countRemovedCards()) + "/28";
+  cairo_show_text(cr, stats.c_str());
+
+  // Pyramid
+  drawPyramid(cr, width, height);
+
+  // Stock and waste
+  drawStockAndWaste(cr, width, height);
+
+  // Instructions
+  cairo_set_font_size(cr, 11);
+  cairo_set_source_rgb(cr, 0.8, 0.8, 0.8);
+  cairo_move_to(cr, 20, height - 20);
+  cairo_show_text(cr, "Click pairs that sum to 13, Kings alone. Right-click to deselect.");
+}
+
+void PyramidGame::drawPyramid(cairo_t *cr, int width, int height) {
+  int pyramid_start_y = 100;
+
+  for (int row = 0; row < 7; row++) {
+    int row_width = (row + 1) * (current_card_width_ + current_card_spacing_);
+    int row_x = (width - row_width) / 2;
+
+    for (int col = 0; col <= row; col++) {
+      int card_x = row_x + col * (current_card_width_ + current_card_spacing_);
+      int card_y = pyramid_start_y + row * (current_card_height_ + current_vert_spacing_);
+
+      const PyramidCard &pcard = pyramid_[row][col];
+
+      if (!pcard.removed) {
+        drawPyramidCard(cr, pcard, card_x, card_y,
+                       selected_card_row_ == row && selected_card_col_ == col);
+      } else {
+        // Empty space
+        cairo_set_source_rgb(cr, 0.1, 0.3, 0.1);
+        cairo_rectangle(cr, card_x, card_y, current_card_width_, current_card_height_);
+        cairo_fill(cr);
+        cairo_set_source_rgb(cr, 0.3, 0.5, 0.3);
+        cairo_set_line_width(cr, 1.0);
+        cairo_rectangle(cr, card_x, card_y, current_card_width_, current_card_height_);
+        cairo_stroke(cr);
+      }
+    }
+  }
+}
+
+void PyramidGame::drawPyramidCard(cairo_t *cr, const PyramidCard &card, int x,
+                                   int y, bool is_selected) {
+  if (card.face_up) {
+    drawCard(cr, card.card, x, y, true);
+  } else {
+    drawCardBack(cr, x, y);
+  }
+
+  if (is_selected) {
+    cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
+    cairo_set_line_width(cr, 4.0);
+    cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+    cairo_stroke(cr);
+  }
+}
+
+void PyramidGame::drawStockAndWaste(cairo_t *cr, int width, int height) {
+  int stock_x = width - current_card_width_ - current_card_spacing_;
+  int stock_y = current_card_spacing_;
+
+  // Stock pile
+  if (!stock_.empty()) {
+    drawCardBack(cr, stock_x, stock_y);
+
+    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+    cairo_set_font_size(cr, 12);
+    cairo_move_to(cr, stock_x + 5, stock_y + current_card_height_ + 15);
+    std::string stock_text = "Stock: " + std::to_string(stock_.size());
+    cairo_show_text(cr, stock_text.c_str());
+  } else {
+    cairo_set_source_rgb(cr, 0.3, 0.3, 0.3);
+    cairo_rectangle(cr, stock_x, stock_y, current_card_width_, current_card_height_);
+    cairo_stroke(cr);
+
+    cairo_set_source_rgb(cr, 0.5, 0.5, 0.5);
+    cairo_move_to(cr, stock_x + 20, stock_y + current_card_height_ / 2);
+    cairo_show_text(cr, "Empty");
+  }
+
+  // Waste pile
+  int waste_x = stock_x - current_card_width_ - current_card_spacing_;
+
+  if (!waste_.empty()) {
+    drawCard(cr, waste_.back(), waste_x, stock_y, true);
+  } else {
+    cairo_set_source_rgb(cr, 0.3, 0.3, 0.3);
+    cairo_rectangle(cr, waste_x, stock_y, current_card_width_, current_card_height_);
+    cairo_stroke(cr);
+  }
+}
+
+void PyramidGame::drawCard(cairo_t *cr, const cardlib::Card &card, int x, int y,
+                            bool face_up) {
+  if (!face_up) {
+    drawCardBack(cr, x, y);
+    return;
+  }
+
+  // Card background (white)
+  cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+  cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+  cairo_fill(cr);
+
+  // Border
+  cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+  cairo_set_line_width(cr, 2.0);
+  cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+  cairo_stroke(cr);
+
+  // Suit color
+  bool is_red = (card.suit == cardlib::Suit::HEARTS ||
+                 card.suit == cardlib::Suit::DIAMONDS);
+  if (is_red) {
+    cairo_set_source_rgb(cr, 1.0, 0.0, 0.0);
+  } else {
+    cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+  }
+
+  cairo_set_font_size(cr, 18);
+
+  // Rank text
+  const char *rank_str = "";
+  switch (card.rank) {
+    case cardlib::Rank::ACE:
+      rank_str = "A";
+      break;
+    case cardlib::Rank::TWO:
+      rank_str = "2";
+      break;
+    case cardlib::Rank::THREE:
+      rank_str = "3";
+      break;
+    case cardlib::Rank::FOUR:
+      rank_str = "4";
+      break;
+    case cardlib::Rank::FIVE:
+      rank_str = "5";
+      break;
+    case cardlib::Rank::SIX:
+      rank_str = "6";
+      break;
+    case cardlib::Rank::SEVEN:
+      rank_str = "7";
+      break;
+    case cardlib::Rank::EIGHT:
+      rank_str = "8";
+      break;
+    case cardlib::Rank::NINE:
+      rank_str = "9";
+      break;
+    case cardlib::Rank::TEN:
+      rank_str = "10";
+      break;
+    case cardlib::Rank::JACK:
+      rank_str = "J";
+      break;
+    case cardlib::Rank::QUEEN:
+      rank_str = "Q";
+      break;
+    case cardlib::Rank::KING:
+      rank_str = "K";
+      break;
+    case cardlib::Rank::JOKER:
+      rank_str = "JO";
+      break;
+  }
+
+  cairo_move_to(cr, x + 8, y + 25);
+  cairo_show_text(cr, rank_str);
+
+  // Suit text
+  const char *suit_str = "";
+  switch (card.suit) {
+    case cardlib::Suit::HEARTS:
+      suit_str = "♥";
+      break;
+    case cardlib::Suit::DIAMONDS:
+      suit_str = "♦";
+      break;
+    case cardlib::Suit::CLUBS:
+      suit_str = "♣";
+      break;
+    case cardlib::Suit::SPADES:
+      suit_str = "♠";
+      break;
+    default:
+      suit_str = "?";
+      break;
+  }
+
+  cairo_move_to(cr, x + 8, y + 50);
+  cairo_show_text(cr, suit_str);
+}
+
+void PyramidGame::drawCardBack(cairo_t *cr, int x, int y) {
+  cairo_set_source_rgb(cr, 0.0, 0.2, 0.5);
+  cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+  cairo_fill(cr);
+
+  cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+  cairo_set_line_width(cr, 2.0);
+  cairo_rectangle(cr, x, y, current_card_width_, current_card_height_);
+  cairo_stroke(cr);
+
+  // Pattern
+  for (int i = 0; i < 5; i++) {
+    for (int j = 0; j < 7; j++) {
+      int px = x + 15 + i * 15;
+      int py = y + 15 + j * 18;
+      cairo_arc(cr, px, py, 3, 0, 2 * M_PI);
+      cairo_fill(cr);
+    }
+  }
+}
+
+// ============================================================================
+// GAME LOGIC
+// ============================================================================
+
+void PyramidGame::selectPyramidCard(int row, int col) {
+  if (pyramid_[row][col].removed || !isCardExposed(row, col)) {
+    playSound(GameSoundEvent::NoMatch);
+    return;
+  }
+
+  const cardlib::Card &card = pyramid_[row][col].card;
+
+  if (!card_selected_) {
+    selected_card_row_ = row;
+    selected_card_col_ = col;
+    card_selected_ = true;
+    playSound(GameSoundEvent::CardFlip);
+  } else {
+    if (selected_card_row_ == row && selected_card_col_ == col) {
+      // Same card clicked again
+      if (canRemoveKing(card)) {
+        removeKing(row, col);
+        playSound(GameSoundEvent::CardPlace);
+        if (checkWinCondition()) {
+          startWinAnimation();
+        }
+      } else {
+        playSound(GameSoundEvent::NoMatch);
+      }
+      selected_card_row_ = -1;
+      selected_card_col_ = -1;
+      card_selected_ = false;
+    } else {
+      // Different card clicked
+      const cardlib::Card &selected = pyramid_[selected_card_row_][selected_card_col_].card;
+
+      if (canRemovePair(selected, card)) {
+        removePair(selected_card_row_, selected_card_col_, row, col);
+        playSound(GameSoundEvent::CardPlace);
+
+        if (checkWinCondition()) {
+          startWinAnimation();
+        }
+      } else {
+        playSound(GameSoundEvent::NoMatch);
+      }
+      selected_card_row_ = -1;
+      selected_card_col_ = -1;
+      card_selected_ = false;
+    }
+  }
+
+  refreshDisplay();
+}
+
+void PyramidGame::selectWasteCard() {
+  if (!waste_.empty()) {
+    playSound(GameSoundEvent::CardFlip);
+  }
+}
+
+void PyramidGame::handleStockPileClick() {
+  if (stock_.empty()) {
+    playSound(GameSoundEvent::NoMatch);
+  } else {
+    waste_.push_back(stock_.back());
+    stock_.pop_back();
+    playSound(GameSoundEvent::DealCard);
+    refreshDisplay();
+  }
+}
+
+void PyramidGame::removePair(int row1, int col1, int row2, int col2) {
+  if (row1 >= 0 && row1 < 7 && col1 >= 0 && col1 <= row1 &&
+      row2 >= 0 && row2 < 7 && col2 >= 0 && col2 <= row2) {
+    pyramid_[row1][col1].removed = true;
+    pyramid_[row2][col2].removed = true;
+  }
+}
+
+void PyramidGame::removeKing(int row, int col) {
+  if (row >= 0 && row < 7 && col >= 0 && col <= row) {
+    pyramid_[row][col].removed = true;
+  }
+}
+
+bool PyramidGame::isCardExposed(int row, int col) const {
+  if (row < 0 || row >= 7 || col < 0 || col > row) {
+    return false;
+  }
+
+  if (pyramid_[row][col].removed) {
+    return false;
+  }
+
+  if (row == 6) {
     return true;
   }
-  #endif
 
+  bool left_removed = pyramid_[row + 1][col].removed;
+  bool right_removed = pyramid_[row + 1][col + 1].removed;
+
+  return left_removed && right_removed;
+}
+
+bool PyramidGame::canRemovePair(const cardlib::Card &card1,
+                                 const cardlib::Card &card2) const {
+  return (getCardValue(card1) + getCardValue(card2)) == 13;
+}
+
+bool PyramidGame::canRemoveKing(const cardlib::Card &card) const {
+  return card.rank == cardlib::Rank::KING;
+}
+
+int PyramidGame::getCardValue(const cardlib::Card &card) const {
+  switch (card.rank) {
+    case cardlib::Rank::ACE:
+      return 1;
+    case cardlib::Rank::TWO:
+      return 2;
+    case cardlib::Rank::THREE:
+      return 3;
+    case cardlib::Rank::FOUR:
+      return 4;
+    case cardlib::Rank::FIVE:
+      return 5;
+    case cardlib::Rank::SIX:
+      return 6;
+    case cardlib::Rank::SEVEN:
+      return 7;
+    case cardlib::Rank::EIGHT:
+      return 8;
+    case cardlib::Rank::NINE:
+      return 9;
+    case cardlib::Rank::TEN:
+      return 10;
+    case cardlib::Rank::JACK:
+      return 11;
+    case cardlib::Rank::QUEEN:
+      return 12;
+    case cardlib::Rank::KING:
+      return 13;
+    default:
+      return 0;
+  }
+}
+
+bool PyramidGame::checkWinCondition() const {
+  for (const auto &row : pyramid_) {
+    for (const auto &card : row) {
+      if (!card.removed) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+int PyramidGame::countRemovedCards() const {
+  int count = 0;
+  for (const auto &row : pyramid_) {
+    for (const auto &card : row) {
+      if (card.removed) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
+  int pyramid_start_y = 100;
+
+  for (int row = 0; row < 7; row++) {
+    int row_width = (row + 1) * (current_card_width_ + current_card_spacing_);
+    int row_x = (game_area_width_ - row_width) / 2;
+
+    for (int col = 0; col <= row; col++) {
+      int card_x = row_x + col * (current_card_width_ + current_card_spacing_);
+      int card_y = pyramid_start_y + row * (current_card_height_ + current_vert_spacing_);
+
+      if (x >= card_x && x < card_x + current_card_width_ &&
+          y >= card_y && y < card_y + current_card_height_) {
+        return {row * 10 + col + 2, 0};
+      }
+    }
+  }
+
+  int stock_x = game_area_width_ - current_card_width_ - current_card_spacing_;
+  int stock_y = current_card_spacing_;
+
+  if (x >= stock_x && x < stock_x + current_card_width_ &&
+      y >= stock_y && y < stock_y + current_card_height_) {
+    return {0, 0};
+  }
+
+  int waste_x = stock_x - current_card_width_ - current_card_spacing_;
+
+  if (x >= waste_x && x < waste_x + current_card_width_ &&
+      y >= stock_y && y < stock_y + current_card_height_) {
+    return {1, 0};
+  }
+
+  return {-1, -1};
+}
+
+// ============================================================================
+// UTILITY METHODS
+// ============================================================================
+
+void PyramidGame::refreshDisplay() {
+  if (rendering_engine_ == RenderingEngine::CAIRO) {
+    if (game_area_) {
+      gtk_widget_queue_draw(game_area_);
+    }
+  }
+#ifdef USEOPENGL
+  else {
+    if (gl_area_) {
+      gtk_widget_queue_draw(gl_area_);
+    }
+  }
+#endif
+}
+
+void PyramidGame::updateCardDimensions(int window_width, int window_height) {
+  double scale = getScaleFactor(window_width, window_height);
+  current_card_width_ = static_cast<int>(BASE_CARD_WIDTH * scale);
+  current_card_height_ = static_cast<int>(BASE_CARD_HEIGHT * scale);
+  current_card_spacing_ = static_cast<int>(BASE_CARD_SPACING * scale);
+  current_vert_spacing_ = static_cast<int>(BASE_VERT_SPACING * scale);
+}
+
+double PyramidGame::getScaleFactor(int window_width, int window_height) const {
+  double scale_x = static_cast<double>(window_width) / BASE_WINDOW_WIDTH;
+  double scale_y = static_cast<double>(window_height) / BASE_WINDOW_HEIGHT;
+  return std::min(scale_x, scale_y);
+}
+
+void PyramidGame::toggleFullscreen() {
+  is_fullscreen_ = !is_fullscreen_;
+  if (is_fullscreen_) {
+    gtk_window_fullscreen(GTK_WINDOW(window_));
+  } else {
+    gtk_window_unfullscreen(GTK_WINDOW(window_));
+  }
+}
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
+
+void PyramidGame::initializeSettingsDir() {
+#ifdef _WIN32
+  const char *appdata = getenv("APPDATA");
+  if (appdata) {
+    std::string dir = std::string(appdata) + "\\PyramidSolitaire";
+    _mkdir(dir.c_str());
+  }
+#else
+  const char *home = getenv("HOME");
+  if (home) {
+    std::string dir = std::string(home) + "/.pyramid-solitaire";
+    mkdir(dir.c_str(), 0755);
+  }
+#endif
+}
+
+void PyramidGame::saveSettings() {
+  // TODO: Implement settings save (window size, game mode, etc.)
+}
+
+void PyramidGame::loadSettings() {
+  // TODO: Implement settings load
+}
+
+// ============================================================================
+// ANIMATION STUBS
+// ============================================================================
+
+void PyramidGame::startWinAnimation() {
+  if (win_animation_active_) {
+    return;
+  }
+
+  win_animation_active_ = true;
+  cards_launched_ = 0;
+  launch_timer_ = 0;
+  animated_cards_.clear();
+
+  animation_timer_id_ = g_timeout_add(ANIMATION_INTERVAL, onWinAnimationTick, this);
+}
+
+void PyramidGame::stopWinAnimation() {
+  if (!win_animation_active_) {
+    return;
+  }
+
+  win_animation_active_ = false;
+
+  if (animation_timer_id_ != 0) {
+    g_source_remove(animation_timer_id_);
+    animation_timer_id_ = 0;
+  }
+
+  animated_cards_.clear();
+  refreshDisplay();
+}
+
+gboolean PyramidGame::onWinAnimationTick(gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+  game->updateWinAnimation();
+
+  if (game->win_animation_active_) {
+    game->refreshDisplay();
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+void PyramidGame::updateWinAnimation() {
+  launch_timer_ += ANIMATION_INTERVAL;
+
+  if (launch_timer_ > 30 && cards_launched_ < 28) {
+    launchNextCard();
+    launch_timer_ = 0;
+  }
+
+  for (auto &card : animated_cards_) {
+    if (card.active) {
+      card.velocity_y += GRAVITY;
+      card.x += card.velocity_x;
+      card.y += card.velocity_y;
+      card.rotation += card.rotation_velocity;
+
+      if (card.y > game_area_height_ + 100) {
+        card.active = false;
+      }
+    }
+  }
+
+  bool any_active = false;
+  for (const auto &card : animated_cards_) {
+    if (card.active) {
+      any_active = true;
+      break;
+    }
+  }
+
+  if (!any_active && cards_launched_ >= 28) {
+    win_animation_active_ = false;
+  }
+}
+
+void PyramidGame::launchNextCard() {
+  if (cards_launched_ >= 28) {
+    return;
+  }
+
+  int row = cards_launched_ / 7;
+  int col = cards_launched_ % 7;
+
+  if (row < 7 && col <= row) {
+    AnimatedCard acard;
+    acard.card = pyramid_[row][col].card;
+    acard.face_up = true;
+    acard.active = true;
+    acard.exploded = false;
+
+    int pyramid_start_y = 100;
+    int row_width = (row + 1) * (current_card_width_ + current_card_spacing_);
+    int row_x = (game_area_width_ - row_width) / 2;
+
+    acard.x = row_x + col * (current_card_width_ + current_card_spacing_);
+    acard.y = pyramid_start_y + row * (current_card_height_ + current_vert_spacing_);
+
+    acard.velocity_x = (rand() % 20 - 10) * 0.5;
+    acard.velocity_y = -15;
+    acard.rotation = 0;
+    acard.rotation_velocity = (rand() % 10 - 5) * 0.2;
+
+    animated_cards_.push_back(acard);
+  }
+
+  cards_launched_++;
+}
+
+void PyramidGame::explodeCard(AnimatedCard &card) {
+  // TODO: Implement card explosion effect
+}
+
+void PyramidGame::updateCardFragments(AnimatedCard &card) {
+  // TODO: Implement card fragment updates
+}
+
+void PyramidGame::startDealAnimation() {
+  // TODO: Implement deal animation
+}
+
+void PyramidGame::updateDealAnimation() {
+  // TODO: Implement deal animation updates
+}
+
+void PyramidGame::dealNextCard() {
+  // TODO: Implement dealing next card
+}
+
+void PyramidGame::completeDeal() {
+  // TODO: Implement deal completion
+}
+
+void PyramidGame::stopDealAnimation() {
+  // TODO: Implement stop deal animation
+}
+
+gboolean PyramidGame::onDealAnimationTick(gpointer data) {
+  return FALSE;
+}
+
+// ============================================================================
+// INPUT HANDLING
+// ============================================================================
+
+gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
+                                     gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+
+  game->keyboard_navigation_active_ = false;
+  game->keyboard_selection_active_ = false;
+
+  if (game->win_animation_active_ || game->deal_animation_active_) {
+    return TRUE;
+  }
+
+  if (event->button == 1) {
+    auto [pile_id, _] = game->getPileAt(event->x, event->y);
+
+    if (pile_id == 0) {
+      game->handleStockPileClick();
+      return TRUE;
+    }
+
+    if (pile_id == 1) {
+      if (!game->waste_.empty()) {
+        game->selectWasteCard();
+      }
+      return TRUE;
+    }
+
+    if (pile_id >= 2) {
+      int pyramid_id = pile_id - 2;
+      int row = pyramid_id / 10;
+      int col = pyramid_id % 10;
+
+      if (row >= 0 && row < 7 && col >= 0 && col <= row) {
+        game->selectPyramidCard(row, col);
+      }
+      return TRUE;
+    }
+  } else if (event->button == 3) {
+    game->selected_card_row_ = -1;
+    game->selected_card_col_ = -1;
+    game->card_selected_ = false;
+    game->refreshDisplay();
+    return TRUE;
+  }
+
+  return TRUE;
+}
+
+gboolean PyramidGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
+                                       gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+  game->keyboard_navigation_active_ = false;
+
+  return TRUE;
+}
+
+gboolean PyramidGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
+                                      gpointer data) {
+  return TRUE;
+}
+
+gboolean PyramidGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
+                                  gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+
+  if (event->keyval == GDK_KEY_Escape) {
+    game->selected_card_row_ = -1;
+    game->selected_card_col_ = -1;
+    game->card_selected_ = false;
+    game->refreshDisplay();
+  }
+
+  return FALSE;
+}
+
+// ============================================================================
+// MENU CALLBACKS
+// ============================================================================
+
+void PyramidGame::onNewGame(GtkWidget *widget, gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+  game->restartGame();
+}
+
+void PyramidGame::onQuit(GtkWidget *widget, gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+  gtk_widget_destroy(game->window_);
+}
+
+void PyramidGame::onAbout(GtkWidget *widget, gpointer data) {
+  GtkWidget *dialog = gtk_about_dialog_new();
+  gtk_about_dialog_set_program_name(GTK_ABOUT_DIALOG(dialog), "Pyramid Solitaire");
+  gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dialog), "1.0");
+  gtk_about_dialog_set_copyright(GTK_ABOUT_DIALOG(dialog), "(c) 2024");
+  gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(dialog),
+                                "A classic solitaire card game.");
+
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
+}
+
+void PyramidGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+  game->toggleFullscreen();
+}
+
+// ============================================================================
+// ENGINE AND RENDERING
+// ============================================================================
+
+bool PyramidGame::isOpenGLSupported() const {
+#ifndef USEOPENGL
+  return false;
+#else
+  return true;
+#endif
+}
+
+bool PyramidGame::setRenderingEngine(RenderingEngine engine) {
   if (rendering_engine_ == engine) {
-    return true;
-  }
-
-  if (!opengl_initialized_ && !cairo_initialized_) {
-    rendering_engine_ = engine;
-    std::cout << "Rendering engine: " << getRenderingEngineName() << std::endl;
     return true;
   }
 
@@ -151,31 +958,21 @@ bool SpiderGame::setRenderingEngine(RenderingEngine engine) {
   return true;
 }
 
-bool SpiderGame::initializeRenderingEngine() {
-  #ifndef USEOPENGL
+bool PyramidGame::initializeRenderingEngine() {
+#ifndef USEOPENGL
   if (rendering_engine_ == RenderingEngine::OPENGL) {
     rendering_engine_ = RenderingEngine::CAIRO;
   }
-  #endif
+#endif
 
   switch (rendering_engine_) {
     case RenderingEngine::CAIRO:
       cairo_initialized_ = true;
-      fprintf(stderr, "✓ Using Cairo rendering (CPU-based)\n");
+      std::cerr << "Using Cairo rendering" << std::endl;
       return true;
-
     case RenderingEngine::OPENGL:
-      #ifdef __linux__
-      // ✅ OpenGL initialization is deferred to onGLRealize callback
-      // This happens when GTK GL area is realized (after gtk_widget_show_all)
-      fprintf(stderr, "✓ OpenGL will be initialized when window is ready\n");
+      std::cerr << "OpenGL rendering requested" << std::endl;
       return true;
-      #else
-      rendering_engine_ = RenderingEngine::CAIRO;
-      cairo_initialized_ = true;
-      return true;
-      #endif
-
     default:
       rendering_engine_ = RenderingEngine::CAIRO;
       cairo_initialized_ = true;
@@ -183,2231 +980,337 @@ bool SpiderGame::initializeRenderingEngine() {
   }
 }
 
-bool SpiderGame::switchRenderingEngine(RenderingEngine newEngine) {
-  #ifndef USEOPENGL
-  if (newEngine == RenderingEngine::OPENGL) {
-    return false;
-  }
-  #endif
-
+bool PyramidGame::switchRenderingEngine(RenderingEngine newEngine) {
   if (newEngine == rendering_engine_) {
     return true;
   }
 
-  #ifdef __linux__
-  if (!rendering_stack_) {
-    std::cout << "Rendering stack not initialized" << std::endl;
-    return false;
-  }
-  
-  // MARK CACHE AS DIRTY - Force complete cache rebuild when switching engines
-  cache_dirty_ = true;
-  
-  // Switch rendering engine
   rendering_engine_ = newEngine;
-  
-  if (newEngine == RenderingEngine::OPENGL) {
-    cairo_initialized_ = false;
-    opengl_initialized_ = true;  // ✅ CRITICAL FIX: Must set to true for rendering to work
-  } else {
-    opengl_initialized_ = false;
-    cairo_initialized_ = true;
-  }
-  
-  // Use GtkStack to switch - this preserves GL context
-  const char *view = (newEngine == RenderingEngine::OPENGL) ? "opengl" : "cairo";
-  gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), view);
-  
-  rendering_engine_ = newEngine;
-  
-  // Grab focus to the new widget
-  GtkWidget *current_widget = gtk_stack_get_visible_child(GTK_STACK(rendering_stack_));
-  if (current_widget) {
-    gtk_widget_grab_focus(current_widget);
-    gtk_widget_queue_draw(current_widget);
-  }
-  
-  // CLEAR AND REBUILD ALL CACHES - Forces complete redraw of entire screen
-  clearAndRebuildCaches();
-  
-  refreshDisplay();
-  
-  saveEnginePreference();
-  std::cout << "Switched to " << getRenderingEngineName() << std::endl;
   return true;
-  #else
-  return false;
-  #endif
+}
+
+void PyramidGame::cleanupRenderingEngine() {
+  // Cleanup code
+}
+
+std::string PyramidGame::getRenderingEngineName() const {
+  return (rendering_engine_ == RenderingEngine::CAIRO) ? "Cairo" : "OpenGL";
+}
+
+void PyramidGame::printEngineInfo() {
+  std::cout << "Rendering Engine: " << getRenderingEngineName() << std::endl;
+}
+
+void PyramidGame::addEngineSelectionMenu(GtkWidget *menubar) {
+  // TODO: Implement engine selection menu
+}
+
+void PyramidGame::saveEnginePreference() {
+  // TODO: Save preference
+}
+
+void PyramidGame::loadEnginePreference() {
+  // TODO: Load preference
+}
+
+void PyramidGame::renderFrame() {
+  // TODO: Implement frame rendering
 }
 
 // ============================================================================
-// GL CONTEXT CALLBACKS - FIX FOR NO OPENGL CONTEXT ERROR
+// SOUND SYSTEM
 // ============================================================================
 
-#ifdef USEOPENGL
-// Called by GTK when GL context is created and available
-gboolean SpiderGame::onGLRealize(GtkGLArea *area, gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-  
-  // Make the GL context current
-  gtk_gl_area_make_current(area);
-  
-  fprintf(stderr, "[GL] Realize callback - initializing OpenGL resources\n");
-  
-  // DIAGNOSTIC: Check if GL context is actually available
-  const GLubyte *version = glGetString(GL_VERSION);
-  if (version == nullptr) {
-    fprintf(stderr, "[GL] ERROR: No GL context available after gtk_gl_area_make_current()\n");
-    fprintf(stderr, "[GL] This means GtkGLArea failed to create/bind the GL context\n");
-    game->rendering_engine_ = RenderingEngine::CAIRO;
-    return FALSE;
-  }
-  fprintf(stderr, "[GL] GL Context verified: %s\n", (const char*)version);
-  
-  // Initialize GL resources (NOW safe to call GL functions!)
-  if (!game->initializeOpenGLResources()) {
-    fprintf(stderr, "[GL] Failed to initialize OpenGL resources\n");
-    gtk_gl_area_set_error(area, NULL);
-    // Fall back to Cairo
-    game->rendering_engine_ = RenderingEngine::CAIRO;
-    return FALSE;
-  }
-  
-  fprintf(stderr, "[GL] OpenGL resources initialized successfully\n");
-  return TRUE;
-}
-#endif
-
-#ifdef USEOPENGL
-// Called by GTK every frame to render
-gboolean SpiderGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
-  (void)context;
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-  
-  // Ensure GL context is current before calling GL functions
-  gtk_gl_area_make_current(area);
-  
-  int window_width = gtk_widget_get_allocated_width(GTK_WIDGET(area));
-  int window_height = gtk_widget_get_allocated_height(GTK_WIDGET(area));
-  
-  if (window_width < 10 || window_height < 10) {
-    gtk_widget_queue_draw(GTK_WIDGET(area));
-    return TRUE;
-  }
-  
-  // Call the actual rendering function
-  game->renderFrame_gl();
-  
-  glFlush();
-  
-  // Request next frame
-  gtk_widget_queue_draw(GTK_WIDGET(area));
-  
-  return TRUE;
-}
-#endif
-
-// ============================================================================
-// GL INITIALIZATION - DEFERRED FROM CONSTRUCTOR
-// ============================================================================
-
-#ifdef USEOPENGL
-// Called from realize callback - NOW has GL context
-bool SpiderGame::initializeOpenGLResources() {
-  #ifdef __linux__
-  fprintf(stderr, "[GL] Setting up OpenGL rendering...\n");
-  
-  // Initialize GLEW (only once)
-  static gboolean glew_initialized = FALSE;
-  if (!glew_initialized) {
-    glewExperimental = GL_TRUE;
-    GLenum err = glewInit();
-    
-    fprintf(stderr, "[GL] glewInit returned: %i\n", err);
-    fprintf(stderr, "[GL] glewInit error string: %s\n", glewGetErrorString(err));
-    
-    if (err != GLEW_OK) {
-      // DIAGNOSTIC: Try to see if basic GL functions work anyway
-      const GLubyte *vendor = glGetString(GL_VENDOR);
-      if (vendor != nullptr) {
-        fprintf(stderr, "[GL] WARNING: glewInit failed but GL_VENDOR is accessible: %s\n", (const char*)vendor);
-        fprintf(stderr, "[GL] GL is functional despite glewInit error - proceeding anyway\n");
-        glew_initialized = TRUE;
-        is_glew_initialized_ = true;  // ← ALSO SET THE MEMBER VARIABLE
-      } else {
-        fprintf(stderr, "[GL] FATAL: glewInit failed and GL functions unavailable\n");
-        fprintf(stderr, "[GL] glewInit failed: %s %i\n", glewGetErrorString(err), err);
-        return false;
-      }
-    } else {
-      glew_initialized = TRUE;
-      is_glew_initialized_ = true;  // ← SET THE MEMBER VARIABLE
-      fprintf(stderr, "[GL] GLEW initialized successfully\n");
-    }
-  } else {
-    fprintf(stderr, "[GL] GLEW already initialized\n");
-  }
-  
-  // ✅ NOW safe to call GL functions - context exists!
-  
-  // Setup shaders
-  cardShaderProgram_gl_ = setupShaders_gl();
-  if (cardShaderProgram_gl_ == 0) {
-    fprintf(stderr, "[GL] Failed to setup shaders\n");
-    return false;
-  }
-  fprintf(stderr, "[GL] Shaders compiled successfully\n");
-  
-  // Setup vertex array and buffers
-  cardQuadVAO_gl_ = setupCardQuadVAO_gl();
-  if (cardQuadVAO_gl_ == 0) {
-    fprintf(stderr, "[GL] Failed to setup VAO\n");
-    return false;
-  }
-  fprintf(stderr, "[GL] VAO setup complete\n");
-  
-  // Load card textures
-  if (!initializeCardTextures_gl()) {
-    fprintf(stderr, "[GL] Failed to initialize card textures\n");
-    return false;
-  }
-  fprintf(stderr, "[GL] Card textures loaded\n");
-  
-  // Set GL state
-  glClearColor(0.0f, 0.6f, 0.0f, 1.0f);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glEnable(GL_LINE_SMOOTH);
-  glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-  glEnable(GL_MULTISAMPLE);
-  
-  opengl_initialized_ = true;
-  cairo_initialized_ = false;  // Disable Cairo when using OpenGL
-  
-  fprintf(stderr, "[GL] OpenGL initialization complete\n");
+bool PyramidGame::setSoundsZipPath(const std::string &path) {
+  sounds_zip_path_ = path;
+  saveSettings();
   return true;
-  #else
-  return false;
-  #endif
-}
-#endif
-
-// ============================================================================
-// WIDGET SETUP - SEPARATED INTO CAIRO AND GL
-// ============================================================================
-
-void SpiderGame::setupCairoArea() {
-  // Create new drawing area for Cairo rendering
-  game_area_ = gtk_drawing_area_new();
-  
-  // Enable mouse event handling
-  gtk_widget_add_events(
-      game_area_,
-      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
-          GDK_POINTER_MOTION_MASK |
-          GDK_STRUCTURE_MASK);
-
-  // Connect all necessary signals
-  g_signal_connect(G_OBJECT(game_area_), "draw", G_CALLBACK(onDraw), this);
-
-  g_signal_connect(G_OBJECT(game_area_), "button-press-event",
-                   G_CALLBACK(onButtonPress), this);
-
-  g_signal_connect(G_OBJECT(game_area_), "button-release-event",
-                   G_CALLBACK(onButtonRelease), this);
-
-  g_signal_connect(G_OBJECT(game_area_), "motion-notify-event",
-                   G_CALLBACK(onMotionNotify), this);
-
-  // Add size-allocate signal handler for resize events
-  g_signal_connect(
-      G_OBJECT(game_area_), "size-allocate",
-      G_CALLBACK(
-          +[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
-            SpiderGame *game = static_cast<SpiderGame *>(data);
-            game->updateCardDimensions(allocation->width, allocation->height);
-
-            // Recreate buffer surface with new dimensions if needed
-            if (game->buffer_surface_) {
-              cairo_surface_destroy(game->buffer_surface_);
-              cairo_destroy(game->buffer_cr_);
-            }
-
-            game->buffer_surface_ = cairo_image_surface_create(
-                CAIRO_FORMAT_ARGB32, allocation->width, allocation->height);
-            game->buffer_cr_ = cairo_create(game->buffer_surface_);
-
-            gtk_widget_queue_draw(widget);
-          }),
-      this);
-
-  // Set minimum size to prevent cards from becoming too small
-  gtk_widget_set_size_request(
-      game_area_,
-      BASE_CARD_WIDTH * 7 +
-          BASE_CARD_SPACING * 8, // Minimum width for 7 cards + spacing
-      BASE_CARD_HEIGHT * 2 +
-          BASE_VERT_SPACING * 6 // Minimum height for 2 rows + tableau
-  );
-
-  // Initialize card dimensions based on initial window size
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(window_, &allocation);
-  updateCardDimensions(allocation.width, allocation.height);
-  
-  // CREATE CAIRO BUFFER - CRITICAL!
-  buffer_surface_ = cairo_image_surface_create(
-      CAIRO_FORMAT_ARGB32, allocation.width, allocation.height);
-  buffer_cr_ = cairo_create(buffer_surface_);
-
-  // Initialize the card cache
-  initializeCardCache();
 }
 
-#ifdef USEOPENGL
-void SpiderGame::setupOpenGLArea() {
-  #ifdef __linux__
-  // Create OpenGL rendering area
-  gl_area_ = gtk_gl_area_new();
-  gtk_widget_set_size_request(gl_area_, -1, -1);
-  gtk_widget_set_can_focus(gl_area_, TRUE);
-  
-  // ✅ CRITICAL: Connect realize signal BEFORE showing window
-  // This callback will be triggered when GL context is created
-  g_signal_connect(G_OBJECT(gl_area_), "realize",
-                  G_CALLBACK(onGLRealize), this);
-  
-  // ✅ Connect render signal for drawing each frame
-  g_signal_connect(G_OBJECT(gl_area_), "render",
-                  G_CALLBACK(onGLRender), this);
-  
-  // Enable event handling
-  gtk_widget_add_events(gl_area_,
-      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
-      GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK |
-      GDK_KEY_RELEASE_MASK);
-  
-  g_signal_connect(G_OBJECT(gl_area_), "button-press-event",
-                  G_CALLBACK(onButtonPress), this);
-  g_signal_connect(G_OBJECT(gl_area_), "button-release-event",
-                  G_CALLBACK(onButtonRelease), this);
-  g_signal_connect(G_OBJECT(gl_area_), "motion-notify-event",
-                  G_CALLBACK(onMotionNotify), this);
-  
-  // Add size-allocate signal handler for resize events (CRITICAL FIX!)
-  g_signal_connect(
-      G_OBJECT(gl_area_), "size-allocate",
-      G_CALLBACK(+[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
-        SpiderGame *game = static_cast<SpiderGame *>(data);
-        game->updateCardDimensions(allocation->width, allocation->height);
-      }), this);
-  // Set minimum size
-  gtk_widget_set_size_request(
-      gl_area_,
-      BASE_CARD_WIDTH * 7 + BASE_CARD_SPACING * 8,
-      BASE_CARD_HEIGHT * 2 + BASE_VERT_SPACING * 6);
-  #endif
-}
-#endif
-
-void SpiderGame::cleanupRenderingEngine() {
-  switch (rendering_engine_) {
-    case RenderingEngine::CAIRO:
-      cleanupCardCache();
-      cairo_initialized_ = false;
-      break;
-
-    case RenderingEngine::OPENGL:
-      #ifdef __linux__
-      cleanupOpenGLResources_gl();
-      #endif
-      opengl_initialized_ = false;
-      break;
-
-    default:
-      break;
-  }
-}
-
-std::string SpiderGame::getRenderingEngineName() const {
-  switch (rendering_engine_) {
-    case RenderingEngine::CAIRO:
-      return "Cairo";
-    case RenderingEngine::OPENGL:
-      return "OpenGL";
-    default:
-      return "Unknown";
-  }
-}
-
-void SpiderGame::printEngineInfo() {
-  std::cout << "\n=== RENDERING ENGINE ===" << std::endl;
-  std::cout << "Current: " << getRenderingEngineName() << std::endl;
-  #ifdef __linux__
-  std::cout << "Platform: Linux (OpenGL supported)" << std::endl;
-  #else
-  std::cout << "Platform: Windows/macOS (Cairo only)" << std::endl;
-  #endif
-  std::cout << "========================\n" << std::endl;
-}
-
-void SpiderGame::saveEnginePreference() {
-  std::string config_file = settings_dir_ + "/graphics.ini";
-  std::ofstream config(config_file);
-  if (config.is_open()) {
-    config << "[Graphics]\nengine=" 
-           << (rendering_engine_ == RenderingEngine::CAIRO ? "cairo" : "opengl") << "\n";
-    config.close();
-  }
-}
-
-void SpiderGame::loadEnginePreference() {
-  std::string config_file = settings_dir_ + "/graphics.ini";
-  std::ifstream config(config_file);
-  if (config.is_open()) {
-    std::string line;
-    while (std::getline(config, line)) {
-      if (line.find("engine=") == 0) {
-        std::string engine_name = line.substr(7);
-        engine_name.erase(0, engine_name.find_first_not_of(" \t\r\n"));
-        engine_name.erase(engine_name.find_last_not_of(" \t\r\n") + 1);
-        
-        #ifdef __linux__
-        if (engine_name == "opengl") {
-          rendering_engine_ = RenderingEngine::OPENGL;
-        }
-        #endif
-      }
-    }
-    config.close();
-  }
-}
-
-void SpiderGame::addEngineSelectionMenu(GtkWidget *menubar) {
-  GtkWidget *graphics_menu = gtk_menu_new();
-  GtkWidget *graphics_item = gtk_menu_item_new_with_label("Graphics");
-
-  GtkWidget *cairo_item = gtk_menu_item_new_with_label("Use Cairo (CPU)");
-  g_signal_connect(cairo_item, "activate",
-                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
-                     SpiderGame *game = static_cast<SpiderGame *>(data);
-                     game->switchRenderingEngine(RenderingEngine::CAIRO);
-                     game->refreshDisplay();
-                   }),
-                   this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), cairo_item);
-
-  #ifdef __linux__
-  GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL");
-  g_signal_connect(opengl_item, "activate",
-                   G_CALLBACK(+[](GtkWidget *w, gpointer data) {
-                     SpiderGame *game = static_cast<SpiderGame *>(data);
-                     game->switchRenderingEngine(RenderingEngine::OPENGL);
-                     game->refreshDisplay();
-                   }),
-                   this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(graphics_menu), opengl_item);
-  #endif
-
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(graphics_item), graphics_menu);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), graphics_item);
-  gtk_widget_show_all(graphics_menu);
-}
-
-void SpiderGame::checkAndInitializeSound() {
-  // Check if sound.zip file exists
-  struct stat buffer;
-  bool sound_file_exists = (stat(sounds_zip_path_.c_str(), &buffer) == 0);
-  
-  if (!sound_file_exists) {
-    // Sound file doesn't exist - disable sound and show dialog
-    sound_enabled_ = false;
-    std::string message = "Sound file (sound.zip) was not found at:\n" + 
-                          sounds_zip_path_ + 
-                          "\n\nSound has been disabled. Game will continue without audio.";
-    showErrorDialog("Sound File Missing", message);
-  } else {
-    // Sound file exists - initialize audio system
+void PyramidGame::checkAndInitializeSound() {
+  if (sound_enabled_) {
     initializeAudio();
-#ifndef _WIN32
-    usleep(100000);  // Unix/Linux usleep takes microseconds; timing issue
-#endif
   }
 }
 
-
-
-void SpiderGame::run(int argc, char **argv) {
-  gtk_init(&argc, &argv);
-  setupWindow();
-  initializeGame();  // Initialize game after GTK is ready and window exists
-  setupGameArea();
-  
-  // Show all widgets AFTER game is fully initialized
-  // This ensures GL context creation happens when game state is ready
-  gtk_widget_show_all(window_);
-  
-  // NOW switch to OpenGL if that's the configured preference
-  // This MUST happen AFTER gtk_widget_show_all() so the GL widget is properly realized
-  #ifdef __linux__
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
-    std::cout << "Switching to OpenGL mode (from graphics.ini) after widget realization..." << std::endl;
-    gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "opengl");
-    // Force processing of pending events to trigger realize callback
-    while (gtk_events_pending()) {
-      gtk_main_iteration();
-    }
-  }
-  #endif
-  
-  gtk_main();
-}
-
-void SpiderGame::initializeGame() {
-  // Check for engine switch request
-  if (engine_switch_requested_) {
-    switchRenderingEngine(requested_engine_);
-    engine_switch_requested_ = false;
-  }
-
-  // FIX: Don't force CAIRO mode - respect the user's rendering engine choice
-  // The rendering_engine_ is already set and should be preserved across game resets
-  // Just ensure the appropriate renderer is marked as initialized
-  if (rendering_engine_ == RenderingEngine::CAIRO) {
-    cairo_initialized_ = true;
-    opengl_initialized_ = false;
-  } else {
-     cairo_initialized_ = false;
-     opengl_initialized_ = true;
-
-  }
-
-  if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {
-    // Original single-deck initialization
-    try {
-      // Try to find cards.zip in several common locations
-#ifdef _WIN32
-      const std::vector<std::string> paths = {getExecutableDir() + "\\cards.zip"};
-#else
-      const std::vector<std::string> paths = {"cards.zip"};
-#endif
-      bool loaded = false;
-      for (const auto &path : paths) {
-        try {
-          deck_ = cardlib::Deck(path);
-          deck_.removeJokers();
-          loaded = true;
-          break;
-        } catch (const std::exception &e) {
-          std::cerr << "Failed to load cards from " << path << ": " << e.what()
-                    << std::endl;
-        }
-      }
-
-      if (!loaded) {
-        std::cerr << "Failed to find cards.zip in any of the expected locations.\n";
-#ifdef _WIN32
-        //showDirectoryStructureDialog(getExecutableDir());
-#else
-        //showDirectoryStructureDialog(".");
-#endif
-        showMissingFileDialog("cards.zip", "Card images are required to play this game.");
-        exit(2); // Exit code 2: Missing required cards.zip
-      }
-      
-      deck_.shuffle(current_seed_);
-
-      // Clear all piles
-      stock_.clear();
-      waste_.clear();
-      foundation_.clear();
-      tableau_.clear();
-
-      // Initialize foundation piles (4 empty piles for aces)
-      foundation_.resize(4);
-
-      // Initialize tableau (7 piles)
-      tableau_.resize(7);
-
-      // Deal cards
-      deal();
-
-    } catch (const std::exception &e) {
-      std::cerr << "Fatal error during game initialization: " << e.what()
-                << std::endl;
-      showErrorDialog("Game Initialization Error", e.what());
-      exit(1); // Exit code 1: General fatal error
-    }
-  } else {
-    // Multi-deck initialization
-    initializeMultiDeckGame();
-  }
-  
-  // CRITICAL: Mark game as fully initialized
-  // This prevents GL rendering from accessing uninitialized game state
-  game_fully_initialized_ = true;
-  std::cout << "✓ Game fully initialized - GL rendering now safe" << std::endl;
-}
-
-bool SpiderGame::isValidDragSource(int pile_index, int card_index) const {
-  if (pile_index < 0)
+bool PyramidGame::initializeAudio() {
+  if (!sound_enabled_) {
     return false;
-
-  // Can drag from waste pile only top card
-  if (pile_index == 1) {
-    return !waste_.empty() &&
-           static_cast<size_t>(card_index) == waste_.size() - 1;
   }
 
-  // Calculate maximum foundation index
-  int max_foundation_index = 2 + foundation_.size() - 1;
-  
-  // Calculate first tableau index
-  int first_tableau_index = max_foundation_index + 1;
+  std::cerr << "Audio initialization stub" << std::endl;
+  return true;
+}
 
-  // Can drag from foundation only top card
-  if (pile_index >= 2 && pile_index <= max_foundation_index) {
-    const auto &pile = foundation_[pile_index - 2];
-    return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
+bool PyramidGame::loadSoundFromZip(GameSoundEvent event,
+                                    const std::string &soundFileName) {
+  return true;
+}
+
+void PyramidGame::playSound(GameSoundEvent event) {
+  if (!sound_enabled_) {
+    return;
   }
 
-  // Can drag from tableau if cards are face up
-  if (pile_index >= first_tableau_index) {
-    int tableau_idx = pile_index - first_tableau_index;
-    if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
-      const auto &pile = tableau_[tableau_idx];
-      return !pile.empty() && card_index >= 0 &&
-             static_cast<size_t>(card_index) < pile.size() &&
-             pile[card_index].face_up; // Make sure card is face up
-    }
-  }
+  // Sound playback stub
+}
 
+bool PyramidGame::extractFileFromZip(const std::string &zipFilePath,
+                                      const std::string &fileName,
+                                      std::vector<uint8_t> &fileData) {
   return false;
 }
 
-std::vector<cardlib::Card> &SpiderGame::getPileReference(int pile_index) {
-  if (pile_index == 0)
-    return stock_;
-  if (pile_index == 1)
-    return waste_;
-    
-  // Check foundation piles using foundation_.size() instead of hardcoded limit
-  int max_foundation_index = 2 + foundation_.size() - 1;
-  if (pile_index >= 2 && pile_index <= max_foundation_index)
-    return foundation_[pile_index - 2];
-    
-  if (pile_index >= 6 && pile_index <= 12) {
-    // We need to handle tableau differently or change the function signature
-    throw std::runtime_error(
-        "Cannot get reference to tableau pile - type mismatch");
-  }
-  throw std::out_of_range("Invalid pile index");
+void PyramidGame::cleanupAudio() {
+  // Cleanup audio
 }
 
-void SpiderGame::deal() {
-  // Clear all piles first
-  stock_.clear();
-  waste_.clear();
-  foundation_.clear();
-  tableau_.clear();
+// ============================================================================
+// RESOURCE CLEANUP
+// ============================================================================
 
-  // Reset foundation and tableau
-  foundation_.resize(4);
-  tableau_.resize(7);
-
-  // Deal to tableau - i represents the pile number (0-6)
-  for (int i = 0; i < 7; i++) {
-    // For each pile i, deal i cards face down
-    for (int j = 0; j < i; j++) {
-      if (auto card = deck_.drawCard()) {
-        tableau_[i].emplace_back(*card, false); // face down
-        //playSound(GameSoundEvent::CardFlip);
-      }
-    }
-    // Deal one card face up at the end
-    if (auto card = deck_.drawCard()) {
-      tableau_[i].emplace_back(*card, true); // face up
-      //playSound(GameSoundEvent::CardFlip);
+void PyramidGame::cleanupCardCache() {
+  for (auto &pair : card_cache_) {
+    if (pair.second) {
+      cairo_surface_destroy(pair.second);
     }
   }
-
-  // Move remaining cards to stock (face down)
-  while (auto card = deck_.drawCard()) {
-    stock_.push_back(*card);
-  }
-
-#ifdef DEBUG
-  std::cout << "Starting deal animation from deal()"
-            << std::endl; // Debug output
-#endif
-
-  // Start the deal animation (call the correct version based on rendering engine)
-  // FIX: Use conditional to call the right animation function for the active renderer
-  std::cerr << "DEBUG: initializeGame() #1 - rendering_engine_ = " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-    startDealAnimation();
+  card_cache_.clear();
 }
 
-void SpiderGame::flipTopTableauCard(int pile_index) {
-  if (pile_index < 0 || pile_index >= static_cast<int>(tableau_.size())) {
-    return;
+void PyramidGame::cleanupResources() {
+  stopWinAnimation();
+  cleanupCardCache();
+  cleanupAudio();
+
+  if (buffer_cr_) {
+    cairo_destroy(buffer_cr_);
+    buffer_cr_ = nullptr;
   }
 
-  auto &pile = tableau_[pile_index];
-  if (!pile.empty() && !pile.back().face_up) {
-    pile.back().face_up = true;
-    // playSound(GameSoundEvent::CardFlip);
+  if (buffer_surface_) {
+    cairo_surface_destroy(buffer_surface_);
+    buffer_surface_ = nullptr;
   }
 }
 
-GtkWidget *SpiderGame::createCardWidget(const cardlib::Card &card,
-                                           bool face_up) {
-  if (face_up) {
-    if (auto img = deck_.getCardImage(card)) {
-      // Create pixbuf from card image data
-      GError *error = NULL;
-      GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-      gdk_pixbuf_loader_write(loader, img->data.data(), img->data.size(),
-                              &error);
-      gdk_pixbuf_loader_close(loader, &error);
-
-      GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-      GdkPixbuf *scaled = gdk_pixbuf_scale_simple(
-          pixbuf, CARD_WIDTH, CARD_HEIGHT, GDK_INTERP_BILINEAR);
-
-      GtkWidget *image = gtk_image_new_from_pixbuf(scaled);
-      g_object_unref(scaled);
-      g_object_unref(loader);
-
-      return image;
-    }
-  }
-
-  // Create card back or placeholder
-  GtkWidget *frame = gtk_frame_new(NULL);
-  gtk_widget_set_size_request(frame, CARD_WIDTH, CARD_HEIGHT);
-  gtk_frame_set_shadow_type(GTK_FRAME(frame), GTK_SHADOW_ETCHED_OUT);
-  return frame;
+bool PyramidGame::loadDeck(const std::string &path) {
+  // TODO: Implement deck loading
+  return true;
 }
 
-std::vector<cardlib::Card> SpiderGame::getTableauCardsAsCards(
-    const std::vector<TableauCard> &tableau_cards, int start_index) {
-  std::vector<cardlib::Card> cards;
-  for (size_t i = start_index; i < tableau_cards.size(); i++) {
-    if (tableau_cards[i].face_up) {
-      cards.push_back(tableau_cards[i].card);
-    }
-  }
-  return cards;
+void PyramidGame::clearAndRebuildCaches() {
+  cleanupCardCache();
+  cache_dirty_ = false;
 }
 
-std::pair<int, int> SpiderGame::getPileAt(int x, int y) const {
-  // Check stock pile
-  if (x >= current_card_spacing_ &&
-      x <= current_card_spacing_ + current_card_width_ &&
-      y >= current_card_spacing_ &&
-      y <= current_card_spacing_ + current_card_height_) {
-    return {0, stock_.empty() ? -1 : 0};
-  }
+// ============================================================================
+// UI HELPERS
+// ============================================================================
 
-  // Check waste pile
-  if (x >= 2 * current_card_spacing_ + current_card_width_ &&
-      x <= 2 * current_card_spacing_ + 2 * current_card_width_ &&
-      y >= current_card_spacing_ &&
-      y <= current_card_spacing_ + current_card_height_) {
-    return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
-  }
+void PyramidGame::showHowToPlay() {
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      "How to Play", GTK_WINDOW(window_), GTK_DIALOG_MODAL, "Close",
+      GTK_RESPONSE_OK, NULL);
 
-  // Check foundation piles - using foundation_.size() instead of hardcoded limit
-  int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
-  for (int i = 0; i < foundation_.size(); i++) {
-    if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
-        y >= current_card_spacing_ &&
-        y <= current_card_spacing_ + current_card_height_) {
-      return {2 + i, foundation_[i].empty()
-                         ? -1
-                         : static_cast<int>(foundation_[i].size() - 1)};
-    }
-    foundation_x += current_card_width_ + current_card_spacing_;
-  }
+  GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 
-  // Calculate first tableau index
-  int first_tableau_index = 2 + foundation_.size();
+  GtkWidget *label = gtk_label_new(
+      "Pyramid Solitaire\n\n"
+      "Remove all 28 cards from the pyramid.\n\n"
+      "Rules:\n"
+      "- Click pairs of cards that sum to 13\n"
+      "- Kings can be removed alone\n"
+      "- Only exposed cards can be selected\n"
+      "- Cards are exposed when both below them are gone\n\n"
+      "Bottom row cards are always exposed.\n");
 
-  // Check tableau piles - check from top card down
-  int tableau_y =
-      current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  for (int i = 0; i < tableau_.size(); i++) {
-    int pile_x = current_card_spacing_ +
-                 i * (current_card_width_ + current_card_spacing_);
-    if (x >= pile_x && x <= pile_x + current_card_width_) {
-      const auto &pile = tableau_[i];
-      if (pile.empty() && y >= tableau_y &&
-          y <= tableau_y + current_card_height_) {
-        return {first_tableau_index + i, -1};
-      }
+  gtk_box_pack_start(GTK_BOX(content), label, TRUE, TRUE, 10);
+  gtk_widget_show_all(dialog);
 
-      // Check cards from top to bottom
-      for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-        int card_y = tableau_y + j * current_vert_spacing_;
-        if (y >= card_y && y <= card_y + current_card_height_) {
-          if (pile[j].face_up) {
-            return {first_tableau_index + i, j};
-          }
-          break; // Hit a face-down card, stop checking
-        }
-      }
-    }
-  }
-
-  return {-1, -1};
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 }
 
-bool SpiderGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
-                                  const std::vector<cardlib::Card> &target,
-                                  bool is_foundation) const {
+void PyramidGame::showKeyboardShortcuts() {
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      "Keyboard Shortcuts", GTK_WINDOW(window_), GTK_DIALOG_MODAL, "Close",
+      GTK_RESPONSE_OK, NULL);
 
-  if (cards.empty())
-    return false;
+  GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 
-  const auto &moving_card = cards[0];
+  GtkWidget *label = gtk_label_new(
+      "Keyboard Shortcuts:\n\n"
+      "Esc - Deselect card\n"
+      "F11 - Toggle fullscreen\n");
 
-  // Foundation pile rules
-  if (is_foundation) {
-    // Only single cards can go to foundation
-    if (cards.size() != 1) {
-      return false;
-    }
+  gtk_box_pack_start(GTK_BOX(content), label, TRUE, TRUE, 10);
+  gtk_widget_show_all(dialog);
 
-    // For empty foundation, only accept aces
-    if (target.empty()) {
-      return moving_card.rank == cardlib::Rank::ACE;
-    }
-
-    // For non-empty foundation, must be same suit and next rank up
-    const auto &target_card = target.back();
-    return moving_card.suit == target_card.suit &&
-           static_cast<int>(moving_card.rank) ==
-               static_cast<int>(target_card.rank) + 1;
-  }
-
-  // Tableau pile rules
-  if (target.empty()) {
-    // Only kings can go to empty tableau spots
-    return static_cast<int>(moving_card.rank) ==
-           static_cast<int>(cardlib::Rank::KING);
-  }
-
-  const auto &target_card = target.back();
-
-  // Must be opposite color and one rank lower
-  bool opposite_color = ((target_card.suit == cardlib::Suit::HEARTS ||
-                          target_card.suit == cardlib::Suit::DIAMONDS) !=
-                         (moving_card.suit == cardlib::Suit::HEARTS ||
-                          moving_card.suit == cardlib::Suit::DIAMONDS));
-
-  bool lower_rank = static_cast<int>(moving_card.rank) ==
-                    static_cast<int>(target_card.rank) - 1;
-
-  return opposite_color && lower_rank;
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 }
 
-bool SpiderGame::canMoveToFoundation(const cardlib::Card &card,
-                                        int foundation_index) const {
-  const auto &pile = foundation_[foundation_index];
-
-  if (pile.empty()) {
-    return card.rank == cardlib::Rank::ACE;
-  }
-
-  const auto &top_card = pile.back();
-  return card.suit == top_card.suit &&
-         static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1;
+void PyramidGame::showGameStats() {
+  // TODO: Implement game stats display
 }
 
-void SpiderGame::moveCards(std::vector<cardlib::Card> &from,
-                              std::vector<cardlib::Card> &to, size_t count) {
-  if (count > from.size())
-    return;
+void PyramidGame::showErrorDialog(const std::string &title,
+                                   const std::string &message) {
+  GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(window_),
+                                              GTK_DIALOG_DESTROY_WITH_PARENT,
+                                              GTK_MESSAGE_ERROR, GTK_BUTTONS_OK,
+                                              "%s", message.c_str());
+  gtk_window_set_title(GTK_WINDOW(dialog), title.c_str());
 
-  to.insert(to.end(), from.end() - count, from.end());
-
-  from.erase(from.end() - count, from.end());
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialog);
 }
 
-void SpiderGame::switchGameMode(GameMode mode) {
-  if (mode == current_game_mode_)
-    return;
+// ============================================================================
+// KEYBOARD NAVIGATION STUBS
+// ============================================================================
 
-  if (win_animation_active_) {
-    stopWinAnimation();
-  }
-    
-  // Update the game mode
-  current_game_mode_ = mode;
-
-  // Start a new game with the selected mode
-  if (mode == GameMode::STANDARD_KLONDIKE) {
-    initializeGame(); // Use the existing single-deck initialization
-  } else {
-    initializeMultiDeckGame(); // Use the new multi-deck initialization
-  }
-  
-  // Get current window dimensions to update card scaling
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(game_area_, &allocation);
-  updateCardDimensions(allocation.width, allocation.height);
-  updateWindowTitle();
-  refreshDisplay();
+void PyramidGame::selectNextCard() {
+  // TODO: Implement
 }
 
-void SpiderGame::initializeMultiDeckGame() {
-  try {
-    // Determine number of decks based on mode
-    size_t num_decks = (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
-    
-    // Try to find cards.zip in several common locations
-    const std::vector<std::string> paths = {"cards.zip"};
-
-    bool loaded = false;
-    for (const auto &path : paths) {
-      try {
-        // Use MultiDeck instead of Deck
-        multi_deck_ = cardlib::MultiDeck(num_decks, path);
-        
-        // Remove jokers from all decks
-        for (size_t i = 0; i < num_decks; i++) {
-          multi_deck_.getDeck(i).removeJokers();
-        }
-        
-        loaded = true;
-        break;
-      } catch (const std::exception &e) {
-        std::cerr << "Failed to load cards from " << path << ": " << e.what()
-                  << std::endl;
-      }
-    }
-
-    if (!loaded) {
-      throw std::runtime_error("Could not find cards.zip in any search path");
-    }
-    
-    multi_deck_.shuffle(current_seed_);
-
-    // Clear all piles
-    stock_.clear();
-    waste_.clear();
-    foundation_.clear();
-    tableau_.clear();
-
-    // For multiple decks, increase the number of foundation piles
-    // Each suit appears multiple times (once per deck)
-    foundation_.resize(4 * num_decks);
-
-    // Keep tableau at 7 piles for simplicity
-    tableau_.resize(7);
-
-    // Deal cards using the multi-deck deal method
-    dealMultiDeck();
-
-  } catch (const std::exception &e) {
-    std::cerr << "Fatal error during game initialization: " << e.what()
-              << std::endl;
-    exit(1);
-  }
+void PyramidGame::selectPreviousCard() {
+  // TODO: Implement
 }
 
-
-void SpiderGame::dealMultiDeck() {
-  // Clear all piles first
-  stock_.clear();
-  waste_.clear();
-  
-  // Deal to tableau - i represents the pile number (0-6)
-  for (int i = 0; i < 7; i++) {
-    // For each pile i, deal i cards face down
-    for (int j = 0; j < i; j++) {
-      if (auto card = multi_deck_.drawCard()) {
-        tableau_[i].emplace_back(*card, false); // face down
-        //playSound(GameSoundEvent::CardFlip);
-      }
-    }
-    // Deal one card face up at the end
-    if (auto card = multi_deck_.drawCard()) {
-      tableau_[i].emplace_back(*card, true); // face up
-      //playSound(GameSoundEvent::CardFlip);
-    }
-  }
-
-  // Move remaining cards to stock (face down)
-  while (auto card = multi_deck_.drawCard()) {
-    stock_.push_back(*card);
-  }
-
-  // Start the deal animation (call the correct version based on rendering engine)
-  // FIX: Use conditional to call the right animation function for the active renderer
-  std::cerr << "DEBUG: initializeGame() #2 - rendering_engine_ = " << (rendering_engine_ == RenderingEngine::OPENGL ? "OPENGL" : "CAIRO") << "\n";
-  startDealAnimation();
+void PyramidGame::activateSelected() {
+  // TODO: Implement
 }
 
-bool SpiderGame::checkWinCondition() const {
-  // Get the number of decks based on the current mode
-  size_t num_decks = (current_game_mode_ == GameMode::STANDARD_KLONDIKE) ? 1 : 
-                     (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
-  
-  // For multi-deck games, each foundation should have 13 cards
-  // There are 4 * num_decks foundations
-  for (const auto &pile : foundation_) {
-    if (pile.size() != 13)
-      return false;
-  }
-
-  // Check if all other piles are empty
-  return stock_.empty() && waste_.empty() &&
-         std::all_of(tableau_.begin(), tableau_.end(),
-                    [](const auto &pile) { return pile.empty(); });
+void PyramidGame::resetKeyboardNavigation() {
+  // TODO: Implement
 }
 
-// Function to refresh the display
-void SpiderGame::refreshDisplay() {
-  // FIX: Refresh the correct widget based on the active rendering engine
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
-    if (gl_area_) {
-      gtk_widget_queue_draw(gl_area_);
-    }
-  } else {
-    if (game_area_) {
-      gtk_widget_queue_draw(game_area_);
-    }
-  }
+// ============================================================================
+// OPENGL STUBS
+// ============================================================================
+
+#ifdef USEOPENGL
+gboolean PyramidGame::onGLRealize(GtkGLArea *area, gpointer data) {
+  return TRUE;
 }
 
-int main(int argc, char **argv) {
-  SpiderGame game;
-  game.run(argc, argv);
+gboolean PyramidGame::onGLRender(GtkGLArea *area, GdkGLContext *context,
+                                  gpointer data) {
+  return TRUE;
+}
+
+void PyramidGame::drawGame_gl() {}
+void PyramidGame::drawPyramid_gl(GLuint shaderProgram, GLuint VAO) {}
+void PyramidGame::drawStockAndWaste_gl(GLuint shaderProgram, GLuint VAO) {}
+void PyramidGame::highlightSelectedCard_gl(GLuint shaderProgram, GLuint VAO) {}
+void PyramidGame::startWinAnimation_gl() {}
+void PyramidGame::updateWinAnimation_gl() {}
+void PyramidGame::stopWinAnimation_gl() {}
+void PyramidGame::launchNextCard_gl() {}
+void PyramidGame::explodeCard_gl(AnimatedCard &card) {}
+void PyramidGame::updateCardFragments_gl(AnimatedCard &card) {}
+void PyramidGame::drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO) {}
+void PyramidGame::startDealAnimation_gl() {}
+void PyramidGame::updateDealAnimation_gl() {}
+void PyramidGame::dealNextCard_gl() {}
+void PyramidGame::completeDeal_gl() {}
+void PyramidGame::stopDealAnimation_gl() {}
+void PyramidGame::drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO) {}
+static gboolean onDealAnimationTick_gl(gpointer data) { return FALSE; }
+
+GLuint PyramidGame::setupShaders_gl() { return 0; }
+GLuint PyramidGame::setupCardQuadVAO_gl() { return 0; }
+bool PyramidGame::initializeCardTextures_gl() { return true; }
+bool PyramidGame::loadCardTexture_gl(const std::string &cardKey,
+                                     const cardlib::Card &card) {
+  return true;
+}
+bool PyramidGame::initializeOpenGLResources() { return true; }
+void PyramidGame::cleanupOpenGLResources_gl() {}
+bool PyramidGame::validateOpenGLContext() { return true; }
+bool PyramidGame::reloadCustomCardBackTexture_gl() { return true; }
+GLuint PyramidGame::loadTextureFromMemory(const std::vector<unsigned char> &data) {
   return 0;
 }
+void PyramidGame::renderFrame_gl() {}
+#endif
 
-void SpiderGame::setupWindow() {
+// ============================================================================
+// MAIN RUN METHOD
+// ============================================================================
+
+void PyramidGame::run(int argc, char **argv) {
+  gtk_init(&argc, &argv);
+
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  //gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
-  gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
-  g_signal_connect(G_OBJECT(window_), "destroy", G_CALLBACK(gtk_main_quit),
-                   NULL);
-  updateWindowTitle();
-  gtk_widget_add_events(window_, GDK_KEY_PRESS_MASK);
-  g_signal_connect(G_OBJECT(window_), "key-press-event", G_CALLBACK(onKeyPress),
-                   this);
+  gtk_window_set_title(GTK_WINDOW(window_), "Pyramid Solitaire");
+  gtk_window_set_default_size(GTK_WINDOW(window_), BASE_WINDOW_WIDTH,
+                              BASE_WINDOW_HEIGHT);
 
-  // Make sure the window is realized before calculating scale
-  gtk_widget_realize(window_);
-  
-  // Check if sound.zip exists and initialize sound system
-  checkAndInitializeSound();
-    
-  // Now get the initial dimensions with correct scale factor
-  GtkAllocation allocation;
-  gtk_widget_get_allocation(window_, &allocation);
-  updateCardDimensions(allocation.width, allocation.height);
-
-  // Create vertical box
   vbox_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add(GTK_CONTAINER(window_), vbox_);
 
-  // Setup menu bar
-  setupMenuBar();
-}
-
-void SpiderGame::setupGameArea() {
-  // Create Cairo rendering area
-  setupCairoArea();
-  
-  // Create OpenGL rendering area
-#ifdef USEOPENGL
-  setupOpenGLArea();
-#endif
-  
-  // Create GtkStack to switch between rendering engines
-  rendering_stack_ = gtk_stack_new();
-  gtk_stack_set_transition_type(GTK_STACK(rendering_stack_), 
-                                GTK_STACK_TRANSITION_TYPE_NONE);
-  
-  // Add both widgets to stack
-  gtk_stack_add_named(GTK_STACK(rendering_stack_), game_area_, "cairo");
-  #ifdef __linux__
-  gtk_stack_add_named(GTK_STACK(rendering_stack_), gl_area_, "opengl");
-  #endif
-  
-  // Always start with Cairo initially - will switch to OpenGL after show_all()
-  // This ensures proper GTK widget realization before GL context creation
-  gtk_stack_set_visible_child_name(GTK_STACK(rendering_stack_), "cairo");
-  
-  // Pack stack into main window
-  gtk_box_pack_start(GTK_BOX(vbox_), rendering_stack_, TRUE, TRUE, 0);
-  
-  // NOTE: After gtk_widget_show_all() is called from run(), we will switch to
-  // OpenGL if that's the configured preference (in run() method)
-}
-
-void SpiderGame::setupMenuBar() {
+  // Menu bar
   GtkWidget *menubar = gtk_menu_bar_new();
+
+  GtkWidget *file_menu_item = gtk_menu_item_new_with_label("Game");
+  GtkWidget *file_menu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(file_menu_item), file_menu);
+
+  GtkWidget *new_game_item = gtk_menu_item_new_with_label("New Game");
+  g_signal_connect(new_game_item, "activate", G_CALLBACK(onNewGame), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), new_game_item);
+
+  GtkWidget *quit_item = gtk_menu_item_new_with_label("Quit");
+  g_signal_connect(quit_item, "activate", G_CALLBACK(onQuit), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), quit_item);
+
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), file_menu_item);
+
+  GtkWidget *help_menu_item = gtk_menu_item_new_with_label("Help");
+  GtkWidget *help_menu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(help_menu_item), help_menu);
+
+  GtkWidget *about_item = gtk_menu_item_new_with_label("About");
+  g_signal_connect(about_item, "activate", G_CALLBACK(onAbout), this);
+  gtk_menu_shell_append(GTK_MENU_SHELL(help_menu), about_item);
+
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), help_menu_item);
+
   gtk_box_pack_start(GTK_BOX(vbox_), menubar, FALSE, FALSE, 0);
 
-  // ==================== GAME MENU ====================
-  GtkWidget *gameMenu = gtk_menu_new();
-  GtkWidget *gameMenuItem = gtk_menu_item_new_with_mnemonic("_Game");
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameMenuItem), gameMenu);
-
-  // New Game
-  GtkWidget *newGameItem = gtk_menu_item_new_with_mnemonic("_New Game (Ctrl+N)");
-  g_signal_connect(G_OBJECT(newGameItem), "activate", G_CALLBACK(onNewGame), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), newGameItem);
-
-  // Restart Game (same seed)
-  GtkWidget *restartGameItem = gtk_menu_item_new_with_label("Restart Game");
-  g_signal_connect(G_OBJECT(restartGameItem), "activate", 
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<SpiderGame *>(data)->restartGame();
-                  }), 
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), restartGameItem);
-
-  // Enter Seed
-  GtkWidget *seedItem = gtk_menu_item_new_with_label("Enter Seed...");
-  g_signal_connect(G_OBJECT(seedItem), "activate", 
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<SpiderGame *>(data)->promptForSeed();
-                  }), 
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
-
-  // Auto Finish
-  GtkWidget *autoFinishItem = gtk_menu_item_new_with_mnemonic("_Auto Finish (F)");
-  g_signal_connect(G_OBJECT(autoFinishItem), "activate",
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<SpiderGame *>(data)->autoFinishGame();
-                  }),
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
-
-GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
-GtkWidget *gameModeMenu = gtk_menu_new();
-gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
-
-// Standard Klondike option (1 deck)
-GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "One Deck");
-GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
-g_signal_connect(
-    G_OBJECT(standardItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SpiderGame *>(data)->switchGameMode(SpiderGame::GameMode::STANDARD_KLONDIKE);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
-
-// Double Klondike option (2 decks)
-GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Two Decks");
-g_signal_connect(
-    G_OBJECT(doubleItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SpiderGame *>(data)->switchGameMode(SpiderGame::GameMode::DOUBLE_KLONDIKE);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
-
-// Triple Klondike option (3 decks)
-GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Three Decks");
-g_signal_connect(
-    G_OBJECT(tripleItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SpiderGame *>(data)->switchGameMode(SpiderGame::GameMode::TRIPLE_KLONDIKE);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
-
-// Set initial state based on current mode
-gtk_check_menu_item_set_active(
-    GTK_CHECK_MENU_ITEM(
-        current_game_mode_ == GameMode::STANDARD_KLONDIKE ? standardItem :
-        current_game_mode_ == GameMode::DOUBLE_KLONDIKE ? doubleItem : tripleItem),
-    TRUE);
-
-// Add the game mode submenu to the options menu
-gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
-
-
-  // Add separator before Quit
-  GtkWidget *sep = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
-
-  // Quit
-  GtkWidget *quitItem = gtk_menu_item_new_with_mnemonic("_Quit (Ctrl+Q)");
-  g_signal_connect(G_OBJECT(quitItem), "activate", G_CALLBACK(onQuit), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), quitItem);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), gameMenuItem);
-
-  // ==================== GRAPHICS MENU ====================
-  addEngineSelectionMenu(menubar);
-
-  // ==================== OPTIONS MENU ====================
-  GtkWidget *optionsMenu = gtk_menu_new();
-  GtkWidget *optionsMenuItem = gtk_menu_item_new_with_mnemonic("_Options");
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(optionsMenuItem), optionsMenu);
-
-  // Draw Mode submenu
-  GtkWidget *drawModeItem = gtk_menu_item_new_with_mnemonic("_Draw Mode");
-  GtkWidget *drawModeMenu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(drawModeItem), drawModeMenu);
-
-  // Draw One option
-  GtkWidget *drawOneItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "_One (1)");
-  GSList *group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
-  g_signal_connect(
-      G_OBJECT(drawOneItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<SpiderGame *>(data)->draw_three_mode_ = false;
-        }
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawOneItem);
-
-  // Draw Three option
-  GtkWidget *drawThreeItem = gtk_radio_menu_item_new_with_mnemonic(group, "_Three (3)");
-  g_signal_connect(
-      G_OBJECT(drawThreeItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<SpiderGame *>(data)->draw_three_mode_ = true;
-        }
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawThreeItem);
-
-  // Set initial state
-  gtk_check_menu_item_set_active(
-      GTK_CHECK_MENU_ITEM(draw_three_mode_ ? drawThreeItem : drawOneItem),
-      TRUE);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), drawModeItem);
-
-  // Card Back menu
-  GtkWidget *cardBackMenu = gtk_menu_new();
-  GtkWidget *cardBackItem = gtk_menu_item_new_with_mnemonic("_Card Back");
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
-
-  // Select custom back option
-  GtkWidget *selectBackItem = gtk_menu_item_new_with_mnemonic("_Select Custom Back");
-  g_signal_connect(
-      G_OBJECT(selectBackItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        SpiderGame *game = static_cast<SpiderGame *>(data);
-
-        GtkWidget *dialog = gtk_file_chooser_dialog_new(
-            "Select Card Back", GTK_WINDOW(game->window_),
-            GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
-            "_Open", GTK_RESPONSE_ACCEPT, NULL);
-
-        GtkFileFilter *filter = gtk_file_filter_new();
-        gtk_file_filter_set_name(filter, "Image Files");
-        gtk_file_filter_add_pattern(filter, "*.png");
-        gtk_file_filter_add_pattern(filter, "*.jpg");
-        gtk_file_filter_add_pattern(filter, "*.jpeg");
-        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-          char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-          if (game->setCustomCardBack(filename)) {
-            game->refreshCardCache();
-            game->refreshDisplay();
-          } else {
-            GtkWidget *error_dialog = gtk_message_dialog_new(
-                GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-                GTK_MESSAGE_ERROR, GTK_BUTTONS_OK, "Failed to load image file");
-            gtk_dialog_run(GTK_DIALOG(error_dialog));
-            gtk_widget_destroy(error_dialog);
-          }
-          g_free(filename);
-        }
-        gtk_widget_destroy(dialog);
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
-
-  // Reset to default back option
-  GtkWidget *resetBackItem = gtk_menu_item_new_with_mnemonic("_Reset to Default Back");
-  g_signal_connect(G_OBJECT(resetBackItem), "activate",
-                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                     SpiderGame *game = static_cast<SpiderGame *>(data);
-                     game->resetToDefaultBack();
-                   }),
+  // Game area
+  game_area_ = gtk_drawing_area_new();
+  gtk_widget_set_can_focus(game_area_, TRUE);
+  g_signal_connect(game_area_, "draw", G_CALLBACK(onDraw), this);
+  g_signal_connect(game_area_, "button-press-event", G_CALLBACK(onButtonPress),
                    this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
+  g_signal_connect(game_area_, "button-release-event",
+                   G_CALLBACK(onButtonRelease), this);
+  g_signal_connect(game_area_, "motion-notify-event",
+                   G_CALLBACK(onMotionNotify), this);
+  g_signal_connect(game_area_, "key-press-event", G_CALLBACK(onKeyPress), this);
 
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), cardBackItem);
+  gtk_widget_add_events(game_area_,
+                        GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+                            GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK);
 
-  // Load Deck option
-  GtkWidget *loadDeckItem = gtk_menu_item_new_with_mnemonic("_Load Deck (Ctrl+L)");
-  g_signal_connect(
-      G_OBJECT(loadDeckItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        SpiderGame *game = static_cast<SpiderGame *>(data);
+  gtk_box_pack_start(GTK_BOX(vbox_), game_area_, TRUE, TRUE, 0);
 
-        GtkWidget *dialog = gtk_file_chooser_dialog_new(
-            "Load Deck", GTK_WINDOW(game->window_),
-            GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
-            "_Open", GTK_RESPONSE_ACCEPT, NULL);
+  // Signal handling
+  g_signal_connect(window_, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-        GtkFileFilter *filter = gtk_file_filter_new();
-        gtk_file_filter_set_name(filter, "Card Deck Files (*.zip)");
-        gtk_file_filter_add_pattern(filter, "*.zip");
-        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-          char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-          if (game->loadDeck(filename)) {
-            game->refreshDisplay();
-          }
-          g_free(filename);
-        }
-
-        gtk_widget_destroy(dialog);
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), loadDeckItem);
-
-  // Add fullscreen toggle
-  GtkWidget *fullscreenItem = gtk_menu_item_new_with_mnemonic("Toggle _Fullscreen (F11)");
-  g_signal_connect(G_OBJECT(fullscreenItem), "activate", G_CALLBACK(onToggleFullscreen), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), fullscreenItem);
-
-  // Add sound toggle
-  GtkWidget *soundItem = gtk_check_menu_item_new_with_mnemonic("_Sound (Ctrl+S)");
-  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(soundItem), sound_enabled_);
-  g_signal_connect(G_OBJECT(soundItem), "toggled",
-                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                     SpiderGame *game = static_cast<SpiderGame *>(data);
-                     game->sound_enabled_ = gtk_check_menu_item_get_active(
-                         GTK_CHECK_MENU_ITEM(widget));
-                   }),
-                   this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), soundItem);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), optionsMenuItem);
-
-  // ==================== HELP MENU ====================
-  GtkWidget *helpMenu = gtk_menu_new();
-  GtkWidget *helpMenuItem = gtk_menu_item_new_with_mnemonic("_Help");
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(helpMenuItem), helpMenu);
-
-  // How To Play
-  GtkWidget *howToPlayItem = gtk_menu_item_new_with_mnemonic("_How To Play");
-  g_signal_connect(G_OBJECT(howToPlayItem), "activate",
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    SpiderGame *game = static_cast<SpiderGame *>(data);
-                    game->showHowToPlay();
-                  }),
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), howToPlayItem);
-
-  // Keyboard Shortcuts
-  GtkWidget *shortcutsItem = gtk_menu_item_new_with_mnemonic("_Keyboard Shortcuts");
-  g_signal_connect(G_OBJECT(shortcutsItem), "activate",
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    SpiderGame *game = static_cast<SpiderGame *>(data);
-                    game->showKeyboardShortcuts();
-                  }),
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), shortcutsItem);
-
-  // About
-  GtkWidget *aboutItem = gtk_menu_item_new_with_mnemonic("_About (Ctrl+H)");
-  g_signal_connect(G_OBJECT(aboutItem), "activate", G_CALLBACK(onAbout), this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(helpMenu), aboutItem);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), helpMenuItem);
-
-#ifdef DEBUG
-  // Debug Menu
-  GtkWidget *debugMenu = gtk_menu_new();
-  GtkWidget *debugMenuItem = gtk_menu_item_new_with_mnemonic("_Debug");
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(debugMenuItem), debugMenu);
-
-  GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
-  g_signal_connect(G_OBJECT(testLayoutItem), "activate",
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    SpiderGame *game = static_cast<SpiderGame *>(data);
-                    game->dealTestLayout();
-                    game->refreshDisplay();
-                  }),
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(debugMenu), testLayoutItem);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), debugMenuItem);
-#endif
-}
-
-void SpiderGame::onNewGame(GtkWidget *widget, gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-    
-  // Check if win animation is active
-  if (game->win_animation_active_) {
-    game->stopWinAnimation();
-  }
-
-  game->current_seed_ = rand();
-  game->initializeGame();
-  game->updateWindowTitle();
-  game->refreshDisplay();
-}
-
-void SpiderGame::restartGame() {
-  // Check if win animation is active
-  if (win_animation_active_) {
-    stopWinAnimation();
-  }
-
-  // Keep the current seed and restart the game
+  // Initialize game
   initializeGame();
-  refreshDisplay();
+  checkAndInitializeSound();
+
+  gtk_widget_show_all(window_);
+
+  gtk_main();
 }
 
-void SpiderGame::onQuit(GtkWidget *widget, gpointer data) {
-  gtk_main_quit();
-}
-
-void SpiderGame::updateWindowTitle() {
-  if (window_) {
-    std::string title = "Solitaire - Seed: " + std::to_string(current_seed_);
-    gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
-  }
-}
-
-void SpiderGame::onAbout(GtkWidget * /* widget */, gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-
-  // Create custom dialog instead of about dialog for more control
-  GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "About Solitaire", GTK_WINDOW(game->window_),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
-                                  GTK_DIALOG_DESTROY_WITH_PARENT),
-      "OK", GTK_RESPONSE_OK, NULL);
-
-  // Set minimum dialog size
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 500);
-
-  // Create and configure the content area
-  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-  gtk_container_set_border_width(GTK_CONTAINER(content_area), 24);
-  gtk_widget_set_margin_bottom(content_area, 12);
-
-  // Add program name with larger font
-  GtkWidget *name_label = gtk_label_new(NULL);
-  const char *name_markup =
-      "<span size='x-large' weight='bold'>Solitaire</span>";
-  gtk_label_set_markup(GTK_LABEL(name_label), name_markup);
-  gtk_container_add(GTK_CONTAINER(content_area), name_label);
-
-  // Add version
-  GtkWidget *version_label = gtk_label_new("Version 1.0");
-  gtk_container_add(GTK_CONTAINER(content_area), version_label);
-  gtk_widget_set_margin_bottom(version_label, 12);
-
-  // Add game instructions in a scrolled window
-  GtkWidget *instructions_text = gtk_text_view_new();
-  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(instructions_text), GTK_WRAP_WORD);
-  gtk_text_view_set_editable(GTK_TEXT_VIEW(instructions_text), FALSE);
-  gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(instructions_text), FALSE);
-  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(instructions_text), 12);
-  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(instructions_text), 12);
-
-  GtkTextBuffer *buffer =
-      gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
-  const char *instructions =
-      "How to Play Solitaire:\n\n"
-      "Objective:\n"
-      "Build four ordered card piles at the top of the screen, one for each "
-      "suit (♣,♦,♥,♠), "
-      "starting with Aces and ending with Kings.\n\n"
-      "Game Setup:\n"
-      "- Seven columns of cards are dealt from left to right\n"
-      "- Each column contains one more card than the column to its left\n"
-      "- The top card of each column is face up\n"
-      "- Remaining cards form the draw pile in the upper left\n\n"
-      "Rules:\n"
-      "1. In the main playing area, stack cards in descending order (King to "
-      "Ace) with alternating colors\n"
-      "2. Move single cards or stacks of cards between columns\n"
-      "3. When you move a card that was covering a face-down card, the "
-      "face-down card is flipped over\n"
-      "4. Click the draw pile to reveal new cards when you need them\n"
-      "5. Build the four suit piles at the top in ascending order, starting "
-      "with Aces\n"
-      "6. Empty spaces in the main playing area can only be filled with "
-      "Kings\n\n"
-      "Controls:\n"
-      "- Left-click and drag to move cards\n"
-      "- Rigit-click to automatically move cards to the suit piles at the "
-      "top\n\n"
-      "Keyboard Controls:\n"
-      "- Arrow keys (←, →, ↑, ↓) to navigate between piles and cards\n"
-      "- Enter to select a card or perform a move\n"
-      "- Escape to cancel a selection\n"
-      "- Space to draw cards from the stock pile\n"
-      "- F to automatically move all possible cards to the foundation piles\n"
-      "- 1 or 3 to toggle between Draw One and Draw Three modes\n"
-      "- F11 to toggle fullscreen mode\n"
-      "- Ctrl+N for a new game\n"
-      "- Ctrl+Q to quit\n"
-      "- Ctrl+H for help\n\n"
-      "Written by Jason Hall\n"
-      "Licensed under the MIT License\n"
-      "https://github.com/jasonbrianhall/solitaire";
-
-  gtk_text_buffer_set_text(buffer, instructions, -1);
-
-  GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-  // Set the size of the scrolled window to be larger
-  gtk_widget_set_size_request(scrolled_window, 550, 400);
-
-  gtk_container_add(GTK_CONTAINER(scrolled_window), instructions_text);
-  gtk_container_add(GTK_CONTAINER(content_area), scrolled_window);
-
-  // Show all widgets before running the dialog
-  gtk_widget_show_all(dialog);
-
-  // Run dialog and get the result
-  gint result = gtk_dialog_run(GTK_DIALOG(dialog));
-
-  // Check for secret layout (Ctrl key pressed during dialog)
-  if (result == GTK_RESPONSE_OK) {
-    GdkModifierType modifiers;
-    gdk_window_get_pointer(gtk_widget_get_window(GTK_WIDGET(dialog)), NULL,
-                           NULL, &modifiers);
-
-    if (modifiers & GDK_CONTROL_MASK) {
-      // Activate test layout
-      game->dealTestLayout();
-      game->refreshDisplay();
-    }
-  }
-
-  // Destroy dialog
-  gtk_widget_destroy(dialog);
-}
-
-void SpiderGame::dealTestLayout() {
-  // Clear all piles
-  if (win_animation_active_) {
-    stopWinAnimation();
-  }
-
-  stock_.clear();
-  waste_.clear();
-  foundation_.clear();
-  tableau_.clear();
-
-  // Reset foundation and tableau
-  // Number of foundation piles depends on the game mode
-  size_t num_decks = 1;
-  if (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) {
-    num_decks = 2;
-  } else if (current_game_mode_ == GameMode::TRIPLE_KLONDIKE) {
-    num_decks = 3;
-  }
-
-  // Resize foundation based on number of decks (4 foundations per deck)
-  foundation_.resize(4 * num_decks);
-  tableau_.resize(7);  // Always 7 tableau piles
-
-  // Set up each suit in order in the tableau
-  std::vector<cardlib::Card> all_cards;
-
-  // Create cards for each deck
-  for (size_t deck = 0; deck < num_decks; deck++) {
-    for (int suit = 0; suit < 4; suit++) {
-      // Add 13 cards of this suit to a vector in reverse order (King to Ace)
-      for (int rank = static_cast<int>(cardlib::Rank::KING);
-           rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
-        all_cards.emplace_back(static_cast<cardlib::Suit>(suit),
-                              static_cast<cardlib::Rank>(rank));
-      }
-    }
-  }
-
-  // Distribute the cards to tableau
-  for (size_t i = 0; i < all_cards.size(); i++) {
-    tableau_[i % 7].emplace_back(all_cards[i], true);  // All cards face up
-  }
-}
-
-void SpiderGame::initializeSettingsDir() {
-#ifdef _WIN32
-    char app_data[MAX_PATH];
-    HRESULT hr = SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data);
-    if (hr != S_OK) {
-        std::cerr << "SHGetFolderPathA failed with code: " << hr << std::endl;
-        settings_dir_ = "./";
-        return;
-    }
-    std::cerr << "AppData path: " << app_data << std::endl;
-    settings_dir_ = std::string(app_data) + "\\Solitaire";
-    std::cerr << "Settings dir: " << settings_dir_ << std::endl;
-    if (!CreateDirectoryA(settings_dir_.c_str(), NULL)) {
-        std::cerr << "CreateDirectoryA failed, error: " << GetLastError() << std::endl;
-    }
-#else
-    const char *home = getenv("HOME");
-    if (!home) {
-        settings_dir_ = "./";
-        return;
-    }
-    settings_dir_ = std::string(home) + "/.solitaire";
-    mkdir(settings_dir_.c_str(), 0755);
-#endif
-}
-
-bool SpiderGame::loadSettings() {
-  if (settings_dir_.empty()) {
-    std::cerr << "Settings directory is empty" << std::endl;
-    return false;
-  }
-
-  std::string settings_file = settings_dir_ +
-#ifdef _WIN32
-                              "\\settings.txt"
-#else
-                              "/settings.txt"
-#endif
-      ;
-
-  std::cerr << "Attempting to load settings from: " << settings_file << std::endl;
-  
-  std::ifstream file(settings_file);
-  if (!file) {
-    std::cerr << "Failed to open settings file" << std::endl;
-    return false;
-  }
-
-  std::string line;
-  while (std::getline(file, line)) {
-    if (line.substr(0, 10) == "card_back=") {
-      custom_back_path_ = line.substr(10);
-      std::cerr << "Loaded custom back path: " << custom_back_path_ << std::endl;
-    }
-  }
-
-  return true; // Return true if we successfully read the file, even if no custom back was found
-}
-
-void SpiderGame::saveSettings() {
-  if (settings_dir_.empty()) {
-    return;
-  }
-
-  std::string settings_file = settings_dir_ +
-#ifdef _WIN32
-                              "\\settings.txt"
-#else
-                              "/settings.txt"
-#endif
-      ;
-
-  std::ofstream file(settings_file);
-  if (!file) {
-    std::cerr << "Could not save settings" << std::endl;
-    return;
-  }
-
-  if (!custom_back_path_.empty()) {
-    file << "card_back=" << custom_back_path_ << std::endl;
-  }
-}
-
-bool SpiderGame::setCustomCardBack(const std::string &path) {
-
-  // First read the entire file into memory
-  std::ifstream file(path, std::ios::binary | std::ios::ate);
-  if (!file.is_open()) {
-    return false;
-  }
-
-  // Store original path
-  std::string old_path = custom_back_path_;
-
-  std::streamsize size = file.tellg();
-  file.seekg(0, std::ios::beg);
-
-  std::vector<char> buffer(size);
-  if (!file.read(buffer.data(), size)) {
-    return false;
-  }
-
-  // Now create pixbuf from memory
-  GError *error = nullptr;
-  GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
-
-  if (!gdk_pixbuf_loader_write(loader, (const guchar *)buffer.data(), size,
-                               &error)) {
-    if (error) {
-      g_error_free(error);
-    }
-    g_object_unref(loader);
-    return false;
-  }
-
-  if (!gdk_pixbuf_loader_close(loader, &error)) {
-    if (error) {
-      g_error_free(error);
-    }
-    g_object_unref(loader);
-    return false;
-  }
-
-  GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-  if (!pixbuf) {
-    g_object_unref(loader);
-    return false;
-  }
-
-  g_object_unref(loader); // This will also unreference the pixbuf
-
-  try {
-    custom_back_path_ = path;
-
-    saveSettings();
-
-    return true;
-
-  } catch (const std::exception &e) {
-    custom_back_path_ = old_path; // Restore old path
-    return false;
-  }
-}
-
-bool SpiderGame::loadDeck(const std::string &path) {
-  try {
-    // Load the new deck first to validate it
-    cardlib::Deck new_deck(path);
-    new_deck.removeJokers();
-
-    // If we got here, the deck loaded successfully
-    cleanupResources();
-    deck_ = std::move(new_deck);
-    refreshDisplay();
-    return true;
-  } catch (const std::exception &e) {
-    std::cerr << "Failed to load deck from " << path << ": " << e.what()
-              << std::endl;
-    GtkWidget *error_dialog = gtk_message_dialog_new(
-        GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
-        GTK_BUTTONS_OK, "Failed to load deck: %s", e.what());
-    gtk_dialog_run(GTK_DIALOG(error_dialog));
-    gtk_widget_destroy(error_dialog);
-    return false;
-  }
-}
-
-void SpiderGame::resetToDefaultBack() {
-  clearCustomBack();
-  refreshCardCache();
-  refreshDisplay();
-}
-
-void SpiderGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-  game->toggleFullscreen();
-}
-
-void SpiderGame::updateCardDimensions(int window_width, int window_height) {
-  double scale = getScaleFactor(window_width, window_height);
-
-  // Update current dimensions
-  current_card_width_ = static_cast<int>(BASE_CARD_WIDTH * scale);
-  current_card_height_ = static_cast<int>(BASE_CARD_HEIGHT * scale);
-  current_card_spacing_ = static_cast<int>(BASE_CARD_SPACING * scale);
-  current_vert_spacing_ = static_cast<int>(BASE_VERT_SPACING * scale);
-
-  // Ensure minimum sizes
-  current_card_width_ = std::max(current_card_width_, 60);
-  current_card_height_ = std::max(current_card_height_, 87);
-  current_card_spacing_ = std::max(current_card_spacing_, 10);
-  current_vert_spacing_ = std::max(current_vert_spacing_, 15);
-
-  // Ensure cards don't overlap
-  if (current_vert_spacing_ < current_card_height_ / 4) {
-    current_vert_spacing_ = current_card_height_ / 4;
-  }
-
-  // Reinitialize card cache with new dimensions
-  initializeCardCache();
-}
-
-double SpiderGame::getScaleFactor(int window_width, int window_height) const {
-  // Get the display scale factor (1.0 for 100%, 2.0 for 200%, etc.)
-  double display_scale = 1.0;
-  if (window_) {
-    GdkWindow *gdk_window = gtk_widget_get_window(window_);
-    if (gdk_window) {
-      display_scale = gdk_window_get_scale_factor(gdk_window);
-    }
-  }
-  
-  // Adjust window dimensions to logical pixels (divide by display scale)
-  int logical_width = static_cast<int>(window_width / display_scale);
-  int logical_height = static_cast<int>(window_height / display_scale);
-  
-  // Define optimal widths for each game mode based on testing
-  const int OPTIMAL_WIDTH_STANDARD = 800;
-  const int OPTIMAL_WIDTH_DOUBLE = 1300;
-  const int OPTIMAL_WIDTH_TRIPLE = 1800;
-  
-  // Select the optimal width based on current game mode
-  int optimal_width;
-  switch (current_game_mode_) {
-    case GameMode::DOUBLE_KLONDIKE:
-      optimal_width = OPTIMAL_WIDTH_DOUBLE;
-      break;
-    case GameMode::TRIPLE_KLONDIKE:
-      optimal_width = OPTIMAL_WIDTH_TRIPLE;
-      break;
-    case GameMode::STANDARD_KLONDIKE:
-    default:
-      optimal_width = OPTIMAL_WIDTH_STANDARD;
-      break;
-  }
-  
-  // Calculate scale factors using logical dimensions
-  double width_scale = static_cast<double>(logical_width) / optimal_width;
-  double height_scale = static_cast<double>(logical_height) / BASE_WINDOW_HEIGHT;
-  
-  // Use the smaller scale to ensure everything fits
-  return std::min(width_scale, height_scale);
-}
-
-void SpiderGame::autoFinishGame() {
-  // We need to use a timer to handle the animations properly
-  if (auto_finish_active_) {
-    return; // Don't restart if already running
-  }
-
-  // Explicitly deactivate keyboard navigation and selection
-  keyboard_navigation_active_ = false;
-  keyboard_selection_active_ = false;
-  // selected_pile_ = -1;
-  // selected_card_idx_ = -1;
-
-  auto_finish_active_ = true;
-
-  // Try to make the first move immediately
-  processNextAutoFinishMove();
-}
-
-void SpiderGame::processNextAutoFinishMove() {
-  if (!auto_finish_active_) {
-    return;
-  }
-
-  // If a foundation animation is currently running, wait for it to complete
-  if (foundation_move_animation_active_) {
-    // Set up a timer to check again after a short delay
-    if (auto_finish_timer_id_ > 0) {
-      g_source_remove(auto_finish_timer_id_);
-    }
-    auto_finish_timer_id_ = g_timeout_add(50, onAutoFinishTick, this);
-    return;
-  }
-
-  bool found_move = false;
-
-  // Check waste pile first
-  if (!waste_.empty()) {
-    const cardlib::Card &waste_card = waste_.back();
-
-    // Try to move the waste card to foundation
-    for (size_t f = 0; f < foundation_.size(); f++) {
-      if (canMoveToFoundation(waste_card, f)) {
-        // Play sound when a move is found and about to be executed
-        playSound(GameSoundEvent::CardPlace);
-        
-        // Use the animation to move the card
-        startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
-
-        // Remove card from waste pile
-        waste_.pop_back();
-
-        found_move = true;
-        break;
-      }
-    }
-  }
-
-  // Try each tableau pile if no move was found yet
-  if (!found_move) {
-    for (size_t t = 0; t < tableau_.size(); t++) {
-      auto &pile = tableau_[t];
-
-      if (!pile.empty() && pile.back().face_up) {
-        const cardlib::Card &top_card = pile.back().card;
-
-        // Try to move to foundation
-        for (size_t f = 0; f < foundation_.size(); f++) {
-          if (canMoveToFoundation(top_card, f)) {
-            // Play sound when a move is found and about to be executed
-            playSound(GameSoundEvent::CardPlace);
-            
-            // Use the animation to move the card
-            startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1, f + 2);
-
-            // Remove card from tableau
-            pile.pop_back();
-
-            // Flip the new top card if needed
-            if (!pile.empty() && !pile.back().face_up) {
-              playSound(GameSoundEvent::CardFlip);
-              pile.back().face_up = true;
-            }
-
-            found_move = true;
-            break;
-          }
-        }
-
-        if (found_move) {
-          break;
-        }
-      }
-    }
-  }
-
-  if (found_move) {
-    // Set up a timer to check for the next move after the animation completes
-    if (auto_finish_timer_id_ > 0) {
-      g_source_remove(auto_finish_timer_id_);
-    }
-    auto_finish_timer_id_ = g_timeout_add(200, onAutoFinishTick, this);
-  } else {
-    // No more moves to make
-    auto_finish_active_ = false;
-    if (auto_finish_timer_id_ > 0) {
-      g_source_remove(auto_finish_timer_id_);
-      auto_finish_timer_id_ = 0;
-    }
-
-    // Check if the player has won
-    if (checkWinCondition()) {
-      // FIX: Use conditional to call the right animation function for the active renderer
-        startWinAnimation();
-    }
-  }
-}
-
-gboolean SpiderGame::onAutoFinishTick(gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-  game->processNextAutoFinishMove();
-  return FALSE; // Don't repeat the timer
-}
-
-void SpiderGame::promptForSeed() {
-  GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "Enter Seed", GTK_WINDOW(window_),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
-      "_Cancel", GTK_RESPONSE_CANCEL,
-      "_OK", GTK_RESPONSE_ACCEPT,
-      NULL);
-
-  // Set the default response to ACCEPT (OK button)
-  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
-
-  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-  gtk_container_set_border_width(GTK_CONTAINER(content_area), 10);
-
-  GtkWidget *label = gtk_label_new("Enter a number to use as the game seed:");
-  gtk_container_add(GTK_CONTAINER(content_area), label);
-
-  // Create an entry with the current seed as the default value
-  GtkWidget *entry = gtk_entry_new();
-  gtk_entry_set_text(GTK_ENTRY(entry), std::to_string(current_seed_).c_str());
-  
-  // Select all text by default so it's easy to replace
-  gtk_editable_select_region(GTK_EDITABLE(entry), 0, -1);
-  
-  // Make the entry activate the default response (OK button) when Enter is pressed
-  gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
-  
-  gtk_container_add(GTK_CONTAINER(content_area), entry);
-
-  gtk_widget_show_all(dialog);
-
-  // Create tooltip for the seed entry field to provide more context
-  gtk_widget_set_tooltip_text(entry, "Current game seed. Press Enter to accept.");
-
-  if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-    const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
-    try {
-      current_seed_ = std::stoul(text);
-      initializeGame();
-      refreshDisplay();
-      updateWindowTitle();
-    } catch (...) {
-      // Invalid input, show an error message
-      GtkWidget *error_dialog = gtk_message_dialog_new(
-          GTK_WINDOW(window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-          GTK_MESSAGE_ERROR, GTK_BUTTONS_OK,
-          "Invalid seed. Please enter a valid number.");
-      gtk_dialog_run(GTK_DIALOG(error_dialog));
-      gtk_widget_destroy(error_dialog);
-    }
-  }
-
-  gtk_widget_destroy(dialog);
-}
-
-void SpiderGame::showHowToPlay() {
-  // Create dialog with OK button
-  GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "How To Play Solitaire", GTK_WINDOW(window_),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
-      "OK", GTK_RESPONSE_OK, NULL);
-
-  // Set minimum dialog size
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 500);
-
-  // Create and configure the content area
-  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-  gtk_container_set_border_width(GTK_CONTAINER(content_area), 24);
-  gtk_widget_set_margin_bottom(content_area, 12);
-
-  // Create a label with the title
-  GtkWidget *title_label = gtk_label_new(NULL);
-  const char *title_markup = "<span size='x-large' weight='bold'>How To Play Solitaire</span>";
-  gtk_label_set_markup(GTK_LABEL(title_label), title_markup);
-  gtk_container_add(GTK_CONTAINER(content_area), title_label);
-  gtk_widget_set_margin_bottom(title_label, 12);
-
-  // Create a text view for the instructions
-  GtkWidget *instructions_text = gtk_text_view_new();
-  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(instructions_text), GTK_WRAP_WORD);
-  gtk_text_view_set_editable(GTK_TEXT_VIEW(instructions_text), FALSE);
-  gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(instructions_text), FALSE);
-  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(instructions_text), 12);
-  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(instructions_text), 12);
-
-  // Add instructions text
-  GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
-  const char *instructions =
-      "Objective:\n"
-      "Build four ordered card piles at the top of the screen, one for each suit (♣,♦,♥,♠), "
-      "starting with Aces and ending with Kings.\n\n"
-      "Game Setup:\n"
-      "- Seven columns of cards are dealt from left to right\n"
-      "- Each column contains one more card than the column to its left\n"
-      "- The top card of each column is face up\n"
-      "- Remaining cards form the draw pile in the upper left\n\n"
-      "Rules:\n"
-      "1. In the tableau (main playing area), stack cards in descending order (King to Ace) "
-      "with alternating colors (red on black or black on red)\n"
-      "2. Move single cards or stacks of cards between columns\n"
-      "3. When you move a card that was covering a face-down card, the face-down card is "
-      "flipped over\n"
-      "4. Click the draw pile to reveal new cards when you need them\n"
-      "5. Build the four foundation piles at the top in ascending order (A,2,3...K) of the same suit\n"
-      "6. Empty spaces in the tableau can only be filled with Kings\n"
-      "7. The game is won when all cards are moved to the foundation piles\n\n"
-      "Controls:\n"
-      "- Left-click and drag to move cards\n"
-      "- Right-click to automatically move cards to the foundation piles\n"
-      "- Use the keyboard for navigation (see Keyboard Shortcuts in the Help menu)\n"
-      "- Use the Auto Finish feature (press F) when you're confident the game can be completed\n\n"
-      "Tips:\n"
-      "- Try to uncover face-down cards as soon as possible\n"
-      "- Keep color alternation in mind when planning moves\n"
-      "- Create empty columns to give yourself more flexibility\n"
-      "- Move cards to the foundations only when it won't block other important moves";
-
-  gtk_text_buffer_set_text(buffer, instructions, -1);
-
-  // Add text view to a scrolled window
-  GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_size_request(scrolled_window, 550, 400);
-  gtk_container_add(GTK_CONTAINER(scrolled_window), instructions_text);
-  gtk_container_add(GTK_CONTAINER(content_area), scrolled_window);
-
-  // Show all widgets and run the dialog
-  gtk_widget_show_all(dialog);
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
-}
-
-void SpiderGame::showKeyboardShortcuts() {
-  // Create dialog with OK button
-  GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "Keyboard Shortcuts", GTK_WINDOW(window_),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
-      "OK", GTK_RESPONSE_OK, NULL);
-
-  // Set dialog size
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 550, 450);
-
-  // Create and configure the content area
-  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-  gtk_container_set_border_width(GTK_CONTAINER(content_area), 24);
-  gtk_widget_set_margin_bottom(content_area, 12);
-
-  // Create a label with the title
-  GtkWidget *title_label = gtk_label_new(NULL);
-  const char *title_markup = "<span size='x-large' weight='bold'>Keyboard Shortcuts</span>";
-  gtk_label_set_markup(GTK_LABEL(title_label), title_markup);
-  gtk_container_add(GTK_CONTAINER(content_area), title_label);
-  gtk_widget_set_margin_bottom(title_label, 12);
-
-  // Create a grid to organize shortcuts
-  GtkWidget *grid = gtk_grid_new();
-  gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
-  gtk_grid_set_column_spacing(GTK_GRID(grid), 20);
-  gtk_container_add(GTK_CONTAINER(content_area), grid);
-
-  // Add header labels
-  GtkWidget *key_header = gtk_label_new(NULL);
-  gtk_label_set_markup(GTK_LABEL(key_header), "<b>Key</b>");
-  gtk_grid_attach(GTK_GRID(grid), key_header, 0, 0, 1, 1);
-
-  GtkWidget *action_header = gtk_label_new(NULL);
-  gtk_label_set_markup(GTK_LABEL(action_header), "<b>Action</b>");
-  gtk_grid_attach(GTK_GRID(grid), action_header, 1, 0, 1, 1);
-
-  // Define shortcuts
-  struct {
-    const char *key;
-    const char *action;
-  } shortcuts[] = {
-      {"Arrow Keys (←, →, ↑, ↓)", "Navigate between piles and cards"},
-      {"Enter", "Select a card or perform a move"},
-      {"Escape", "Cancel a selection or exit fullscreen"},
-      {"Space", "Draw cards from the stock pile"},
-      {"F", "Auto-finish (automatically move all possible cards to foundation)"},
-      {"1", "Switch to Draw One mode"},
-      {"3", "Switch to Draw Three mode"},
-      {"F11", "Toggle fullscreen mode"},
-      {"Ctrl+N", "New game"},
-      {"Ctrl+L", "Load custom deck"},
-      {"Ctrl+S", "Toggle sound on/off"},
-      {"Ctrl+H", "Show About dialog"},
-      {"Ctrl+Q", "Quit the game"},
-      {"F1", "Show How To Play / About dialog"}
-  };
-
-  // Add shortcut rows
-  for (int i = 0; i < sizeof(shortcuts) / sizeof(shortcuts[0]); i++) {
-    GtkWidget *key_label = gtk_label_new(shortcuts[i].key);
-    gtk_widget_set_halign(key_label, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(grid), key_label, 0, i + 1, 1, 1);
-
-    GtkWidget *action_label = gtk_label_new(shortcuts[i].action);
-    gtk_widget_set_halign(action_label, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(grid), action_label, 1, i + 1, 1, 1);
-  }
-
-  // Show all widgets and run the dialog
-  gtk_widget_show_all(dialog);
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
-}
-
-void SpiderGame::showDirectoryStructureDialog(const std::string &directory) {
-  // Create dialog with OK button
-  GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "Directory Contents - Debugging Info",
-      GTK_WINDOW(window_),
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
-      "OK", GTK_RESPONSE_OK, NULL);
-
-  // Set dialog size
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 600, 400);
-
-  // Create and configure the content area
-  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-  gtk_container_set_border_width(GTK_CONTAINER(content_area), 12);
-
-  // Create a text view for the directory contents
-  GtkWidget *text_view = gtk_text_view_new();
-  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD);
-  gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
-  gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(text_view), FALSE);
-  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(text_view), 8);
-  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(text_view), 8);
-
-  // Use monospace font for better readability
-  PangoFontDescription *font_desc = pango_font_description_from_string("Monospace 10");
-  gtk_widget_override_font(text_view, font_desc);
-  pango_font_description_free(font_desc);
-
-  // Get directory structure as string
-  std::string dir_info = getDirectoryStructure(directory);
-
-  // Set the text
-  GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
-  gtk_text_buffer_set_text(buffer, dir_info.c_str(), -1);
-
-  // Add text view to a scrolled window
-  GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_size_request(scrolled_window, 550, 350);
-  gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
-  gtk_container_add(GTK_CONTAINER(content_area), scrolled_window);
-
-  // Show all widgets and run the dialog
-  gtk_widget_show_all(dialog);
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
-}
-
-void SpiderGame::showMissingFileDialog(const std::string &filename, 
-                                          const std::string &details) {
-  // Create a dialog to show missing file error
-  GtkWidget *dialog = gtk_message_dialog_new(
-      GTK_WINDOW(window_),
-      GTK_DIALOG_DESTROY_WITH_PARENT,
-      GTK_MESSAGE_ERROR,
-      GTK_BUTTONS_OK,
-      "Missing Required File");
-  
-  // Set detailed message
-  std::string message = "Could not find " + filename + ".\n\n" + details + 
-                        "\n\nPlease ensure the file is in the application directory.";
-  gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), 
-                                           "%s", message.c_str());
-  
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
-}
-
-void SpiderGame::showErrorDialog(const std::string &title, 
-                                    const std::string &message) {
-  // Create a dialog to show error
-  GtkWidget *dialog = gtk_message_dialog_new(
-      GTK_WINDOW(window_),
-      GTK_DIALOG_DESTROY_WITH_PARENT,
-      GTK_MESSAGE_ERROR,
-      GTK_BUTTONS_OK,
-      "%s", title.c_str());
-  
-  // Set detailed message
-  gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), 
-                                           "%s", message.c_str());
-  
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
+void PyramidGame::dealTestLayout() {
+  // TODO: Implement for testing
 }

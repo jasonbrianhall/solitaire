@@ -1,279 +1,300 @@
 #include "pyramid.h"
 #include <iostream>
 
-// Fix for onButtonPress in mouse.cpp to handle all foundation piles
-gboolean SpiderGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
-                                      gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
+// Pyramid Solitaire mouse input handler
+// This file handles all mouse interactions: card selection and pairing
+
+gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
+                                     gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
 
   game->keyboard_navigation_active_ = false;
   game->keyboard_selection_active_ = false;
 
-  if (game->win_animation_active_) {
-    game->stopWinAnimation();
-    return TRUE;
-  }
-
-  // If any animation is active, block all interactions
-  if (game->foundation_move_animation_active_ ||
-      game->stock_to_waste_animation_active_) {
+  // Block interactions during animations
+  if (game->win_animation_active_ || game->deal_animation_active_) {
     return TRUE;
   }
 
   if (event->button == 1) { // Left click
-    auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
+    auto [pile_id, _] = game->getPileAt(event->x, event->y);
 
-    if (pile_index == 0) { // Stock pile
+    if (pile_id == 0) { // Stock pile
       game->handleStockPileClick();
       return TRUE;
     }
 
-    if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
-      game->dragging_ = true;
-      game->drag_source_pile_ = pile_index;
-      game->drag_start_x_ = event->x;
-      game->drag_start_y_ = event->y;
-      game->drag_cards_ = game->getDragCards(pile_index, card_index);
-      game->playSound(GameSoundEvent::CardFlip);
-      
-      // Calculate offsets
-      int x_offset_multiplier;
-      // Calculate max foundation index
-      int max_foundation_index = 2 + game->foundation_.size() - 1;
-      // First tableau index is right after the last foundation
-      int first_tableau_index = max_foundation_index + 1;
-      
-      if (pile_index >= 2 && pile_index <= max_foundation_index) { 
-        // Foundation piles - adjust offset multiplier
-        // Use correct foundation position for drag offset
-        x_offset_multiplier = 3 + (pile_index - 2);
-      } else if (pile_index >= first_tableau_index) { 
-        // Tableau piles - use tableau index for offset
-        x_offset_multiplier = pile_index - first_tableau_index;
-      } else if (pile_index == 1) { // Waste pile
-        x_offset_multiplier = 1;
-      } else { // Stock pile
-        x_offset_multiplier = 0;
+    if (pile_id == 1) { // Waste pile
+      if (!game->waste_.empty()) {
+        game->selectWasteCard();
       }
-
-      game->drag_offset_x_ =
-          event->x - (game->current_card_spacing_ +
-                      x_offset_multiplier * (game->current_card_width_ +
-                                             game->current_card_spacing_));
-
-      if (pile_index >= first_tableau_index) { // Tableau piles
-        int tableau_idx = pile_index - first_tableau_index;
-        if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
-          game->drag_offset_y_ =
-              event->y -
-              (game->current_card_spacing_ + game->current_card_height_ +
-               game->current_vert_spacing_ +
-               card_index * game->current_vert_spacing_);
-        }
-      } else { // Stock, waste, and foundation piles
-        game->drag_offset_y_ = event->y - game->current_card_spacing_;
-      }
+      return TRUE;
     }
-  } else if (event->button == 3) { // Right click
-    // Instead of trying to move specific cards, just call autoFinishGame()
-    // which already knows how to properly move cards to foundation piles
-    game->autoFinishGame();
+
+    if (pile_id >= 2) { // Pyramid card (encoded as row*10 + col + 2)
+      int pyramid_id = pile_id - 2;
+      int row = pyramid_id / 10;
+      int col = pyramid_id % 10;
+
+      if (row >= 0 && row < 7 && col >= 0 && col <= row) {
+        game->selectPyramidCard(row, col);
+      }
+      return TRUE;
+    }
+  } else if (event->button == 3) { // Right click - deselect
+    game->selected_card_row_ = -1;
+    game->selected_card_col_ = -1;
+    game->card_selected_ = false;
+    game->refreshDisplay();
     return TRUE;
   }
 
   return TRUE;
 }
 
-
-gboolean SpiderGame::onButtonRelease(GtkWidget *widget,
-                                        GdkEventButton *event, gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
+gboolean PyramidGame::onButtonRelease(GtkWidget *widget, GdkEventButton *event,
+                                       gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
   game->keyboard_navigation_active_ = false;
 
-  if (event->button == 1 && game->dragging_) {
-    auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
-
-    if (target_pile >= 0) {
-      bool move_successful = false;
-
-      // Calculate max foundation index based on actual foundation size
-      int max_foundation_index = 2 + game->foundation_.size() - 1;
-      
-      // Calculate first tableau index
-      int first_tableau_index = max_foundation_index + 1;
-      
-      // Handle dropping on foundation piles
-      if (target_pile >= 2 && target_pile <= max_foundation_index) {
-        auto &foundation_pile = game->foundation_[target_pile - 2];
-        if (game->canMoveToPile(game->drag_cards_, foundation_pile, true)) {
-          // Remove card from source
-          if (game->drag_source_pile_ >= first_tableau_index) {
-            int tableau_idx = game->drag_source_pile_ - first_tableau_index;
-            if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
-              auto &source_tableau = game->tableau_[tableau_idx];
-              source_tableau.pop_back();
-
-              // Flip over the new top card if there is one
-              if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                source_tableau.back().face_up = true;
-              }
-            }
-          } else {
-            auto &source = game->getPileReference(game->drag_source_pile_);
-            source.pop_back();
-          }
-
-          // Add to foundation
-          foundation_pile.push_back(game->drag_cards_[0]);
-          move_successful = true;
-        }
-      }
-      // Handle dropping on tableau piles
-      else if (target_pile >= first_tableau_index) {
-        int tableau_idx = target_pile - first_tableau_index;
-        if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
-          auto &tableau_pile = game->tableau_[tableau_idx];
-          std::vector<cardlib::Card> target_cards;
-          if (!tableau_pile.empty()) {
-            target_cards = {tableau_pile.back().card};
-          }
-
-          if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
-            // Remove cards from source
-            if (game->drag_source_pile_ >= first_tableau_index) {
-              int source_tableau_idx = game->drag_source_pile_ - first_tableau_index;
-              if (source_tableau_idx >= 0 && static_cast<size_t>(source_tableau_idx) < game->tableau_.size()) {
-                auto &source_tableau = game->tableau_[source_tableau_idx];
-                source_tableau.erase(source_tableau.end() -
-                                     game->drag_cards_.size(),
-                                     source_tableau.end());
-
-                // Flip over the new top card if there is one
-                if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                  source_tableau.back().face_up = true;
-                }
-              }
-            } else {
-              auto &source = game->getPileReference(game->drag_source_pile_);
-              source.erase(source.end() - game->drag_cards_.size(), source.end());
-            }
-
-            // Add cards to target tableau
-            for (const auto &card : game->drag_cards_) {
-              tableau_pile.emplace_back(card, true);
-            }
-            move_successful = true;
-            game->playSound(GameSoundEvent::CardPlace);
-          }
-        }
-      }
-
-      if (move_successful) {
-        if (game->checkWinCondition()) {
-          game->startWinAnimation(); // Start animation instead of showing dialog
-        }
-        gtk_widget_queue_draw(game->game_area_);
-      }
-    }
-
-    game->dragging_ = false;
-    game->drag_cards_.clear();
-    game->drag_source_pile_ = -1;
-    gtk_widget_queue_draw(game->game_area_);
-  }
+  // In Pyramid Solitaire, we don't use drag-and-drop
+  // All interactions are click-based
 
   return TRUE;
 }
 
-void SpiderGame::handleStockPileClick() {
-  if (stock_.empty()) {
-    // If stock is empty, move all waste cards back to stock in reverse order
-    while (!waste_.empty()) {
-      stock_.push_back(waste_.back());
-      waste_.pop_back();
-    }
-    refreshDisplay();
+gboolean PyramidGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
+                                      gpointer data) {
+  PyramidGame *game = static_cast<PyramidGame *>(data);
+
+  // In Pyramid Solitaire, motion events are not used
+  // Could add hover effects here if desired
+
+  return TRUE;
+}
+
+// ============================================================================
+// CARD SELECTION AND REMOVAL LOGIC
+// ============================================================================
+
+void PyramidGame::selectPyramidCard(int row, int col) {
+  // Validate position
+  if (row < 0 || row >= 7 || col < 0 || col > row) {
+    return;
+  }
+
+  // Check if card is already removed
+  if (pyramid_[row][col].removed) {
+    return;
+  }
+
+  // Check if card is exposed (can be selected)
+  if (!isCardExposed(row, col)) {
+    playSound(GameSoundEvent::NoMatch);
+    return;
+  }
+
+  const cardlib::Card &card = pyramid_[row][col].card;
+
+  if (!card_selected_) {
+    // First card selection
+    selected_card_row_ = row;
+    selected_card_col_ = col;
+    card_selected_ = true;
+    playSound(GameSoundEvent::CardFlip);
   } else {
-    // Don't start a new animation if one is already running
-    if (stock_to_waste_animation_active_) {
-      return;
-    }
+    // Second card clicked
 
-    // Start animation instead of immediately moving cards
-    startStockToWasteAnimation();
+    if (selected_card_row_ == row && selected_card_col_ == col) {
+      // Same card clicked twice
+      if (canRemoveKing(card)) {
+        // King: remove on second click
+        removeKing(row, col);
+        playSound(GameSoundEvent::CardPlace);
+
+        if (checkWinCondition()) {
+          startWinAnimation();
+        }
+      } else {
+        // Non-King: deselect
+        playSound(GameSoundEvent::NoMatch);
+      }
+
+      selected_card_row_ = -1;
+      selected_card_col_ = -1;
+      card_selected_ = false;
+    } else {
+      // Different card clicked
+      const cardlib::Card &selected = pyramid_[selected_card_row_][selected_card_col_].card;
+
+      if (canRemovePair(selected, card)) {
+        // Valid pair - remove both
+        removePair(selected_card_row_, selected_card_col_, row, col);
+        playSound(GameSoundEvent::CardPlace);
+
+        if (checkWinCondition()) {
+          startWinAnimation();
+        }
+      } else {
+        // Invalid pair
+        playSound(GameSoundEvent::NoMatch);
+      }
+
+      // Reset selection
+      selected_card_row_ = -1;
+      selected_card_col_ = -1;
+      card_selected_ = false;
+    }
+  }
+
+  refreshDisplay();
+}
+
+void PyramidGame::selectWasteCard() {
+  if (!waste_.empty()) {
+    playSound(GameSoundEvent::CardFlip);
+    // In basic Pyramid, you don't directly use waste cards
+    // This could be extended for variant rules
   }
 }
 
-bool SpiderGame::tryMoveToFoundation(const cardlib::Card &card) {
-  // Try each foundation pile
-  for (size_t i = 0; i < foundation_.size(); i++) {
-    std::vector<cardlib::Card> cards = {card};
-    if (canMoveToPile(cards, foundation_[i], true)) {
-      foundation_[i].push_back(card);
-      return true;
-    }
+void PyramidGame::handleStockPileClick() {
+  if (stock_.empty()) {
+    // Stock is empty - game continues with pyramid cards only
+    playSound(GameSoundEvent::NoMatch);
+  } else {
+    // Draw one card from stock to waste
+    waste_.push_back(stock_.back());
+    stock_.pop_back();
+    playSound(GameSoundEvent::DealCard);
+    refreshDisplay();
   }
-  return false;
 }
 
-gboolean SpiderGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
-                                       gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
-
-  if (game->dragging_) {
-    game->drag_start_x_ = event->x;
-    game->drag_start_y_ = event->y;
-    gtk_widget_queue_draw(game->game_area_);
+void PyramidGame::removePair(int row1, int col1, int row2, int col2) {
+  if (row1 >= 0 && row1 < 7 && col1 >= 0 && col1 <= row1 &&
+      row2 >= 0 && row2 < 7 && col2 >= 0 && col2 <= row2) {
+    pyramid_[row1][col1].removed = true;
+    pyramid_[row2][col2].removed = true;
   }
-
-  return TRUE;
 }
 
-// Fix for the getDragCards function in mouse.cpp
-std::vector<cardlib::Card> SpiderGame::getDragCards(int pile_index,
-                                                     int card_index) {
-  // Calculate maximum foundation index
-  int max_foundation_index = 2 + foundation_.size() - 1;
-  
-  // Calculate first tableau index
-  int first_tableau_index = max_foundation_index + 1;
-  
-  // Check foundation piles
-  if (pile_index >= 2 && pile_index <= max_foundation_index) {
-    // Get foundation pile
-    const auto &foundation_pile = foundation_[pile_index - 2];
-    if (card_index >= 0 && static_cast<size_t>(card_index) < foundation_pile.size()) {
-      // Return only the top card
-      return {foundation_pile.back()};
-    }
-    return std::vector<cardlib::Card>();
+void PyramidGame::removeKing(int row, int col) {
+  if (row >= 0 && row < 7 && col >= 0 && col <= row) {
+    pyramid_[row][col].removed = true;
   }
-  
-  // Check tableau piles
-  if (pile_index >= first_tableau_index) {
-    int tableau_idx = pile_index - first_tableau_index;
-    if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
-      const auto &tableau_pile = tableau_[tableau_idx];
-      if (card_index >= 0 &&
-          static_cast<size_t>(card_index) < tableau_pile.size() &&
-          tableau_pile[card_index].face_up) {
-        return getTableauCardsAsCards(tableau_pile, card_index);
+}
+
+// ============================================================================
+// CARD EXPOSURE AND VALIDATION
+// ============================================================================
+
+bool PyramidGame::isCardExposed(int row, int col) const {
+  // Check bounds
+  if (row < 0 || row >= 7 || col < 0 || col > row) {
+    return false;
+  }
+
+  // Already removed cards are not exposed
+  if (pyramid_[row][col].removed) {
+    return false;
+  }
+
+  // Bottom row (row 6) is always exposed
+  if (row == 6) {
+    return true;
+  }
+
+  // For other rows, both cards below must be removed
+  bool left_removed = pyramid_[row + 1][col].removed;
+  bool right_removed = pyramid_[row + 1][col + 1].removed;
+
+  return left_removed && right_removed;
+}
+
+bool PyramidGame::canRemovePair(const cardlib::Card &card1,
+                                 const cardlib::Card &card2) const {
+  int value1 = getCardValue(card1);
+  int value2 = getCardValue(card2);
+
+  return (value1 + value2) == 13;
+}
+
+bool PyramidGame::canRemoveKing(const cardlib::Card &card) const {
+  return card.rank == cardlib::Rank::KING;
+}
+
+int PyramidGame::getCardValue(const cardlib::Card &card) const {
+  switch (card.rank) {
+    case cardlib::Rank::ACE:
+      return 1;
+    case cardlib::Rank::TWO:
+      return 2;
+    case cardlib::Rank::THREE:
+      return 3;
+    case cardlib::Rank::FOUR:
+      return 4;
+    case cardlib::Rank::FIVE:
+      return 5;
+    case cardlib::Rank::SIX:
+      return 6;
+    case cardlib::Rank::SEVEN:
+      return 7;
+    case cardlib::Rank::EIGHT:
+      return 8;
+    case cardlib::Rank::NINE:
+      return 9;
+    case cardlib::Rank::TEN:
+      return 10;
+    case cardlib::Rank::JACK:
+      return 11;
+    case cardlib::Rank::QUEEN:
+      return 12;
+    case cardlib::Rank::KING:
+      return 13;
+    default:
+      return 0;
+  }
+}
+
+std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
+  int pyramid_start_y = 100;
+
+  // Check pyramid positions
+  for (int row = 0; row < 7; row++) {
+    int row_width = (row + 1) * (current_card_width_ + current_card_spacing_);
+    int row_x = (game_area_width_ - row_width) / 2; // Center horizontally
+
+    for (int col = 0; col <= row; col++) {
+      int card_x = row_x + col * (current_card_width_ + current_card_spacing_);
+      int card_y = pyramid_start_y + row * (current_card_height_ + current_vert_spacing_);
+
+      // Check if click is on this card
+      if (x >= card_x && x < card_x + current_card_width_ &&
+          y >= card_y && y < card_y + current_card_height_) {
+        // Encode as (row*10 + col + 2) to avoid conflicts with stock(0) and waste(1)
+        return {row * 10 + col + 2, 0};
       }
     }
-    return std::vector<cardlib::Card>();
   }
 
-  // Handle other piles (stock, waste)
-  if (pile_index == 0 || pile_index == 1) {
-    try {
-      auto &pile = getPileReference(pile_index);
-      if (card_index >= 0 && static_cast<size_t>(card_index) < pile.size()) {
-        return std::vector<cardlib::Card>(pile.begin() + card_index, pile.end());
-      }
-    } catch (const std::exception &e) {
-      std::cerr << "Error in getDragCards: " << e.what() << std::endl;
-    }
+  // Check stock pile position (top right)
+  int stock_x = game_area_width_ - current_card_width_ - current_card_spacing_;
+  int stock_y = current_card_spacing_;
+
+  if (x >= stock_x && x < stock_x + current_card_width_ &&
+      y >= stock_y && y < stock_y + current_card_height_) {
+    return {0, 0}; // Stock pile
   }
-  
-  return std::vector<cardlib::Card>();
+
+  // Check waste pile position (next to stock)
+  int waste_x = stock_x - current_card_width_ - current_card_spacing_;
+
+  if (x >= waste_x && x < waste_x + current_card_width_ &&
+      y >= stock_y && y < stock_y + current_card_height_) {
+    return {1, 0}; // Waste pile
+  }
+
+  // No hit
+  return {-1, -1};
 }

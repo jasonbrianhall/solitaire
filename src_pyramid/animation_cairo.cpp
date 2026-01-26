@@ -1,4 +1,4 @@
-#include "pyramid.h"
+#include "solitaire.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -7,7 +7,7 @@
 #include <direct.h>
 #endif
 
-void SpiderGame::drawCardFragment(cairo_t *cr,
+void SolitaireGame::drawCardFragment(cairo_t *cr,
                                      const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
   if (!fragment.active || !fragment.surface)
@@ -40,8 +40,8 @@ void SpiderGame::drawCardFragment(cairo_t *cr,
   cairo_restore(cr);
 }
 
-gboolean SpiderGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
+gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
 
   // Get the widget dimensions
   GtkAllocation allocation;
@@ -79,7 +79,7 @@ gboolean SpiderGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
 }
 
 // Initialize or resize the drawing buffer as needed
-void SpiderGame::initializeOrResizeBuffer(int width, int height) {
+void SolitaireGame::initializeOrResizeBuffer(int width, int height) {
   if (!buffer_surface_ ||
       cairo_image_surface_get_width(buffer_surface_) != width ||
       cairo_image_surface_get_height(buffer_surface_) != height) {
@@ -96,7 +96,7 @@ void SpiderGame::initializeOrResizeBuffer(int width, int height) {
 }
 
 // Draw foundation pile during win animation
-void SpiderGame::drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+void SolitaireGame::drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
   // Only draw the topmost non-animated card
   for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
     if (!animated_foundation_cards_[pile_index][j]) {
@@ -107,7 +107,7 @@ void SpiderGame::drawFoundationDuringWinAnimation(size_t pile_index, const std::
 }
 
 // Draw foundation pile during normal gameplay
-void SpiderGame::drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
+void SolitaireGame::drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y) {
   // Check if the top card is being dragged from foundation
   bool top_card_dragging =
       (dragging_ && drag_source_pile_ == pile_index + 2 &&
@@ -127,7 +127,7 @@ void SpiderGame::drawNormalFoundationPile(size_t pile_index, const std::vector<c
 
 // Draw tableau piles during normal gameplay
 // Fix to prevent tableau cards from disappearing when dragging foundation cards
-void SpiderGame::drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
+void SolitaireGame::drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
   // Calculate max foundation index and first tableau index
   int max_foundation_index = 2 + foundation_.size() - 1;
   int first_tableau_index = max_foundation_index + 1;
@@ -149,7 +149,7 @@ void SpiderGame::drawNormalTableauPile(size_t pile_index, const std::vector<Tabl
 }
 
 // Draw all active animations and dragged cards
-void SpiderGame::drawAllAnimations() {
+void SolitaireGame::drawAllAnimations() {
   // Draw stock to waste animation
   if (stock_to_waste_animation_active_) {
     drawAnimatedCard(buffer_cr_, stock_to_waste_card_);
@@ -177,7 +177,7 @@ void SpiderGame::drawAllAnimations() {
 }
 
 // Draw cards that are currently being dragged
-void SpiderGame::drawDraggedCards() {
+void SolitaireGame::drawDraggedCards() {
   int drag_x = static_cast<int>(drag_start_x_ - drag_offset_x_);
   int drag_y = static_cast<int>(drag_start_y_ - drag_offset_y_);
 
@@ -189,7 +189,7 @@ void SpiderGame::drawDraggedCards() {
 }
 
 // Draw the win animation effects
-void SpiderGame::drawWinAnimation() {
+void SolitaireGame::drawWinAnimation() {
   for (const auto &anim_card : animated_cards_) {
     if (!anim_card.active)
       continue;
@@ -209,7 +209,7 @@ void SpiderGame::drawWinAnimation() {
 }
 
 // Draw the deal animation
-void SpiderGame::drawDealAnimation() {
+void SolitaireGame::drawDealAnimation() {
   // Debug indicator - small red square to indicate deal animation is active
   cairo_set_source_rgb(buffer_cr_, 1.0, 0.0, 0.0);
   cairo_rectangle(buffer_cr_, 10, 10, 10, 10);
@@ -222,7 +222,7 @@ void SpiderGame::drawDealAnimation() {
   }
 }
 
-void SpiderGame::explodeCard(AnimatedCard &card) {
+void SolitaireGame::explodeCard(AnimatedCard &card) {
   // Mark the card as exploded
   card.exploded = true;
 
@@ -333,7 +333,7 @@ void SpiderGame::explodeCard(AnimatedCard &card) {
   // cairo_surface_destroy(card_surface);
 }
 
-void SpiderGame::startDealAnimation() {
+void SolitaireGame::startDealAnimation() {
   if (deal_animation_active_)
     return;
 
@@ -370,13 +370,13 @@ void SpiderGame::startDealAnimation() {
   refreshDisplay();
 }
 
-gboolean SpiderGame::onDealAnimationTick(gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
+gboolean SolitaireGame::onDealAnimationTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
   game->updateDealAnimation();
   return game->deal_animation_active_ ? TRUE : FALSE;
 }
 
-void SpiderGame::updateDealAnimation() {
+void SolitaireGame::updateDealAnimation() {
   if (!deal_animation_active_)
     return;
 
@@ -443,7 +443,7 @@ void SpiderGame::updateDealAnimation() {
   refreshDisplay();
 }
 
-void SpiderGame::dealNextCard() {
+void SolitaireGame::dealNextCard() {
   if (cards_dealt_ >= 28)
     return;
 
@@ -505,7 +505,7 @@ void SpiderGame::dealNextCard() {
   cards_dealt_++;
 }
 
-void SpiderGame::startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
+void SolitaireGame::startFoundationMoveAnimation(const cardlib::Card &card, int source_pile, int source_index, int target_pile) {
   // If there's already an animation running, complete it immediately
   // before starting a new one to avoid race conditions
   if (foundation_move_animation_active_) {
@@ -588,13 +588,13 @@ void SpiderGame::startFoundationMoveAnimation(const cardlib::Card &card, int sou
   refreshDisplay();
 }
 
-gboolean SpiderGame::onFoundationMoveAnimationTick(gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
+gboolean SolitaireGame::onFoundationMoveAnimationTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
   game->updateFoundationMoveAnimation();
   return game->foundation_move_animation_active_ ? TRUE : FALSE;
 }
 
-void SpiderGame::updateFoundationMoveAnimation() {
+void SolitaireGame::updateFoundationMoveAnimation() {
   if (!foundation_move_animation_active_)
     return;
 
@@ -655,7 +655,7 @@ void SpiderGame::updateFoundationMoveAnimation() {
   refreshDisplay();
 }
 
-void SpiderGame::drawAnimatedCard(cairo_t *cr,
+void SolitaireGame::drawAnimatedCard(cairo_t *cr,
                                      const AnimatedCard &anim_card) {
   if (!anim_card.active)
     return;
@@ -675,7 +675,7 @@ void SpiderGame::drawAnimatedCard(cairo_t *cr,
   cairo_restore(cr);
 }
 
-void SpiderGame::startStockToWasteAnimation() {
+void SolitaireGame::startStockToWasteAnimation() {
   if (stock_to_waste_animation_active_ || stock_.empty())
     return;
   playSound(GameSoundEvent::CardFlip);
@@ -736,13 +736,13 @@ void SpiderGame::startStockToWasteAnimation() {
   refreshDisplay();
 }
 
-gboolean SpiderGame::onStockToWasteAnimationTick(gpointer data) {
-  SpiderGame *game = static_cast<SpiderGame *>(data);
+gboolean SolitaireGame::onStockToWasteAnimationTick(gpointer data) {
+  SolitaireGame *game = static_cast<SolitaireGame *>(data);
   game->updateStockToWasteAnimation();
   return game->stock_to_waste_animation_active_ ? TRUE : FALSE;
 }
 
-void SpiderGame::updateStockToWasteAnimation() {
+void SolitaireGame::updateStockToWasteAnimation() {
   if (!stock_to_waste_animation_active_)
     return;
 
@@ -792,7 +792,7 @@ void SpiderGame::updateStockToWasteAnimation() {
   refreshDisplay();
 }
 
-void SpiderGame::completeStockToWasteAnimation() {
+void SolitaireGame::completeStockToWasteAnimation() {
   stock_to_waste_animation_active_ = false;
 
   if (animation_timer_id_ > 0) {
@@ -805,7 +805,7 @@ void SpiderGame::completeStockToWasteAnimation() {
 }
 
 // Highlight the selected card in the onDraw method
-void SpiderGame::highlightSelectedCard(cairo_t *cr) {
+void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
   int x = 0, y = 0;
 
   if (!cr || selected_pile_ == -1) {
@@ -935,7 +935,7 @@ void SpiderGame::highlightSelectedCard(cairo_t *cr) {
   }
 }
 
-SpiderGame::~SpiderGame() {
+SolitaireGame::~SolitaireGame() {
   if (buffer_cr_) {
     cairo_destroy(buffer_cr_);
   }
@@ -945,7 +945,7 @@ SpiderGame::~SpiderGame() {
   cleanupAudio();
 }
 
-void SpiderGame::drawCard(cairo_t *cr, int x, int y,
+void SolitaireGame::drawCard(cairo_t *cr, int x, int y,
                              const cardlib::Card *card, bool face_up) {
   if (face_up && card) {
 
@@ -1051,7 +1051,7 @@ void SpiderGame::drawCard(cairo_t *cr, int x, int y,
   }
 }
 
-void SpiderGame::initializeCardCache() {
+void SolitaireGame::initializeCardCache() {
   // Pre-load all card images into cairo surfaces with current dimensions
   cleanupCardCache();
 
@@ -1108,26 +1108,26 @@ void SpiderGame::initializeCardCache() {
   }
 }
 
-void SpiderGame::cleanupCardCache() {
+void SolitaireGame::cleanupCardCache() {
   for (auto &[key, surface] : card_surface_cache_) {
     cairo_surface_destroy(surface);
   }
   card_surface_cache_.clear();
 }
 
-cairo_surface_t *SpiderGame::getCardSurface(const cardlib::Card &card) {
+cairo_surface_t *SolitaireGame::getCardSurface(const cardlib::Card &card) {
   std::string key = std::to_string(static_cast<int>(card.suit)) +
                     std::to_string(static_cast<int>(card.rank));
   auto it = card_surface_cache_.find(key);
   return it != card_surface_cache_.end() ? it->second : nullptr;
 }
 
-cairo_surface_t *SpiderGame::getCardBackSurface() {
+cairo_surface_t *SolitaireGame::getCardBackSurface() {
   auto it = card_surface_cache_.find("back");
   return it != card_surface_cache_.end() ? it->second : nullptr;
 }
 
-void SpiderGame::cleanupResources() {
+void SolitaireGame::cleanupResources() {
   // Clean up Cairo resources
   if (buffer_cr_) {
     cairo_destroy(buffer_cr_);
@@ -1142,7 +1142,7 @@ void SpiderGame::cleanupResources() {
   cleanupCardCache();
 }
 
-void SpiderGame::clearCustomBack() {
+void SolitaireGame::clearCustomBack() {
   custom_back_path_.clear();
 
   // Remove the custom back from cache if it exists
@@ -1156,7 +1156,7 @@ void SpiderGame::clearCustomBack() {
   saveSettings();
 }
 
-void SpiderGame::drawEmptyPile(cairo_t *cr, int x, int y) {
+void SolitaireGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   // Draw a placeholder for an empty pile (cell or foundation)
   cairo_save(cr);
   
@@ -1183,7 +1183,7 @@ void SpiderGame::drawEmptyPile(cairo_t *cr, int x, int y) {
   cairo_restore(cr);
 }
 
-void SpiderGame::refreshCardCache() {
+void SolitaireGame::refreshCardCache() {
   // Clean up existing cache
   cleanupCardCache();
 
@@ -1242,7 +1242,7 @@ void SpiderGame::refreshCardCache() {
   }
 }
 
-void SpiderGame::clearAndRebuildCaches() {
+void SolitaireGame::clearAndRebuildCaches() {
   // Clear and rebuild Cairo card surface cache
   cleanupCardCache();
 
