@@ -13,8 +13,8 @@ SRCS_LINUX_KLONDIKE = src_klondike/pulseaudioplayer.cpp src_klondike/animation_g
 SRCS_WIN_KLONDIKE = src_klondike/windowsaudioplayer.cpp
 
 # Source files for Spider Solitaire
-SRCS_COMMON_SPIDER = src_spider/spider.cpp src_spider/cardlib.cpp src_spider/sound.cpp src_spider/animation.cpp src_spider/keyboard.cpp src_spider/audiomanager.cpp src_spider/spiderdeck.cpp
-SRCS_LINUX_SPIDER = src_spider/pulseaudioplayer.cpp src_spider/animation_gl.cpp
+SRCS_COMMON_SPIDER = src_spider/spider.cpp src_spider/cardlib.cpp src_spider/sound.cpp src_spider/spider_animation.cpp src_spider/keyboard.cpp src_spider/audiomanager.cpp src_spider/spiderdeck.cpp
+SRCS_LINUX_SPIDER = src_spider/pulseaudioplayer.cpp src_spider/spider_animation_gl.cpp
 SRCS_WIN_SPIDER = src_spider/windowsaudioplayer.cpp
 
 # Source files for FreeCell
