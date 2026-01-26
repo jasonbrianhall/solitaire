@@ -466,7 +466,6 @@ void SolitaireGame::drawBackground(cairo_t *cr) {
 
 // Draw the stock pile
 void SolitaireGame::drawStockPile(cairo_t *cr) {
-  printf("Drawing stock pile\n");
   int x = current_card_spacing_;
   int y = current_card_spacing_;
   
@@ -849,7 +848,94 @@ void SolitaireGame::drawDealAnimation(cairo_t *cr) {
 // Draw keyboard navigation highlight
 void SolitaireGame::drawKeyboardNavigation(cairo_t *cr) {
   highlightSelectedCard(cr);
+
 }
+
+void SolitaireGame::highlightSelectedCard(cairo_t *cr) {
+  int x = 0, y = 0;
+
+  if (!cr || selected_pile_ == -1) {
+    return;
+  }
+
+  // Validate keyboard selection
+  if (keyboard_selection_active_) {
+    if (source_pile_ < 6 || source_pile_ > 15 ||
+        source_pile_ - 6 >= tableau_.size()) {
+      // Invalid source pile, reset selection state
+      keyboard_selection_active_ = false;
+      source_pile_ = -1;
+      source_card_idx_ = -1;
+      return;
+    }
+  }
+
+  // Determine position based on pile type
+  if (selected_pile_ == 0) {
+    // Stock pile
+    x = current_card_spacing_;
+    y = current_card_spacing_;
+  } else if (selected_pile_ >= 6 && selected_pile_ <= 15) {
+    // Tableau piles (10 piles for Spider)
+    int tableau_idx = selected_pile_ - 6;
+    x = current_card_spacing_ +
+        tableau_idx * (current_card_width_ + current_card_spacing_);
+
+    // For empty tableau piles, highlight the empty space
+    if (selected_card_idx_ == -1) {
+      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+    } else {
+      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+          selected_card_idx_ * current_vert_spacing_;
+    }
+  }
+
+  // Choose highlight color based on whether we're selecting a card to move
+  if (keyboard_selection_active_ && source_pile_ == selected_pile_ &&
+      (source_card_idx_ == selected_card_idx_ || selected_card_idx_ == -1)) {
+    // Source card/pile is highlighted in blue
+    cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.5); // Semi-transparent blue
+  } else {
+    // Regular selection is highlighted in yellow
+    cairo_set_source_rgba(cr, 1.0, 1.0, 0.0, 0.5); // Semi-transparent yellow
+  }
+
+  cairo_set_line_width(cr, 3.0);
+  cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
+                  current_card_height_ + 4);
+  cairo_stroke(cr);
+
+  // If we have a card selected for movement, highlight all cards below it in a
+  // tableau pile
+  if (keyboard_selection_active_ && source_pile_ >= 6 && source_pile_ <= 15 &&
+      source_card_idx_ >= 0) {
+    int tableau_idx = source_pile_ - 6;
+    auto &tableau_pile = tableau_[tableau_idx];
+
+    if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
+      // Highlight all cards from the selected one to the bottom
+      cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
+
+      x = current_card_spacing_ +
+          tableau_idx * (current_card_width_ + current_card_spacing_);
+      y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
+          source_card_idx_ * current_vert_spacing_;
+
+      // Draw a single rectangle that covers all cards in the stack
+      int stack_height =
+          (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ +
+          current_card_height_;
+
+      if (stack_height > 0) {
+        cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
+                        stack_height + 4);
+        cairo_stroke(cr);
+      }
+    }
+  }
+}
+
+
 void SolitaireGame::explodeCard(AnimatedCard &card) {
   // Mark the card as exploded
   card.exploded = true;
