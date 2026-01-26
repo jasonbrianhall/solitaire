@@ -1,6 +1,7 @@
-#include "pyramid.h"
+#include "audiomanager.h"
+#include "solitaire.h"
 #include <algorithm>
-#include <cctype>
+#include <cctype> // Added for std::tolower
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -8,18 +9,14 @@
 #include <sys/stat.h>
 #include <vector>
 #include <zip.h>
-
 #ifdef _WIN32
 #include <direct.h>
 #endif
 
-// ============================================================================
-// ZIP FILE EXTRACTION
-// ============================================================================
-
-bool PyramidGame::extractFileFromZip(const std::string &zipFilePath,
-                                      const std::string &fileName,
-                                      std::vector<uint8_t> &fileData) {
+// Function to extract a file from a ZIP archive into memory
+bool SolitaireGame::extractFileFromZip(const std::string &zipFilePath,
+                                       const std::string &fileName,
+                                       std::vector<uint8_t> &fileData) {
   int errCode = 0;
   zip_t *archive = zip_open(zipFilePath.c_str(), 0, &errCode);
 
@@ -32,18 +29,18 @@ bool PyramidGame::extractFileFromZip(const std::string &zipFilePath,
     return false;
   }
 
-  // Find file in archive
+  // Find the file in the archive
   zip_int64_t index = zip_name_locate(archive, fileName.c_str(), 0);
   if (index < 0) {
-    std::cerr << "File not found in ZIP: " << fileName << std::endl;
+    std::cerr << "File not found in ZIP archive: " << fileName << std::endl;
     zip_close(archive);
     return false;
   }
 
-  // Open file
+  // Open the file in the archive
   zip_file_t *file = zip_fopen_index(archive, index, 0);
   if (!file) {
-    std::cerr << "Failed to open file in ZIP: " << zip_strerror(archive)
+    std::cerr << "Failed to open file in ZIP archive: " << zip_strerror(archive)
               << std::endl;
     zip_close(archive);
     return false;
@@ -59,9 +56,10 @@ bool PyramidGame::extractFileFromZip(const std::string &zipFilePath,
     return false;
   }
 
-  // Read file
+  // Resize the buffer to fit the file
   fileData.resize(stat.size);
 
+  // Read the file content
   zip_int64_t bytesRead = zip_fread(file, fileData.data(), stat.size);
   if (bytesRead < 0 || static_cast<zip_uint64_t>(bytesRead) != stat.size) {
     std::cerr << "Failed to read file: " << zip_file_strerror(file)
@@ -71,42 +69,119 @@ bool PyramidGame::extractFileFromZip(const std::string &zipFilePath,
     return false;
   }
 
-  // Cleanup
+  // Close everything
   zip_fclose(file);
   zip_close(archive);
-
-  std::cout << "Extracted file: " << fileData.size() << " bytes" << std::endl;
+#ifdef DEBUG
+  std::cout << "Successfully extracted file (" << fileData.size() << " bytes)"
+            << std::endl;
+#endif
   return true;
 }
 
-// ============================================================================
-// AUDIO INITIALIZATION
-// ============================================================================
+// Custom Audio Manager function to load sound from memory
+bool loadSoundFromMemory(SoundEvent event, const std::vector<uint8_t> &data,
+                         const std::string &format) {
+  // Get file extension to determine format
+  if (format != "wav" && format != "mp3") {
+    std::cerr << "Unsupported audio format: " << format << std::endl;
+    return false;
+  }
 
-bool PyramidGame::initializeAudio() {
-  // Don't initialize if sound is disabled
+  // Store the sound data
+  return AudioManager::getInstance().loadSoundFromMemory(event, data, format);
+}
+
+bool SolitaireGame::initializeAudio() {
+  // Don't do anything if sound is disabled
   if (!sound_enabled_) {
     return false;
   }
 
   if (sounds_zip_path_.empty()) {
-    sounds_zip_path_ = "sounds.zip";
+    sounds_zip_path_ =
+        "sounds.zip"; // Default location, can be changed via settings
   }
 
-  std::cout << "Audio system initialized (stub)" << std::endl;
-  return true;
+  // Try to initialize the audio system
+  if (AudioManager::getInstance().initialize()) {
+    // Attempt to load default sounds
+    if (loadSoundFromZip(GameSoundEvent::CardFlip, "flip.wav") &&
+        loadSoundFromZip(GameSoundEvent::CardPlace, "place.wav") &&
+        loadSoundFromZip(GameSoundEvent::StockRefill, "refill.wav") &&
+        loadSoundFromZip(GameSoundEvent::WinGame, "win.wav") &&
+        loadSoundFromZip(GameSoundEvent::DealCard, "deal.wav") &&
+        loadSoundFromZip(GameSoundEvent::Firework, "firework.wav")) {
+
+#ifdef DEBUG
+      std::cout << "Sound system initialized successfully." << std::endl;
+#endif
+      return true;
+    } else {
+#ifdef DEBUG
+      std::cerr << "Failed to load all sound effects. Sound will be disabled."
+                << std::endl;
+#endif
+      AudioManager::getInstance().shutdown();
+      sound_enabled_ = false;
+
+      // Update menu checkbox if window exists
+      if (window_) {
+        GList *menu_items = gtk_container_get_children(GTK_CONTAINER(vbox_));
+        if (menu_items) {
+          GtkWidget *menubar = GTK_WIDGET(menu_items->data);
+          GList *menus = gtk_container_get_children(GTK_CONTAINER(menubar));
+          if (menus) {
+            // First menu should be the Game menu
+            GtkWidget *game_menu_item = GTK_WIDGET(menus->data);
+            GtkWidget *game_menu =
+                gtk_menu_item_get_submenu(GTK_MENU_ITEM(game_menu_item));
+            if (game_menu) {
+              GList *game_menu_items =
+                  gtk_container_get_children(GTK_CONTAINER(game_menu));
+              // Find the sound checkbox (should be near the end)
+              for (GList *item = game_menu_items; item != NULL;
+                   item = item->next) {
+                if (GTK_IS_CHECK_MENU_ITEM(item->data)) {
+                  GtkWidget *check_item = GTK_WIDGET(item->data);
+                  const gchar *label =
+                      gtk_menu_item_get_label(GTK_MENU_ITEM(check_item));
+                  if (label && strstr(label, "Sound") != NULL) {
+                    gtk_check_menu_item_set_active(
+                        GTK_CHECK_MENU_ITEM(check_item), FALSE);
+                    break;
+                  }
+                }
+              }
+              g_list_free(game_menu_items);
+            }
+            g_list_free(menus);
+          }
+          g_list_free(menu_items);
+        }
+      }
+
+      return false;
+    }
+  } else {
+    std::cerr << "Failed to initialize audio system. Sound will be disabled."
+              << std::endl;
+    sound_enabled_ = false;
+    return false;
+  }
 }
 
-bool PyramidGame::loadSoundFromZip(GameSoundEvent event,
-                                    const std::string &soundFileName) {
-  // Extract sound file from ZIP
+bool SolitaireGame::loadSoundFromZip(GameSoundEvent event,
+                                     const std::string &soundFileName) {
+  // Extract the sound file from the ZIP archive
   std::vector<uint8_t> soundData;
   if (!extractFileFromZip(sounds_zip_path_, soundFileName, soundData)) {
-    std::cerr << "Failed to extract: " << soundFileName << std::endl;
+    std::cerr << "Failed to extract sound file from ZIP archive: "
+              << soundFileName << std::endl;
     return false;
   }
 
-  // Get file extension for format
+  // Get file extension to determine format
   std::string format;
   size_t dotPos = soundFileName.find_last_of('.');
   if (dotPos != std::string::npos) {
@@ -119,107 +194,104 @@ bool PyramidGame::loadSoundFromZip(GameSoundEvent event,
     return false;
   }
 
-  // Validate format
-  if (format != "wav" && format != "mp3") {
-    std::cerr << "Unsupported audio format: " << format << std::endl;
+  // Map GameSoundEvent to AudioManager's SoundEvent
+  SoundEvent audioEvent;
+  switch (event) {
+  case GameSoundEvent::CardFlip:
+    audioEvent = SoundEvent::CardFlip;
+    break;
+  case GameSoundEvent::CardPlace:
+    audioEvent = SoundEvent::CardPlace;
+    break;
+  case GameSoundEvent::StockRefill:
+    audioEvent = SoundEvent::StockRefill;
+    break;
+  case GameSoundEvent::WinGame:
+    // Reuse an existing sound event since WinGame is not available
+    audioEvent = SoundEvent::WinGame; // Using CardPlace as a substitute
+    break;
+  case GameSoundEvent::DealCard:
+    // Reuse an existing sound event since DealCards is not available
+    audioEvent = SoundEvent::DealCard;
+    break;
+  case GameSoundEvent::Firework:
+    // Reuse an existing sound event since DealCards is not available
+    audioEvent = SoundEvent::Firework; // Using CardDrag as a substitute
+    break;
+
+  default:
+    std::cerr << "Unknown sound event" << std::endl;
     return false;
   }
 
-  std::cout << "Loaded sound: " << soundFileName << " (" << soundData.size()
-            << " bytes)" << std::endl;
-  return true;
+  // Load the sound data into the audio manager
+  return AudioManager::getInstance().loadSoundFromMemory(audioEvent, soundData,
+                                                         format);
 }
 
-void PyramidGame::playSound(GameSoundEvent event) {
+void SolitaireGame::playSound(GameSoundEvent event) {
   if (!sound_enabled_) {
     return;
   }
 
-  // Convert event to string for debugging
-  const char *event_name = "Unknown";
+  // Map GameSoundEvent to AudioManager's SoundEvent
+  SoundEvent audioEvent;
   switch (event) {
-    case GameSoundEvent::CardFlip:
-      event_name = "CardFlip";
-      break;
-    case GameSoundEvent::CardPlace:
-      event_name = "CardPlace";
-      break;
-    case GameSoundEvent::CardRemove:
-      event_name = "CardRemove";
-      break;
-    case GameSoundEvent::WinGame:
-      event_name = "WinGame";
-      break;
-    case GameSoundEvent::DealCard:
-      event_name = "DealCard";
-      break;
-    case GameSoundEvent::Firework:
-      event_name = "Firework";
-      break;
-    case GameSoundEvent::NoMatch:
-      event_name = "NoMatch";
-      break;
+  case GameSoundEvent::CardFlip:
+    audioEvent = SoundEvent::CardFlip;
+    break;
+  case GameSoundEvent::CardPlace:
+    audioEvent = SoundEvent::CardPlace;
+    break;
+  case GameSoundEvent::StockRefill:
+    audioEvent = SoundEvent::StockRefill;
+    break;
+  case GameSoundEvent::WinGame:
+    audioEvent = SoundEvent::WinGame; // Using CardPlace as a substitute
+    break;
+  case GameSoundEvent::DealCard:
+    audioEvent = SoundEvent::DealCard;
+    break;
+  case GameSoundEvent::Firework:
+    audioEvent = SoundEvent::Firework;
+    break;
+  default:
+    return;
   }
 
-  // Stub implementation - would play sound via audio system
-  // std::cout << "Play sound: " << event_name << std::endl;
+  // Play the sound asynchronously
+  AudioManager::getInstance().playSound(audioEvent);
 }
 
-void PyramidGame::cleanupAudio() {
+void SolitaireGame::cleanupAudio() {
   if (sound_enabled_) {
+    AudioManager::getInstance().shutdown();
     sound_enabled_ = false;
-    std::cout << "Audio system shutdown" << std::endl;
   }
 }
 
-// ============================================================================
-// AUDIO PATH MANAGEMENT
-// ============================================================================
-
-bool PyramidGame::setSoundsZipPath(const std::string &path) {
+bool SolitaireGame::setSoundsZipPath(const std::string &path) {
+  // Save original path in case of failure
   std::string original_path = sounds_zip_path_;
+
+  // Update path
   sounds_zip_path_ = path;
 
-  // If sound is enabled, try to reload
+  // If sound is enabled, reload all sounds
   if (sound_enabled_) {
+    // First clean up existing audio
     cleanupAudio();
 
+    // Try to reinitialize with new path
     if (!initializeAudio()) {
-      // Restore original path on failure
+      // If failed, restore original path and reinitialize with that
       sounds_zip_path_ = original_path;
       initializeAudio();
       return false;
     }
   }
 
+  // Save the new path to settings
   saveSettings();
   return true;
-}
-
-void PyramidGame::checkAndInitializeSound() {
-  if (sound_enabled_) {
-    // Attempt to load default sounds
-    bool sounds_loaded = true;
-
-    // Try to load common sounds
-    sounds_loaded &=
-        loadSoundFromZip(GameSoundEvent::CardFlip, "flip.wav");
-    sounds_loaded &=
-        loadSoundFromZip(GameSoundEvent::CardPlace, "place.wav");
-    sounds_loaded &=
-        loadSoundFromZip(GameSoundEvent::CardRemove, "remove.wav");
-    sounds_loaded &=
-        loadSoundFromZip(GameSoundEvent::DealCard, "deal.wav");
-    sounds_loaded &=
-        loadSoundFromZip(GameSoundEvent::WinGame, "win.wav");
-    sounds_loaded &=
-        loadSoundFromZip(GameSoundEvent::Firework, "firework.wav");
-
-    if (!sounds_loaded) {
-      std::cerr << "Warning: Not all sounds loaded successfully" << std::endl;
-      // Don't disable sound entirely, just warn
-    }
-
-    std::cout << "Sound system ready" << std::endl;
-  }
 }
