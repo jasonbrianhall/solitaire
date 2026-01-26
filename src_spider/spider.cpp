@@ -274,18 +274,10 @@ std::string SolitaireGame::getRenderingEngineName() const {
 }
 
 void SolitaireGame::renderFrame() {
-  switch (rendering_engine_) {
-    case RenderingEngine::CAIRO:
       refreshDisplay();
-      break;
-    case RenderingEngine::OPENGL:
-      #ifdef USEOPENGL
+#ifdef USEOPENGL
       renderFrame_gl();
-      #endif
-      break;
-    default:
-      refreshDisplay();
-  }
+#endif
 }
 
 void SolitaireGame::saveEnginePreference() {
@@ -1556,7 +1548,6 @@ void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
 }
 
 void SolitaireGame::restartGame() {
-  // Check if win animation is active
   if (win_animation_active_) {
     stopWinAnimation();
   }
