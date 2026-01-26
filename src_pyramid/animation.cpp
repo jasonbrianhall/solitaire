@@ -203,7 +203,7 @@ void PyramidGame::startWinAnimation() {
   animated_cards_.clear();
 
   // If we're not in single-deck mode, adjust the foundation piles for the animation
-  if (current_game_mode_ != GameMode::STANDARD_KLONDIKE) {
+  if (current_game_mode_ != GameMode::STANDARD_PYRAMID) {
     // Save the original foundation piles for potential restoration later if needed
     std::vector<std::vector<cardlib::Card>> original_foundation = foundation_;
     

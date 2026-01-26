@@ -86,7 +86,7 @@ PyramidGame::PyramidGame()
       selected_pile_(-1), selected_card_idx_(-1),
       keyboard_navigation_active_(false), keyboard_selection_active_(false),
       source_pile_(-1), source_card_idx_(-1),
-      current_game_mode_(GameMode::STANDARD_KLONDIKE),
+      current_game_mode_(GameMode::STANDARD_PYRAMID),
       multi_deck_(1),
       sound_enabled_(true),
       #ifdef __linux__
@@ -682,7 +682,7 @@ void PyramidGame::initializeGame() {
 
   }
 
-  if (current_game_mode_ == GameMode::STANDARD_KLONDIKE) {
+  if (current_game_mode_ == GameMode::STANDARD_PYRAMID) {
     // Original single-deck initialization
     try {
       // Try to find cards.zip in several common locations
@@ -1046,7 +1046,7 @@ void PyramidGame::switchGameMode(GameMode mode) {
   current_game_mode_ = mode;
 
   // Start a new game with the selected mode
-  if (mode == GameMode::STANDARD_KLONDIKE) {
+  if (mode == GameMode::STANDARD_PYRAMID) {
     initializeGame(); // Use the existing single-deck initialization
   } else {
     initializeMultiDeckGame(); // Use the new multi-deck initialization
@@ -1063,7 +1063,7 @@ void PyramidGame::switchGameMode(GameMode mode) {
 void PyramidGame::initializeMultiDeckGame() {
   try {
     // Determine number of decks based on mode
-    size_t num_decks = (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
+    size_t num_decks = (current_game_mode_ == GameMode::DOUBLE_PYRAMID) ? 2 : 3;
     
     // Try to find cards.zip in several common locations
     const std::vector<std::string> paths = {"cards.zip"};
@@ -1151,8 +1151,8 @@ void PyramidGame::dealMultiDeck() {
 
 bool PyramidGame::checkWinCondition() const {
   // Get the number of decks based on the current mode
-  size_t num_decks = (current_game_mode_ == GameMode::STANDARD_KLONDIKE) ? 1 : 
-                     (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
+  size_t num_decks = (current_game_mode_ == GameMode::STANDARD_PYRAMID) ? 1 : 
+                     (current_game_mode_ == GameMode::DOUBLE_PYRAMID) ? 2 : 3;
   
   // For multi-deck games, each foundation should have 13 cards
   // There are 4 * num_decks foundations
@@ -1293,38 +1293,38 @@ GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
 GtkWidget *gameModeMenu = gtk_menu_new();
 gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
 
-// Standard Klondike option (1 deck)
+// Standard Pyramid Solitaire option (1 deck)
 GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "One Deck");
 GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
 g_signal_connect(
     G_OBJECT(standardItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
       if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::STANDARD_KLONDIKE);
+        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::STANDARD_PYRAMID);
       }
     }),
     this);
 gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
 
-// Double Klondike option (2 decks)
+// Double Pyramid Solitaire option (2 decks)
 GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Two Decks");
 g_signal_connect(
     G_OBJECT(doubleItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
       if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::DOUBLE_KLONDIKE);
+        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::DOUBLE_PYRAMID);
       }
     }),
     this);
 gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
 
-// Triple Klondike option (3 decks)
+// Triple Pyramid Solitaire option (3 decks)
 GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Three Decks");
 g_signal_connect(
     G_OBJECT(tripleItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
       if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::TRIPLE_KLONDIKE);
+        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::TRIPLE_PYRAMID);
       }
     }),
     this);
@@ -1333,8 +1333,8 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
 // Set initial state based on current mode
 gtk_check_menu_item_set_active(
     GTK_CHECK_MENU_ITEM(
-        current_game_mode_ == GameMode::STANDARD_KLONDIKE ? standardItem :
-        current_game_mode_ == GameMode::DOUBLE_KLONDIKE ? doubleItem : tripleItem),
+        current_game_mode_ == GameMode::STANDARD_PYRAMID ? standardItem :
+        current_game_mode_ == GameMode::DOUBLE_PYRAMID ? doubleItem : tripleItem),
     TRUE);
 
 // Add the game mode submenu to the options menu
@@ -1584,7 +1584,7 @@ void PyramidGame::onQuit(GtkWidget *widget, gpointer data) {
 
 void PyramidGame::updateWindowTitle() {
   if (window_) {
-    std::string title = "Solitaire - Seed: " + std::to_string(current_seed_);
+    std::string title = "Pyramid Solitaire - Seed: " + std::to_string(current_seed_);
     gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
   }
 }
@@ -1594,7 +1594,7 @@ void PyramidGame::onAbout(GtkWidget * /* widget */, gpointer data) {
 
   // Create custom dialog instead of about dialog for more control
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "About Solitaire", GTK_WINDOW(game->window_),
+      "About Pyramid Solitaire", GTK_WINDOW(game->window_),
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
                                   GTK_DIALOG_DESTROY_WITH_PARENT),
       "OK", GTK_RESPONSE_OK, NULL);
@@ -1610,7 +1610,7 @@ void PyramidGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   // Add program name with larger font
   GtkWidget *name_label = gtk_label_new(NULL);
   const char *name_markup =
-      "<span size='x-large' weight='bold'>Solitaire</span>";
+      "<span size='x-large' weight='bold'>Pyramid Solitaire</span>";
   gtk_label_set_markup(GTK_LABEL(name_label), name_markup);
   gtk_container_add(GTK_CONTAINER(content_area), name_label);
 
@@ -1630,45 +1630,35 @@ void PyramidGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   GtkTextBuffer *buffer =
       gtk_text_view_get_buffer(GTK_TEXT_VIEW(instructions_text));
   const char *instructions =
-      "How to Play Solitaire:\n\n"
+      "How to Play Pyramid Solitaire:\n\n"
       "Objective:\n"
-      "Build four ordered card piles at the top of the screen, one for each "
-      "suit (♣,♦,♥,♠), "
-      "starting with Aces and ending with Kings.\n\n"
+      "Remove all cards by pairing cards that sum to 13.\n\n"
       "Game Setup:\n"
-      "- Seven columns of cards are dealt from left to right\n"
-      "- Each column contains one more card than the column to its left\n"
-      "- The top card of each column is face up\n"
-      "- Remaining cards form the draw pile in the upper left\n\n"
+      "- Cards are laid out in a pyramid pattern\n"
+      "- The pyramid has 7 rows with one card in the top row\n"
+      "- Each row has one more card than the row above it\n"
+      "- Cards below the pyramid form the draw pile\n\n"
       "Rules:\n"
-      "1. In the main playing area, stack cards in descending order (King to "
-      "Ace) with alternating colors\n"
-      "2. Move single cards or stacks of cards between columns\n"
-      "3. When you move a card that was covering a face-down card, the "
-      "face-down card is flipped over\n"
-      "4. Click the draw pile to reveal new cards when you need them\n"
-      "5. Build the four suit piles at the top in ascending order, starting "
-      "with Aces\n"
-      "6. Empty spaces in the main playing area can only be filled with "
-      "Kings\n\n"
+      "1. You can only remove cards that are completely exposed (not covered by other cards)\n"
+      "2. Remove pairs of cards that add up to 13:\n"
+      "   - Ace = 1, Jack = 11, Queen = 12, King = 13 (King can be removed alone)\n"
+      "   - For example: 6 + 7 = 13, 5 + 8 = 13, etc.\n"
+      "3. Click cards in the pyramid to match pairs\n"
+      "4. Use cards from the draw pile to match with exposed cards\n"
+      "5. Remove all cards to win the game\n\n"
       "Controls:\n"
-      "- Left-click and drag to move cards\n"
-      "- Rigit-click to automatically move cards to the suit piles at the "
-      "top\n\n"
+      "- Left-click cards to select them for matching\n"
+      "- Click the draw pile to reveal new cards\n\n"
       "Keyboard Controls:\n"
-      "- Arrow keys (←, →, ↑, ↓) to navigate between piles and cards\n"
-      "- Enter to select a card or perform a move\n"
-      "- Escape to cancel a selection\n"
-      "- Space to draw cards from the stock pile\n"
-      "- F to automatically move all possible cards to the foundation piles\n"
-      "- 1 or 3 to toggle between Draw One and Draw Three modes\n"
+      "- Arrow keys to navigate\n"
+      "- Enter to select cards\n"
       "- F11 to toggle fullscreen mode\n"
       "- Ctrl+N for a new game\n"
       "- Ctrl+Q to quit\n"
       "- Ctrl+H for help\n\n"
       "Written by Jason Hall\n"
       "Licensed under the MIT License\n"
-      "https://github.com/jasonbrianhall/solitaire";
+      "https://github.com/jasonbrianhall/pyramid";
 
   gtk_text_buffer_set_text(buffer, instructions, -1);
 
@@ -1719,9 +1709,9 @@ void PyramidGame::dealTestLayout() {
   // Reset foundation and tableau
   // Number of foundation piles depends on the game mode
   size_t num_decks = 1;
-  if (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) {
+  if (current_game_mode_ == GameMode::DOUBLE_PYRAMID) {
     num_decks = 2;
-  } else if (current_game_mode_ == GameMode::TRIPLE_KLONDIKE) {
+  } else if (current_game_mode_ == GameMode::TRIPLE_PYRAMID) {
     num_decks = 3;
   }
 
@@ -1760,7 +1750,7 @@ void PyramidGame::initializeSettingsDir() {
         return;
     }
     std::cerr << "AppData path: " << app_data << std::endl;
-    settings_dir_ = std::string(app_data) + "\\Solitaire";
+    settings_dir_ = std::string(app_data) + "\\Pyramid Solitaire";
     std::cerr << "Settings dir: " << settings_dir_ << std::endl;
     if (!CreateDirectoryA(settings_dir_.c_str(), NULL)) {
         std::cerr << "CreateDirectoryA failed, error: " << GetLastError() << std::endl;
@@ -1771,7 +1761,7 @@ void PyramidGame::initializeSettingsDir() {
         settings_dir_ = "./";
         return;
     }
-    settings_dir_ = std::string(home) + "/.solitaire";
+    settings_dir_ = std::string(home) + "/.pyramid-solitaire";
     mkdir(settings_dir_.c_str(), 0755);
 #endif
 }
@@ -1974,13 +1964,13 @@ double PyramidGame::getScaleFactor(int window_width, int window_height) const {
   // Select the optimal width based on current game mode
   int optimal_width;
   switch (current_game_mode_) {
-    case GameMode::DOUBLE_KLONDIKE:
+    case GameMode::DOUBLE_PYRAMID:
       optimal_width = OPTIMAL_WIDTH_DOUBLE;
       break;
-    case GameMode::TRIPLE_KLONDIKE:
+    case GameMode::TRIPLE_PYRAMID:
       optimal_width = OPTIMAL_WIDTH_TRIPLE;
       break;
-    case GameMode::STANDARD_KLONDIKE:
+    case GameMode::STANDARD_PYRAMID:
     default:
       optimal_width = OPTIMAL_WIDTH_STANDARD;
       break;
@@ -2175,7 +2165,7 @@ void PyramidGame::promptForSeed() {
 void PyramidGame::showHowToPlay() {
   // Create dialog with OK button
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "How To Play Solitaire", GTK_WINDOW(window_),
+      "How To Play Pyramid Solitaire", GTK_WINDOW(window_),
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
       "OK", GTK_RESPONSE_OK, NULL);
 
@@ -2189,7 +2179,7 @@ void PyramidGame::showHowToPlay() {
 
   // Create a label with the title
   GtkWidget *title_label = gtk_label_new(NULL);
-  const char *title_markup = "<span size='x-large' weight='bold'>How To Play Solitaire</span>";
+  const char *title_markup = "<span size='x-large' weight='bold'>How To Play Pyramid Solitaire</span>";
   gtk_label_set_markup(GTK_LABEL(title_label), title_markup);
   gtk_container_add(GTK_CONTAINER(content_area), title_label);
   gtk_widget_set_margin_bottom(title_label, 12);

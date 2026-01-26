@@ -1,5 +1,5 @@
-#ifndef SOLITAIRE_H
-#define SOLITAIRE_H
+#ifndef PYRAMID_SOLITAIRE_H
+#define PYRAMID_SOLITAIRE_H
 
 // ============================================================================
 // INCLUDES - System and External Libraries
@@ -73,9 +73,9 @@ public:
   // ========================================================================
 
   enum class GameMode {
-    STANDARD_KLONDIKE,  // Single deck
-    DOUBLE_KLONDIKE,    // Two decks
-    TRIPLE_KLONDIKE     // Three decks (for future expansion)
+    STANDARD_PYRAMID,  // Single deck
+    DOUBLE_PYRAMID,    // Two decks
+    TRIPLE_PYRAMID     // Three decks (for future expansion)
   };
 
   enum class GameSoundEvent {
@@ -147,7 +147,7 @@ private:
   // ========================================================================
   cardlib::Deck deck_;
   cardlib::MultiDeck multi_deck_;
-  GameMode current_game_mode_ = GameMode::STANDARD_KLONDIKE;
+  GameMode current_game_mode_ = GameMode::STANDARD_PYRAMID;
   unsigned int current_seed_;
 
   std::vector<cardlib::Card> stock_;                       // Draw pile
@@ -558,4 +558,4 @@ private:
   void dealTestLayout();
 };
 
-#endif // SOLITAIRE_H
+#endif // PYRAMID_SOLITAIRE_H
