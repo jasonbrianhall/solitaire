@@ -66,7 +66,7 @@ struct TableauCard {
 // CLASS DEFINITION
 // ============================================================================
 
-class SolitaireGame {
+class PyramidGame {
 public:
   // ========================================================================
   // ENUMS
@@ -95,8 +95,8 @@ public:
     OPENGL    // GPU-accelerated 3D rendering
   };
 
-  SolitaireGame();
-  ~SolitaireGame();
+  PyramidGame();
+  ~PyramidGame();
 
   // Engine control methods
   bool setRenderingEngine(RenderingEngine engine);

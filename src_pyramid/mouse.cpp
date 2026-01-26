@@ -1,10 +1,10 @@
-#include "solitaire.h"
+#include "pyramid.h"
 #include <iostream>
 
 // Fix for onButtonPress in mouse.cpp to handle all foundation piles
-gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
+gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
                                       gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  PyramidGame *game = static_cast<PyramidGame *>(data);
 
   game->keyboard_navigation_active_ = false;
   game->keyboard_selection_active_ = false;
@@ -85,9 +85,9 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
 }
 
 
-gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
+gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                                         GdkEventButton *event, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  PyramidGame *game = static_cast<PyramidGame *>(data);
   game->keyboard_navigation_active_ = false;
 
   if (event->button == 1 && game->dragging_) {
@@ -185,7 +185,7 @@ gboolean SolitaireGame::onButtonRelease(GtkWidget *widget,
   return TRUE;
 }
 
-void SolitaireGame::handleStockPileClick() {
+void PyramidGame::handleStockPileClick() {
   if (stock_.empty()) {
     // If stock is empty, move all waste cards back to stock in reverse order
     while (!waste_.empty()) {
@@ -204,7 +204,7 @@ void SolitaireGame::handleStockPileClick() {
   }
 }
 
-bool SolitaireGame::tryMoveToFoundation(const cardlib::Card &card) {
+bool PyramidGame::tryMoveToFoundation(const cardlib::Card &card) {
   // Try each foundation pile
   for (size_t i = 0; i < foundation_.size(); i++) {
     std::vector<cardlib::Card> cards = {card};
@@ -216,9 +216,9 @@ bool SolitaireGame::tryMoveToFoundation(const cardlib::Card &card) {
   return false;
 }
 
-gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
+gboolean PyramidGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
                                        gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  PyramidGame *game = static_cast<PyramidGame *>(data);
 
   if (game->dragging_) {
     game->drag_start_x_ = event->x;
@@ -230,7 +230,7 @@ gboolean SolitaireGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
 }
 
 // Fix for the getDragCards function in mouse.cpp
-std::vector<cardlib::Card> SolitaireGame::getDragCards(int pile_index,
+std::vector<cardlib::Card> PyramidGame::getDragCards(int pile_index,
                                                      int card_index) {
   // Calculate maximum foundation index
   int max_foundation_index = 2 + foundation_.size() - 1;
