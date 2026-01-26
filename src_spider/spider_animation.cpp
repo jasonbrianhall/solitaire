@@ -474,10 +474,26 @@ void SolitaireGame::drawStockPile(cairo_t *cr) {
   
   if (stock_.empty()) {
     // Make this condition more explicit and ensure it draws an empty pile
+#ifdef USEOPENGL
+    if (rendering_engine_ == RenderingEngine::OPENGL) {
+      drawEmptyPile_gl(x, y);
+    } else {
+      drawEmptyPile(cr, x, y, true);
+    }
+#else
     drawEmptyPile(cr, x, y, true);
+#endif
   } else {
     // Only draw a card back when there are actually cards left
+#ifdef USEOPENGL
+    if (rendering_engine_ == RenderingEngine::OPENGL) {
+      drawCard_gl(cardlib::Card(cardlib::Suit::HEARTS, cardlib::Rank::KING), x, y, false);
+    } else {
+      drawCard(cr, x, y, nullptr, false);
+    }
+#else
     drawCard(cr, x, y, nullptr, false);
+#endif
   }
 }
 
@@ -534,7 +550,15 @@ void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
       cardlib::Card card(suit, rank);
       
       // Draw the card
+#ifdef USEOPENGL
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(card, foundation_x, foundation_y, true);
+      } else {
+        drawCard(cr, foundation_x, foundation_y, &card, true);
+      }
+#else
       drawCard(cr, foundation_x, foundation_y, &card, true);
+#endif
       
       // Move to next position
       foundation_x += current_card_width_ + current_card_spacing_;
@@ -553,7 +577,15 @@ void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
               sequence_cards_[j].y == sequence_cards_[j].target_y) {
             // This card has completed its animation to the foundation
             const cardlib::Card &card = sequence_cards_[j].card;
+#ifdef USEOPENGL
+            if (rendering_engine_ == RenderingEngine::OPENGL) {
+              drawCard_gl(card, foundation_x, foundation_y, true);
+            } else {
+              drawCard(cr, foundation_x, foundation_y, &card, true);
+            }
+#else
             drawCard(cr, foundation_x, foundation_y, &card, true);
+#endif
             foundation_card_found = true;
             break;
           }
@@ -561,17 +593,41 @@ void SolitaireGame::drawFoundationPiles(cairo_t *cr) {
         
         // If no card has arrived yet, draw an empty pile
         if (!foundation_card_found) {
+#ifdef USEOPENGL
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawEmptyPile_gl(foundation_x, foundation_y);
+          } else {
+            drawEmptyPile(cr, foundation_x, foundation_y, false);
+          }
+#else
           drawEmptyPile(cr, foundation_x, foundation_y, false);
+#endif
         }
       }
       // Check if we have a completed sequence for this pile
       else if (i < completed_sequences) {
         // For each completed sequence, draw its card
         const cardlib::Card &card = foundation_[0][i];
+#ifdef USEOPENGL
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawCard_gl(card, foundation_x, foundation_y, true);
+        } else {
+          drawCard(cr, foundation_x, foundation_y, &card, true);
+        }
+#else
         drawCard(cr, foundation_x, foundation_y, &card, true);
+#endif
       } else {
         // Empty foundation slot
+#ifdef USEOPENGL
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawEmptyPile_gl(foundation_x, foundation_y);
+        } else {
+          drawEmptyPile(cr, foundation_x, foundation_y, false);
+        }
+#else
         drawEmptyPile(cr, foundation_x, foundation_y, false);
+#endif
       }
       
       // Move to next position
@@ -593,7 +649,15 @@ void SolitaireGame::drawTableauPiles(cairo_t *cr) {
 
     // Draw empty pile outline
     if (pile.empty()) {
+#ifdef USEOPENGL
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawEmptyPile_gl(x, tableau_base_y);
+      } else {
+        drawEmptyPile(cr, x, tableau_base_y, false);
+      }
+#else
       drawEmptyPile(cr, x, tableau_base_y, false);
+#endif
     }
 
     // Handle drawing the tableau cards
@@ -643,7 +707,15 @@ void SolitaireGame::drawTableauPileDuringAnimation(cairo_t *cr, size_t pile_inde
     
     if (!is_animating) {
       int current_y = tableau_base_y + j * current_vert_spacing_;
+#ifdef USEOPENGL
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(pile[j].card, x, current_y, pile[j].face_up);
+      } else {
+        drawCard(cr, x, current_y, &pile[j].card, pile[j].face_up);
+      }
+#else
       drawCard(cr, x, current_y, &pile[j].card, pile[j].face_up);
+#endif
     }
   }
 }
@@ -685,7 +757,15 @@ void SolitaireGame::drawNormalTableauPile(cairo_t *cr, size_t pile_index, int x,
         
         int current_y = tableau_base_y + j * current_vert_spacing_;
         const auto &tableau_card = pile[j];
+#ifdef USEOPENGL
+        if (rendering_engine_ == RenderingEngine::OPENGL) {
+          drawCard_gl(tableau_card.card, x, current_y, tableau_card.face_up);
+        } else {
+          drawCard(cr, x, current_y, &tableau_card.card, tableau_card.face_up);
+        }
+#else
         drawCard(cr, x, current_y, &tableau_card.card, tableau_card.face_up);
+#endif
     }
 }
 
@@ -702,9 +782,20 @@ void SolitaireGame::drawDraggedCards(cairo_t *cr) {
     int drag_y = static_cast<int>(drag_start_y_ - drag_offset_y_);
 
     for (size_t i = 0; i < drag_cards_.size(); i++) {
+#ifdef USEOPENGL
+      if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(drag_cards_[i], drag_x,
+                   drag_y + i * current_vert_spacing_, true);
+      } else {
+        drawCard(cr, drag_x,
+                 drag_y + i * current_vert_spacing_,
+                 &drag_cards_[i], true);
+      }
+#else
       drawCard(cr, drag_x,
                drag_y + i * current_vert_spacing_,
                &drag_cards_[i], true);
+#endif
     }
   }
 }
@@ -722,7 +813,15 @@ void SolitaireGame::drawWinAnimation(cairo_t *cr) {
       // Draw all the fragments for this card
       for (const auto &fragment : anim_card.fragments) {
         if (fragment.active) {
+#ifdef USEOPENGL
+          if (rendering_engine_ == RenderingEngine::OPENGL) {
+            drawCardFragment_gl(fragment, anim_card, cardShaderProgram_gl_, cardQuadVAO_gl_);
+          } else {
+            drawCardFragment(cr, fragment);
+          }
+#else
           drawCardFragment(cr, fragment);
+#endif
         }
       }
     }
@@ -1207,7 +1306,15 @@ void SolitaireGame::drawAnimatedCard(cairo_t *cr,
   cairo_translate(cr, -current_card_width_ / 2, -current_card_height_ / 2);
 
   // Draw the card with its actual face-up status
+#ifdef USEOPENGL
+  if (rendering_engine_ == RenderingEngine::OPENGL) {
+    drawCard_gl(anim_card.card, 0, 0, anim_card.face_up);
+  } else {
+    drawCard(cr, 0, 0, &anim_card.card, anim_card.face_up);
+  }
+#else
   drawCard(cr, 0, 0, &anim_card.card, anim_card.face_up);
+#endif
 
   cairo_restore(cr);
 }
