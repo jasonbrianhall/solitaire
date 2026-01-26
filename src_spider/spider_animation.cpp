@@ -8,7 +8,6 @@
 #endif
 
 void SolitaireGame::updateWinAnimation() {
-  printf("Updating Win Animation\n");
   if (!win_animation_active_)
     return;
 
@@ -102,7 +101,6 @@ void SolitaireGame::updateWinAnimation() {
 }
 
 void SolitaireGame::startWinAnimation() {
-  printf("Starting Win Animation\n");
 
   if (win_animation_active_)
     return;
@@ -164,7 +162,6 @@ gtk_widget_destroy(dialog);
 }
 
 void SolitaireGame::stopWinAnimation() {
-  printf("Stopping Win Animation\n");
 
   if (!win_animation_active_)
     return;
@@ -208,7 +205,6 @@ gboolean SolitaireGame::onAnimationTick(gpointer data) {
 }
 
 void SolitaireGame::launchNextCard() {
-  printf("Launching Next Card\n");
   // Early exit if all cards have been launched
   if (cards_launched_ >= 104)  // 8 suits x 13 cards = 104 for Spider
     return;
@@ -326,7 +322,6 @@ void SolitaireGame::launchNextCard() {
 }
 
 void SolitaireGame::updateCardFragments(AnimatedCard &card) {
-  printf("Update Card Fragments\n");
   if (!card.exploded)
     return;
 
@@ -379,9 +374,7 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
   }
 }
 
-void SolitaireGame::drawCardFragment(cairo_t *cr,
-                                     const CardFragment &fragment) {
-  printf("Draw Card Fragments\n");
+void SolitaireGame::drawCardFragment(cairo_t *cr, const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
   if (!fragment.active || !fragment.surface)
     return;
@@ -414,7 +407,6 @@ void SolitaireGame::drawCardFragment(cairo_t *cr,
 }
 
 gboolean SolitaireGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
-  printf("On Draw\n");
 
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
 

@@ -1425,6 +1425,15 @@ void SolitaireGame::renderFrame_gl() {
         drawStockToWasteAnimation_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     }
     
+    // Draw sequence completion animation (flying cards to foundation)
+    if (sequence_animation_active_) {
+        for (const auto& card : sequence_cards_) {
+            if (card.active) {
+                drawAnimatedCard_gl(card, cardShaderProgram_gl_, cardQuadVAO_gl_);
+            }
+        }
+    }
+    
     // Draw dragged cards overlay - CRITICAL FIX FOR DRAG VISUALIZATION
     drawDraggedCards_gl(cardShaderProgram_gl_, cardQuadVAO_gl_);
     
