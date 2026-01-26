@@ -88,6 +88,8 @@ void SolitaireGame::run(int argc, char **argv) {
     while (gtk_events_pending()) {
       gtk_main_iteration();
     }
+    // CRITICAL: Grab focus on GL widget so keyboard events work
+    gtk_widget_grab_focus(gl_area_);
   }
   #endif
   #endif
@@ -581,7 +583,6 @@ gboolean SolitaireGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
       return TRUE;
   }
 
-
   game->keyboard_navigation_active_ = false;
   game->keyboard_selection_active_ = false;
 
@@ -595,6 +596,18 @@ if (game->win_animation_active_) {
       game->stock_to_waste_animation_active_) {
     return TRUE;
   }
+
+  // Ensure card dimensions are up to date (critical for OpenGL mode)
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(widget, &allocation);
+  game->updateCardDimensions(allocation.width, allocation.height);
+  
+  // Grab focus only on GL widget (critical for OpenGL mode keyboard input)
+#ifdef USEOPENGL
+  if (widget == game->gl_area_) {
+    gtk_widget_grab_focus(widget);
+  }
+#endif
 
   if (event->button == 1) { // Left click
     auto [pile_index, card_index] = game->getPileAt(event->x, event->y);

@@ -1078,31 +1078,11 @@ void SolitaireGame::highlightSelectedCard_gl() {
 
   int x = 0, y = 0;
 
-  // Calculate max foundation index (depends on game mode)
-  int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
-  int first_tableau_index = max_foundation_index + 1;
-
-  // Validate keyboard selection
+  // Validate keyboard selection - SPIDER SPECIFIC LOGIC
+  // Only tableau piles (6-15) can be selected in Spider Solitaire
   if (keyboard_selection_active_) {
-    bool invalid_source = false;
-    
-    if (source_pile_ < 0) {
-      invalid_source = true;
-    } else if (source_pile_ >= first_tableau_index) {
-      int tableau_idx = source_pile_ - first_tableau_index;
-      if (tableau_idx < 0 || tableau_idx >= static_cast<int>(tableau_.size())) {
-        invalid_source = true;
-      }
-    } else if (source_pile_ == 1 && waste_.empty()) {
-      invalid_source = true;
-    } else if (source_pile_ >= 2 && source_pile_ <= max_foundation_index) {
-      int foundation_idx = source_pile_ - 2;
-      if (foundation_idx < 0 || foundation_idx >= static_cast<int>(foundation_.size())) {
-        invalid_source = true;
-      }
-    }
-    
-    if (invalid_source) {
+    if (source_pile_ < 6 || source_pile_ > 15 ||
+        source_pile_ - 6 >= tableau_.size()) {
       // Invalid source pile, reset selection state
       keyboard_selection_active_ = false;
       source_pile_ = -1;
@@ -1111,43 +1091,38 @@ void SolitaireGame::highlightSelectedCard_gl() {
     }
   }
 
-  // Determine position based on pile type (matching Cairo logic)
+  // Determine position based on pile type - SPIDER SPECIFIC
   if (selected_pile_ == 0) {
     // Stock pile
     x = current_card_spacing_;
     y = current_card_spacing_;
-  } else if (selected_pile_ == 1) {
-    // Waste pile
-    x = 2 * current_card_spacing_ + current_card_width_;
-    y = current_card_spacing_;
-  } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
-    // Foundation piles - match the exact calculation from drawFoundationPiles()
-    int foundation_idx = selected_pile_ - 2;
-    
-    // Make sure foundation_idx is valid
-    if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
-      x = 3 * (current_card_width_ + current_card_spacing_) + 
-          foundation_idx * (current_card_width_ + current_card_spacing_);
-      y = current_card_spacing_;
-    }
-  } else if (selected_pile_ >= first_tableau_index) {
-    // Tableau piles
-    int tableau_idx = selected_pile_ - first_tableau_index;
+  } else if (selected_pile_ >= 6 && selected_pile_ <= 15) {
+    // Tableau piles (10 piles for Spider Solitaire)
+    int tableau_idx = selected_pile_ - 6;
+    x = current_card_spacing_ +
+        tableau_idx * (current_card_width_ + current_card_spacing_);
+
+    // Get the tableau pile for this index
     if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
-      x = current_card_spacing_ +
-          tableau_idx * (current_card_width_ + current_card_spacing_);
-      
       const auto &tableau_pile = tableau_[tableau_idx];
+      
+      // For empty tableau piles, highlight the empty space
       if (tableau_pile.empty()) {
         y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-      } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
+      } else if (selected_card_idx_ == -1 || 
+                 selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
+        // Highlight the last card if no specific card selected
         y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
             (tableau_pile.size() - 1) * current_vert_spacing_;
       } else {
+        // Highlight the selected card in the pile
         y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
             selected_card_idx_ * current_vert_spacing_;
       }
     }
+  } else {
+    // Invalid pile for Spider - don't draw highlight
+    return;
   }
 
   // Choose highlight color based on selection state (matching Cairo colors)
@@ -1288,8 +1263,8 @@ void SolitaireGame::highlightSelectedCard_gl() {
     glDeleteVertexArrays(1, &VAO);
     
     // If we have a card selected for movement, also highlight all cards below it in tableau
-    if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_card_idx_ >= 0) {
-        int tableau_idx = source_pile_ - first_tableau_index;
+    if (keyboard_selection_active_ && source_pile_ >= 6 && source_pile_ <= 15 && source_card_idx_ >= 0) {
+        int tableau_idx = source_pile_ - 6;
         if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
             const auto &tableau_pile = tableau_[tableau_idx];
             
