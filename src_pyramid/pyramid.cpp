@@ -917,7 +917,7 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
     return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
   }
 
-  // Check foundation piles - using foundation_.size() instead of hardcoded limit
+  // Check foundation piles
   int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
   for (int i = 0; i < foundation_.size(); i++) {
     if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
@@ -932,30 +932,53 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
 
   // Calculate first tableau index
   int first_tableau_index = 2 + foundation_.size();
-
-  // Check tableau piles - check from top card down
-  int tableau_y =
-      current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  for (int i = 0; i < tableau_.size(); i++) {
-    int pile_x = current_card_spacing_ +
-                 i * (current_card_width_ + current_card_spacing_);
-    if (x >= pile_x && x <= pile_x + current_card_width_) {
-      const auto &pile = tableau_[i];
-      if (pile.empty() && y >= tableau_y &&
-          y <= tableau_y + current_card_height_) {
+  
+  // Check pyramid piles - pyramid layout with 7 rows (1,2,3,4,5,6,7 cards)
+  const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+  int screen_width = 1024;  // Approximate screen width
+  
+  int row = 0;
+  int pile_in_row = 0;
+  int cards_in_row = 1;
+  int pile_idx = 0;
+  
+  for (int i = 0; i < tableau_.size() && pile_idx < 28; i++) {
+    // Calculate pyramid row position
+    int row_y = base_y + row * (current_card_height_ + current_vert_spacing_);
+    
+    // Center the row horizontally
+    int row_width = cards_in_row * (current_card_width_ + current_card_spacing_);
+    int row_x = (screen_width - row_width) / 2 + (pile_in_row * (current_card_width_ + current_card_spacing_));
+    
+    const auto &pile = tableau_[i];
+    
+    // Check if click is in this pile's area
+    if (x >= row_x && x <= row_x + current_card_width_) {
+      if (pile.empty() && y >= row_y && y <= row_y + current_card_height_) {
         return {first_tableau_index + i, -1};
       }
 
       // Check cards from top to bottom
       for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-        int card_y = tableau_y + j * current_vert_spacing_;
+        int card_y = row_y + j * current_vert_spacing_;
         if (y >= card_y && y <= card_y + current_card_height_) {
           if (pile[j].face_up) {
             return {first_tableau_index + i, j};
           }
-          break; // Hit a face-down card, stop checking
+          break;
         }
       }
+    }
+    
+    // Move to next card in pyramid
+    pile_in_row++;
+    pile_idx++;
+    
+    // Check if we've completed this row
+    if (pile_in_row >= cards_in_row) {
+      row++;
+      pile_in_row = 0;
+      cards_in_row++;
     }
   }
 
@@ -969,46 +992,33 @@ bool PyramidGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
   if (cards.empty())
     return false;
 
-  const auto &moving_card = cards[0];
+  const auto &card1 = cards[0];
 
-  // Foundation pile rules
-  if (is_foundation) {
-    // Only single cards can go to foundation
-    if (cards.size() != 1) {
-      return false;
-    }
-
-    // For empty foundation, only accept aces
-    if (target.empty()) {
-      return moving_card.rank == cardlib::Rank::ACE;
-    }
-
-    // For non-empty foundation, must be same suit and next rank up
-    const auto &target_card = target.back();
-    return moving_card.suit == target_card.suit &&
-           static_cast<int>(moving_card.rank) ==
-               static_cast<int>(target_card.rank) + 1;
+  // Pyramid Solitaire: Cards are paired and removed, not moved to piles
+  // Only single cards can be paired
+  if (cards.size() != 1) {
+    return false;
   }
 
-  // Tableau pile rules
+  // King alone (sum to 13 by itself)
   if (target.empty()) {
-    // Only kings can go to empty tableau spots
-    return static_cast<int>(moving_card.rank) ==
-           static_cast<int>(cardlib::Rank::KING);
+    return static_cast<int>(card1.rank) == static_cast<int>(cardlib::Rank::KING);
   }
 
-  const auto &target_card = target.back();
+  // Must have exactly one target card to pair with
+  if (target.size() != 1) {
+    return false;
+  }
 
-  // Must be opposite color and one rank lower
-  bool opposite_color = ((target_card.suit == cardlib::Suit::HEARTS ||
-                          target_card.suit == cardlib::Suit::DIAMONDS) !=
-                         (moving_card.suit == cardlib::Suit::HEARTS ||
-                          moving_card.suit == cardlib::Suit::DIAMONDS));
+  const auto &card2 = target[0];
 
-  bool lower_rank = static_cast<int>(moving_card.rank) ==
-                    static_cast<int>(target_card.rank) - 1;
+  // Calculate rank values (A=1, 2=2, ..., Q=12, K=13)
+  // cardlib uses 0-based ranks (A=0 to K=12), so add 1 to get face values
+  int rank1 = static_cast<int>(card1.rank) + 1;
+  int rank2 = static_cast<int>(card2.rank) + 1;
 
-  return opposite_color && lower_rank;
+  // Cards pair if their ranks sum to 13
+  return (rank1 + rank2) == 13;
 }
 
 bool PyramidGame::canMoveToFoundation(const cardlib::Card &card,
@@ -1150,21 +1160,16 @@ void PyramidGame::dealMultiDeck() {
 }
 
 bool PyramidGame::checkWinCondition() const {
-  // Get the number of decks based on the current mode
-  size_t num_decks = (current_game_mode_ == GameMode::STANDARD_PYRAMID) ? 1 : 
-                     (current_game_mode_ == GameMode::DOUBLE_PYRAMID) ? 2 : 3;
-  
-  // For multi-deck games, each foundation should have 13 cards
-  // There are 4 * num_decks foundations
-  for (const auto &pile : foundation_) {
-    if (pile.size() != 13)
-      return false;
+  // Pyramid Solitaire: Win when all cards from the pyramid are removed
+  // The pyramid is stored in tableau_, so victory is when all tableau piles are empty
+  for (const auto &pile : tableau_) {
+    if (!pile.empty()) {
+      return false;  // Still have cards in the pyramid
+    }
   }
 
-  // Check if all other piles are empty
-  return stock_.empty() && waste_.empty() &&
-         std::all_of(tableau_.begin(), tableau_.end(),
-                    [](const auto &pile) { return pile.empty(); });
+  // All pyramid cards have been removed = WIN!
+  return true;
 }
 
 // Function to refresh the display

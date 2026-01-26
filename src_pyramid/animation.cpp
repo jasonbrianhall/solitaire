@@ -600,14 +600,29 @@ void PyramidGame::drawFoundationPiles() {
 void PyramidGame::drawTableauPiles() {
     const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
     
-    // Calculate pile index offsets to correctly identify tableau piles for drag handling
-    // Pile indices: 0=stock, 1=waste, 2...(2+foundation_.size()-1)=foundation, rest=tableau
+    // Calculate pile index offsets
     int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
     int first_tableau_index = max_foundation_index + 1;
     
-    for (size_t pile = 0; pile < tableau_.size(); pile++) {
-        int x = current_card_spacing_ + (int)(pile * (current_card_width_ + current_card_spacing_));
-        int y = base_y;
+    // Pyramid layout: 7 rows with 1, 2, 3, 4, 5, 6, 7 cards
+    // Total: 28 cards across 7 rows
+    int row = 0;
+    int pile_in_row = 0;
+    int cards_in_row = 1;
+    int pile_idx = 0;
+    
+    for (size_t pile = 0; pile < tableau_.size() && pile_idx < 28; pile++) {
+        // Calculate pyramid row position
+        int y = base_y + row * (current_card_height_ + current_vert_spacing_);
+        
+        // Center the row horizontally
+        int row_width = cards_in_row * (current_card_width_ + current_card_spacing_);
+        int x_offset = (current_card_width_ + current_card_spacing_) * cards_in_row / 2;  // Center adjustment
+        int x = current_card_spacing_ + (pile_in_row * (current_card_width_ + current_card_spacing_));
+        
+        // Add centering to make pyramid centered on screen
+        int screen_width = 1024;  // Approximate, will be replaced by actual width
+        x = (screen_width - row_width) / 2 + (pile_in_row * (current_card_width_ + current_card_spacing_));
         
         const auto &pile_data = tableau_[pile];
         
@@ -635,13 +650,12 @@ void PyramidGame::drawTableauPiles() {
             else if (rendering_engine_ == RenderingEngine::OPENGL) {
                 // Draw cards with drag support for OpenGL
                 for (size_t card_idx = 0; card_idx < pile_data.size(); card_idx++) {
-                    // Skip cards that are being dragged from THIS tableau pile
-                    // This reveals the card underneath when dragging
+                    // Skip cards that are being dragged
                     if (dragging_ && 
                         drag_source_pile_ >= first_tableau_index && 
                         drag_source_pile_ - first_tableau_index == static_cast<int>(pile) &&
                         card_idx >= pile_data.size() - drag_cards_.size()) {
-                        continue;  // Skip this card - it's being dragged!
+                        continue;
                     }
                     
                     const TableauCard &tc = pile_data[card_idx];
@@ -650,6 +664,17 @@ void PyramidGame::drawTableauPiles() {
                 }
             }
 #endif            
+        }
+        
+        // Move to next card in pyramid
+        pile_in_row++;
+        pile_idx++;
+        
+        // Check if we've completed this row
+        if (pile_in_row >= cards_in_row) {
+            row++;
+            pile_in_row = 0;
+            cards_in_row++;  // Next row has one more card
         }
     }
 }
