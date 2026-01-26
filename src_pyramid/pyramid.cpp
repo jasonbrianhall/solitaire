@@ -78,7 +78,7 @@ PyramidGame::PyramidGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
       window_(nullptr), game_area_(nullptr), gl_area_(nullptr),
       rendering_stack_(nullptr), buffer_surface_(nullptr),
-      buffer_cr_(nullptr), draw_three_mode_(true),
+      buffer_cr_(nullptr), draw_three_mode_(false),
       current_card_width_(BASE_CARD_WIDTH),
       current_card_height_(BASE_CARD_HEIGHT),
       current_card_spacing_(BASE_CARD_SPACING),
@@ -1125,19 +1125,13 @@ void PyramidGame::dealMultiDeck() {
   stock_.clear();
   waste_.clear();
   
-  // Deal to tableau - i represents the pile number (0-6)
+  // Deal to tableau - Pyramid Solitaire: all cards in pyramid are face up
   for (int i = 0; i < 7; i++) {
-    // For each pile i, deal i cards face down
-    for (int j = 0; j < i; j++) {
+    // For each pile i, deal i+1 cards ALL face up (no face-down cards in Pyramid)
+    for (int j = 0; j <= i; j++) {
       if (auto card = multi_deck_.drawCard()) {
-        tableau_[i].emplace_back(*card, false); // face down
-        //playSound(GameSoundEvent::CardFlip);
+        tableau_[i].emplace_back(*card, true);  // ALL face up
       }
-    }
-    // Deal one card face up at the end
-    if (auto card = multi_deck_.drawCard()) {
-      tableau_[i].emplace_back(*card, true); // face up
-      //playSound(GameSoundEvent::CardFlip);
     }
   }
 
@@ -1153,15 +1147,22 @@ void PyramidGame::dealMultiDeck() {
 }
 
 bool PyramidGame::checkWinCondition() const {
-  // Pyramid Solitaire: Win when all cards from the pyramid are removed
-  // The pyramid is stored in tableau_, so victory is when all tableau piles are empty
+  // Pyramid Solitaire: Win when all cards from the pyramid and waste are moved to discard
+  // The pyramid and waste must be empty (all cards discarded as matches)
+  
+  // Check if all pyramid cards are gone
   for (const auto &pile : tableau_) {
     if (!pile.empty()) {
       return false;  // Still have cards in the pyramid
     }
   }
+  
+  // Check if waste pile is empty
+  if (!waste_.empty()) {
+    return false;  // Still have cards in waste
+  }
 
-  // All pyramid cards have been removed = WIN!
+  // All pyramid and waste cards have been matched and discarded = WIN!
   return true;
 }
 
@@ -1358,43 +1359,8 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   GtkWidget *optionsMenuItem = gtk_menu_item_new_with_mnemonic("_Options");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(optionsMenuItem), optionsMenu);
 
-  // Draw Mode submenu
-  GtkWidget *drawModeItem = gtk_menu_item_new_with_mnemonic("_Draw Mode");
-  GtkWidget *drawModeMenu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(drawModeItem), drawModeMenu);
-
-  // Draw One option
-  GtkWidget *drawOneItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "_One (1)");
-  GSList *group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(drawOneItem));
-  g_signal_connect(
-      G_OBJECT(drawOneItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<PyramidGame *>(data)->draw_three_mode_ = false;
-        }
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawOneItem);
-
-  // Draw Three option
-  GtkWidget *drawThreeItem = gtk_radio_menu_item_new_with_mnemonic(group, "_Three (3)");
-  g_signal_connect(
-      G_OBJECT(drawThreeItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<PyramidGame *>(data)->draw_three_mode_ = true;
-        }
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(drawModeMenu), drawThreeItem);
-
-  // Set initial state
-  gtk_check_menu_item_set_active(
-      GTK_CHECK_MENU_ITEM(draw_three_mode_ ? drawThreeItem : drawOneItem),
-      TRUE);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), drawModeItem);
-
+  // Draw Mode menu removed - Pyramid Solitaire only uses Draw One mode
+  
   // Card Back menu
   GtkWidget *cardBackMenu = gtk_menu_new();
   GtkWidget *cardBackItem = gtk_menu_item_new_with_mnemonic("_Card Back");

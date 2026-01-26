@@ -310,6 +310,7 @@ private:
   // ========================================================================
   void drawStockPile();
   void drawWastePile();
+  void drawDiscardPile();  // Discard pile for matched cards
   void drawFoundationPiles();
   void drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
   void drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
@@ -333,6 +334,7 @@ private:
   // Game pile drawing functions - OpenGL versions
   void drawStockPile_gl();
   void drawWastePile_gl();
+  void drawDiscardPile_gl();  // Discard pile for matched cards (OpenGL)
   void drawFoundationPiles_gl();
   void drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
   void drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);

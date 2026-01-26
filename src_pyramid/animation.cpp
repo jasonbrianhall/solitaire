@@ -472,30 +472,28 @@ void PyramidGame::drawStockPile() {
   int x = current_card_spacing_;
   int y = current_card_spacing_;
   
+  if (stock_.empty()) {
+    // Draw empty stock pile outline
+    if (rendering_engine_ == RenderingEngine::CAIRO) {
+      drawEmptyPile(buffer_cr_, x, y);
+    }
 #ifdef USEOPENGL
-  if (rendering_engine_ == RenderingEngine::OPENGL) {
-      if (!stock_.empty()) {
-        drawCard_gl(stock_.back(), x, y, false);
-      } else {
-        // Draw empty stock pile outline
-        drawEmptyPile_gl(x, y);
-      }
-   } else if( rendering_engine_ == RenderingEngine::CAIRO) {
-      if (!stock_.empty()) {
-        drawCard(buffer_cr_, x, y, nullptr, false);
-      } else {
-        // Draw empty stock pile outline
-        drawEmptyPile(buffer_cr_, x, y);
-      }
-   }
-#else
-      if (!stock_.empty()) {
-        drawCard(buffer_cr_, x, y, nullptr, false);
-      } else {
-        // Draw empty stock pile outline
-        drawEmptyPile(buffer_cr_, x, y);
-      }
+    else if (rendering_engine_ == RenderingEngine::OPENGL) {
+      drawEmptyPile_gl(x, y);
+    }
 #endif
+  } else {
+    // Draw the ONE card in stock (face up)
+    const auto &card = stock_.back();
+    if (rendering_engine_ == RenderingEngine::CAIRO) {
+      drawCard(buffer_cr_, x, y, &card, true);
+    }
+#ifdef USEOPENGL
+    else if (rendering_engine_ == RenderingEngine::OPENGL) {
+      drawCard_gl(card, x, y, true);
+    }
+#endif
+  }
 }
 
 // Draw the waste pile (cards drawn from stock)
@@ -555,44 +553,41 @@ void PyramidGame::drawWastePile() {
 }
 
 // Draw the foundation piles (where aces build up to kings)
+// DISABLED FOR PYRAMID SOLITAIRE - not used in this game
 void PyramidGame::drawFoundationPiles() {
-  int x = 3 * (current_card_width_ + current_card_spacing_);
+  // Foundation piles not used in Pyramid Solitaire - do nothing
+  return;
+}
+
+// Draw the discard pile (matched cards that sum to 13)
+void PyramidGame::drawDiscardPile() {
+  // Position discard pile on far right of waste pile
+  // waste is at: current_card_spacing_ + current_card_width_ + current_card_spacing_
+  // discard is further right: waste_x + current_card_width_ + current_card_spacing_
+  int x = current_card_spacing_ + (2 * current_card_width_) + (2 * current_card_spacing_);
   int y = current_card_spacing_;
   
-  for (size_t i = 0; i < foundation_.size(); i++) {
-    // Always draw the empty foundation pile outline
-    if( rendering_engine_ == RenderingEngine::CAIRO) {
-        drawEmptyPile(buffer_cr_, x, y);
-    } 
-
-#ifdef USEOPENGL    
+  if (foundation_[0].empty()) {
+    // Draw empty pile outline if no cards discarded yet
+    if (rendering_engine_ == RenderingEngine::CAIRO) {
+      drawEmptyPile(buffer_cr_, x, y);
+    }
+#ifdef USEOPENGL            
     else if (rendering_engine_ == RenderingEngine::OPENGL) {
-        drawEmptyPile_gl(x, y);
+      drawEmptyPile_gl(x, y);
     }
 #endif
-    const auto &pile = foundation_[i];
-    if (!pile.empty()) {
-      if (win_animation_active_) {
-        if (rendering_engine_ == RenderingEngine::CAIRO) {
-            drawFoundationDuringWinAnimation(i, pile, x, y);
-        } 
-#ifdef USEOPENGL
-        else if (rendering_engine_ == RenderingEngine::OPENGL) {
-            drawFoundationDuringWinAnimation_gl(i, pile, x, y);
-        }
-#endif        
-      } else {
-        if (rendering_engine_ == RenderingEngine::CAIRO) {
-            drawNormalFoundationPile(i, pile, x, y);
-        } 
-#ifdef USEOPENGL        
-        else if (rendering_engine_ == RenderingEngine::OPENGL) {
-            drawNormalFoundationPile_gl(i, pile, x, y);
-        }
-#endif
-      }
+  } else {
+    // Draw the top card of the discard pile
+    const auto &top_card = foundation_[0].back();
+    if (rendering_engine_ == RenderingEngine::CAIRO) {
+      drawCard(buffer_cr_, x, y, &top_card, true);
     }
-    x += current_card_width_ + current_card_spacing_;
+#ifdef USEOPENGL            
+    else if (rendering_engine_ == RenderingEngine::OPENGL) {
+      drawCard_gl(top_card, x, y, true);
+    }
+#endif
   }
 }
 
