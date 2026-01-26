@@ -1,4 +1,4 @@
-#include "solitaire.h"
+#include "spider.h"
 #include <gtk/gtk.h>
 
 // Handler for keyboard events

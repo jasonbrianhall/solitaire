@@ -8,6 +8,19 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef USEOPENGL
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#endif
+
+enum class RenderingEngine {
+  CAIRO,    // CPU-based 2D rendering
+  OPENGL    // GPU-accelerated 3D rendering
+};
+
 enum class GameSoundEvent {
   CardFlip,
   CardPlace,
@@ -26,6 +39,8 @@ struct CardFragment {
   double velocity_y;
   double rotation;
   double rotation_velocity;
+  double target_x;  // UV coordinate X for texture mapping
+  double target_y;  // UV coordinate Y for texture mapping
   cairo_surface_t *surface;
   bool active;
 };
@@ -66,6 +81,16 @@ public:
   bool setSoundsZipPath(const std::string &path);
 
   void run(int argc, char **argv);
+
+  // Engine control methods
+  bool setRenderingEngine(RenderingEngine engine);
+  RenderingEngine getRenderingEngine() const { return rendering_engine_; }
+  bool isOpenGLSupported() const;
+  bool initializeRenderingEngine();
+  bool switchRenderingEngine(RenderingEngine newEngine);
+  void cleanupRenderingEngine();
+  std::string getRenderingEngineName() const;
+  void renderFrame();
 
 private:
   bool relaxed_rules_mode_;
@@ -159,6 +184,18 @@ private:
   GtkWidget *game_area_;
   std::vector<GtkWidget *> card_widgets_;
 
+  // Rendering engine state
+  RenderingEngine rendering_engine_ = RenderingEngine::CAIRO;
+  bool opengl_initialized_ = false;
+  bool cairo_initialized_ = false;
+  bool engine_switch_requested_ = false;
+  RenderingEngine requested_engine_ = RenderingEngine::CAIRO;
+  bool is_glew_initialized_ = false;
+  bool cache_dirty_ = false;
+  
+  GtkWidget *gl_area_ = nullptr;        // OpenGL rendering area
+  GtkWidget *rendering_stack_ = nullptr;  // Stack to switch between Cairo and OpenGL
+
   // Card dimensions and spacing
   static constexpr int CARD_WIDTH = 100;
   static constexpr int CARD_HEIGHT = 145;
@@ -172,6 +209,16 @@ private:
   // UI setup
   void setupWindow();
   void setupGameArea();
+  void setupCairoArea();
+
+#ifdef USEOPENGL
+  void setupOpenGLArea();
+  bool initializeOpenGLResources();
+  bool initializeGLEW_gl();
+  bool checkOpenGLCapabilities_gl();
+  void logOpenGLInfo_gl();
+#endif
+
   GtkWidget *createCardWidget(const cardlib::Card &card, bool face_up);
 
   // Game logic
@@ -214,6 +261,7 @@ private:
   cairo_surface_t *getCardBackSurface();
 
   void setupMenuBar();
+  void addEngineSelectionMenu(GtkWidget *menubar);
   static void onNewGame(GtkWidget *widget, gpointer data);
   void restartGame();
   void promptForSeed();
@@ -226,11 +274,64 @@ private:
   void drawAnimatedCard(cairo_t *cr, const AnimatedCard &anim_card);
   void dealTestLayout();
 
+#ifdef USEOPENGL
+  void drawCard_gl(const cardlib::Card &card, int x, int y, bool face_up);
+  void drawEmptyPile_gl(int x, int y);
+  void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
+  void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
+  
+  void drawStockPile_gl();
+  void drawFoundationPiles_gl();
+  void drawTableauPiles_gl();
+  void drawTableauPileDuringAnimationGL(size_t pile_index, int x, int tableau_base_y);
+  void drawNormalTableauPileGL(size_t pile_index, int x, int tableau_base_y);
+  void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
+  
+  void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawDealAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
+  void drawFoundationDuringWinAnimation_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void drawNormalFoundationPile_gl(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
+  void highlightSelectedCard_gl();
+  void explodeCard_gl(AnimatedCard &card);
+  
+  void renderFrame_gl();
+  
+  bool initializeRenderingEngine_gl();
+  GLuint setupShaders_gl();
+  GLuint setupCardQuadVAO_gl();
+  bool initializeCardTextures_gl();
+  bool loadCardTexture_gl(const std::string &cardKey, const cardlib::Card &card);
+  void cleanupOpenGLResources_gl();
+  bool validateOpenGLContext_gl();
+  bool reloadCustomCardBackTexture_gl();
+  GLuint loadTextureFromMemory(const std::vector<unsigned char> &data);
+  
+  gboolean onAutoFinishTick_gl(gpointer data);
+  void processNextAutoFinishMove_gl();
+
+  // OpenGL 3.4 Rendering Components
+  GLuint cardShaderProgram_gl_ = 0;      // Main card rendering shader
+  GLuint simpleShaderProgram_gl_ = 0;    // Simple color rendering shader
+  GLuint cardQuadVAO_gl_ = 0;            // Vertex Array Object for card quad
+  GLuint cardQuadVBO_gl_ = 0;            // Vertex Buffer Object
+  GLuint cardQuadEBO_gl_ = 0;            // Element Buffer Object
+
+  std::unordered_map<std::string, GLuint> cardTextures_gl_;  // Texture cache
+  GLuint cardBackTexture_gl_ = 0;                             // Card back texture
+
+  static gboolean onGLRealize(GtkGLArea *area, gpointer data);
+  static gboolean onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data);
+#endif
+
   std::string settings_dir_;
   std::string custom_back_path_;
   bool loadSettings();
   void saveSettings();
   void initializeSettingsDir();
+  void saveEnginePreference();
+  void loadEnginePreference();
   bool setCustomCardBack(const std::string &path);
 
   bool loadDeck(const std::string &path);

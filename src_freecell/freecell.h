@@ -432,7 +432,7 @@ private:
   bool initializeRenderingEngine_gl();
   bool reloadCustomCardBackTexture_gl();
 
-  
+#ifdef USEOPENGL  
   void drawAnimatedCard_gl(const AnimatedCard &anim_card, GLuint shaderProgram, GLuint VAO);
   void drawCardFragment_gl(const CardFragment &fragment, const AnimatedCard &card, GLuint shaderProgram, GLuint VAO);
   void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);
@@ -440,6 +440,7 @@ private:
   void drawFoundationAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawStockToWasteAnimation_gl(GLuint shaderProgram, GLuint VAO);
   void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
+#endif
 };
 
 #endif // FREECELL_H
