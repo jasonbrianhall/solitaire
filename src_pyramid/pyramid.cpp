@@ -815,19 +815,17 @@ void PyramidGame::deal() {
   foundation_.resize(4);
   tableau_.resize(7);
 
-  // Deal to tableau - i represents the pile number (0-6)
+  // Deal to tableau - Pyramid Solitaire: all cards in pyramid are face up
+  // tableau_[0] = 1 card (face up)
+  // tableau_[1] = 2 cards (all face up)
+  // tableau_[2] = 3 cards (all face up)
+  // ... etc
   for (int i = 0; i < 7; i++) {
-    // For each pile i, deal i cards face down
-    for (int j = 0; j < i; j++) {
+    // For each pile i, deal i+1 cards, all face up
+    for (int j = 0; j <= i; j++) {
       if (auto card = deck_.drawCard()) {
-        tableau_[i].emplace_back(*card, false); // face down
-        //playSound(GameSoundEvent::CardFlip);
+        tableau_[i].emplace_back(*card, true); // All face up in pyramid
       }
-    }
-    // Deal one card face up at the end
-    if (auto card = deck_.drawCard()) {
-      tableau_[i].emplace_back(*card, true); // face up
-      //playSound(GameSoundEvent::CardFlip);
     }
   }
 
@@ -933,52 +931,47 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
   // Calculate first tableau index
   int first_tableau_index = 2 + foundation_.size();
   
-  // Check pyramid piles - pyramid layout with 7 rows (1,2,3,4,5,6,7 cards)
+  // Check pyramid piles
+  // tableau_[0] = row 1 (1 card)
+  // tableau_[1] = row 2 (2 cards staggered)
+  // ...
+  // tableau_[6] = row 7 (7 cards staggered)
+  
   const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  int screen_width = 1024;  // Approximate screen width
+  int screen_width = 1024;
   
-  int row = 0;
-  int pile_in_row = 0;
-  int cards_in_row = 1;
-  int pile_idx = 0;
+  const int HORIZ_SPACING = current_card_width_ + 15;    // Card width plus 15 pixel gap
+  const int VERT_OVERLAP = current_card_height_ / 2;     // Half card height between rows
   
-  for (int i = 0; i < tableau_.size() && pile_idx < 28; i++) {
-    // Calculate pyramid row position
-    int row_y = base_y + row * (current_card_height_ + current_vert_spacing_);
+  for (int row = 0; row < 7; row++) {
+    const auto &pile = tableau_[row];
+    int num_cards_in_row = row + 1;
     
-    // Center the row horizontally
-    int row_width = cards_in_row * (current_card_width_ + current_card_spacing_);
-    int row_x = (screen_width - row_width) / 2 + (pile_in_row * (current_card_width_ + current_card_spacing_));
+    // Calculate row dimensions
+    int row_width = current_card_width_ + (num_cards_in_row - 1) * HORIZ_SPACING;
+    int row_start_x = (screen_width - row_width) / 2;
+    int row_y = base_y + row * VERT_OVERLAP;
     
-    const auto &pile = tableau_[i];
-    
-    // Check if click is in this pile's area
-    if (x >= row_x && x <= row_x + current_card_width_) {
-      if (pile.empty() && y >= row_y && y <= row_y + current_card_height_) {
-        return {first_tableau_index + i, -1};
-      }
-
-      // Check cards from top to bottom
-      for (int j = static_cast<int>(pile.size()) - 1; j >= 0; j--) {
-        int card_y = row_y + j * current_vert_spacing_;
-        if (y >= card_y && y <= card_y + current_card_height_) {
-          if (pile[j].face_up) {
-            return {first_tableau_index + i, j};
-          }
-          break;
+    // Check each card in this row, from last to first (top-most cards first)
+    for (int card_idx = static_cast<int>(pile.size()) - 1; card_idx >= 0; card_idx--) {
+      int card_x = row_start_x + (card_idx * HORIZ_SPACING);
+      
+      // Check if click is on this card
+      if (x >= card_x && x <= card_x + current_card_width_ &&
+          y >= row_y && y <= row_y + current_card_height_) {
+        if (pile[card_idx].face_up) {
+          return {first_tableau_index + row, card_idx};
         }
       }
     }
     
-    // Move to next card in pyramid
-    pile_in_row++;
-    pile_idx++;
-    
-    // Check if we've completed this row
-    if (pile_in_row >= cards_in_row) {
-      row++;
-      pile_in_row = 0;
-      cards_in_row++;
+    // Check empty row area if empty
+    if (pile.empty()) {
+      int card_x = row_start_x;
+      if (x >= card_x && x <= card_x + current_card_width_ &&
+          y >= row_y && y <= row_y + current_card_height_) {
+        return {first_tableau_index + row, -1};
+      }
     }
   }
 

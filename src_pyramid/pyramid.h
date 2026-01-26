@@ -121,15 +121,15 @@ private:
   // ========================================================================
   static constexpr int BASE_WINDOW_WIDTH = 1024;
   static constexpr int BASE_WINDOW_HEIGHT = 768;
-  static constexpr int BASE_CARD_WIDTH = 100;
-  static constexpr int BASE_CARD_HEIGHT = 145;
-  static constexpr int BASE_CARD_SPACING = 20;
-  static constexpr int BASE_VERT_SPACING = 30;
+  static constexpr int BASE_CARD_WIDTH = 90;
+  static constexpr int BASE_CARD_HEIGHT = 130;
+  static constexpr int BASE_CARD_SPACING = 15;
+  static constexpr int BASE_VERT_SPACING = 25;
 
-  static constexpr int CARD_WIDTH = 100;
-  static constexpr int CARD_HEIGHT = 145;
-  static constexpr int CARD_SPACING = 20;
-  static constexpr int VERT_SPACING = 30;
+  static constexpr int CARD_WIDTH = 90;
+  static constexpr int CARD_HEIGHT = 130;
+  static constexpr int CARD_SPACING = 15;
+  static constexpr int VERT_SPACING = 25;
 
   static constexpr double GRAVITY = 0.8;
   static constexpr double BOUNCE_FACTOR = -0.7;

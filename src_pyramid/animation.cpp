@@ -599,82 +599,70 @@ void PyramidGame::drawFoundationPiles() {
 // Draw the tableau piles (the main playing area)
 void PyramidGame::drawTableauPiles() {
     const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+    int screen_width = 1024;
     
     // Calculate pile index offsets
     int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
     int first_tableau_index = max_foundation_index + 1;
     
-    // Pyramid layout: 7 rows with 1, 2, 3, 4, 5, 6, 7 cards
-    // Total: 28 cards across 7 rows
-    int row = 0;
-    int pile_in_row = 0;
-    int cards_in_row = 1;
-    int pile_idx = 0;
+    // Pyramid Solitaire layout:
+    // tableau_[0] = row 1 (1 card)
+    // tableau_[1] = row 2 (2 cards staggered)
+    // tableau_[2] = row 3 (3 cards staggered)
+    // ...
+    // tableau_[6] = row 7 (7 cards staggered)
+    //
+    // Each card in a row overlaps the previous one
+    // Rows also overlap each other vertically
     
-    for (size_t pile = 0; pile < tableau_.size() && pile_idx < 28; pile++) {
-        // Calculate pyramid row position
-        int y = base_y + row * (current_card_height_ + current_vert_spacing_);
+    const int HORIZ_SPACING = current_card_width_ + 15;    // Card width plus 15 pixel gap
+    const int VERT_OVERLAP = current_card_height_ / 2;     // Half card height between rows
+    
+    for (int row = 0; row < 7; row++) {
+        const auto &pile = tableau_[row];
+        int num_cards_in_row = row + 1;  // row 0 has 1 card, row 1 has 2, etc
         
-        // Center the row horizontally
-        int row_width = cards_in_row * (current_card_width_ + current_card_spacing_);
-        int x_offset = (current_card_width_ + current_card_spacing_) * cards_in_row / 2;  // Center adjustment
-        int x = current_card_spacing_ + (pile_in_row * (current_card_width_ + current_card_spacing_));
+        // Calculate the width needed for this row when all cards are visible
+        // With full card width plus gap spacing
+        int row_width = current_card_width_ + (num_cards_in_row - 1) * HORIZ_SPACING;
         
-        // Add centering to make pyramid centered on screen
-        int screen_width = 1024;  // Approximate, will be replaced by actual width
-        x = (screen_width - row_width) / 2 + (pile_in_row * (current_card_width_ + current_card_spacing_));
+        // Center this row horizontally
+        int row_start_x = (screen_width - row_width) / 2;
         
-        const auto &pile_data = tableau_[pile];
+        // Y position for this row (rows have small vertical overlap)
+        int row_y = base_y + row * VERT_OVERLAP;
         
-        // Draw empty pile outline for empty piles
-        if (pile_data.empty()) {
-            if (rendering_engine_ == RenderingEngine::CAIRO) {
-                drawEmptyPile(buffer_cr_, x, y);
-            } 
-#ifdef USEOPENGL            
-            else if (rendering_engine_ == RenderingEngine::OPENGL) {
-                drawEmptyPile_gl(x, y);
-            }
-#endif            
-        }
-        
-        // Handle deal animation or normal rendering
-        if (deal_animation_active_) {
-            drawTableauDuringDealAnimation(pile, pile_data, x, y);
-        } else {
-            if (rendering_engine_ == RenderingEngine::CAIRO) {
-                drawNormalTableauPile(pile, pile_data, x, y);
-            } 
+        // Draw all cards in this pile (which forms one row of the pyramid)
+        for (int card_idx = 0; card_idx < pile.size(); card_idx++) {
+            // X position - each card is spaced by full card width plus gap
+            int card_x = row_start_x + (card_idx * HORIZ_SPACING);
+            int card_y = row_y;
             
+            const auto &tableau_card = pile[card_idx];
+            
+            if (rendering_engine_ == RenderingEngine::CAIRO) {
+                drawCard(buffer_cr_, card_x, card_y, &tableau_card.card, tableau_card.face_up);
+            }
 #ifdef USEOPENGL            
             else if (rendering_engine_ == RenderingEngine::OPENGL) {
-                // Draw cards with drag support for OpenGL
-                for (size_t card_idx = 0; card_idx < pile_data.size(); card_idx++) {
-                    // Skip cards that are being dragged
-                    if (dragging_ && 
-                        drag_source_pile_ >= first_tableau_index && 
-                        drag_source_pile_ - first_tableau_index == static_cast<int>(pile) &&
-                        card_idx >= pile_data.size() - drag_cards_.size()) {
-                        continue;
-                    }
-                    
-                    const TableauCard &tc = pile_data[card_idx];
-                    int card_y = y + (int)(card_idx * current_vert_spacing_);
-                    drawCard_gl(tc.card, x, card_y, tc.face_up);
-                }
+                drawCard_gl(tableau_card.card, card_x, card_y, tableau_card.face_up);
             }
-#endif            
+#endif
         }
         
-        // Move to next card in pyramid
-        pile_in_row++;
-        pile_idx++;
-        
-        // Check if we've completed this row
-        if (pile_in_row >= cards_in_row) {
-            row++;
-            pile_in_row = 0;
-            cards_in_row++;  // Next row has one more card
+        // Draw empty pile outline if this row/pile is empty
+        if (pile.empty()) {
+            int card_x = row_start_x;
+            int card_y = row_y;
+            
+            if (rendering_engine_ == RenderingEngine::CAIRO) {
+                drawEmptyPile(buffer_cr_, card_x, card_y);
+            }
+#ifdef USEOPENGL            
+            else if (rendering_engine_ == RenderingEngine::OPENGL) {
+                drawEmptyPile_gl(card_x, card_y);
+            }
+#endif
         }
     }
 }
