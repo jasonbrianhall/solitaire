@@ -283,6 +283,8 @@ private:
   void drawStockPile_gl();
   void drawFoundationPiles_gl();
   void drawTableauPiles_gl();
+  void drawTableauPileDuringAnimationGL(size_t pile_index, int x, int tableau_base_y);
+  void drawNormalTableauPileGL(size_t pile_index, int x, int tableau_base_y);
   void drawDraggedCards_gl(GLuint shaderProgram, GLuint VAO);
   
   void drawWinAnimation_gl(GLuint shaderProgram, GLuint VAO);

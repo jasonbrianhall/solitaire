@@ -275,9 +275,6 @@ std::string SolitaireGame::getRenderingEngineName() const {
 
 void SolitaireGame::renderFrame() {
       refreshDisplay();
-#ifdef USEOPENGL
-      renderFrame_gl();
-#endif
 }
 
 void SolitaireGame::saveEnginePreference() {
@@ -934,9 +931,18 @@ bool SolitaireGame::checkWinCondition() const {
 
 // Function to refresh the display
 void SolitaireGame::refreshDisplay() {
+#ifdef USEOPENGL
+  // Queue redraw on whichever renderer is currently active
+  if (rendering_engine_ == RenderingEngine::OPENGL && gl_area_) {
+    gtk_widget_queue_draw(gl_area_);
+  } else if (game_area_) {
+    gtk_widget_queue_draw(game_area_);
+  }
+#else
   if (game_area_) {
     gtk_widget_queue_draw(game_area_);
   }
+#endif
 }
 
 int main(int argc, char **argv) {
@@ -2574,19 +2580,52 @@ void SolitaireGame::promptForNewGame(const std::string& difficulty) {
 #ifdef USEOPENGL
 
 bool SolitaireGame::initializeOpenGLResources() {
-  if (!initializeGLEW_gl()) {
-    return false;
+  // Initialize GLEW - following Freecell's approach
+  static gboolean glew_initialized = FALSE;
+  if (!glew_initialized) {
+    glewExperimental = GL_TRUE;
+    GLenum err = glewInit();
+    
+    fprintf(stderr, "[GL] glewInit returned: %i\n", err);
+    fprintf(stderr, "[GL] glewInit error string: %s\n", glewGetErrorString(err));
+    
+    if (err != GLEW_OK) {
+      const GLubyte *vendor = glGetString(GL_VENDOR);
+      if (vendor != nullptr) {
+        fprintf(stderr, "[GL] WARNING: glewInit failed but GL_VENDOR is accessible: %s\n", (const char*)vendor);
+        fprintf(stderr, "[GL] GL is functional despite glewInit error - proceeding anyway\n");
+        glew_initialized = TRUE;
+        is_glew_initialized_ = true;
+      } else {
+        fprintf(stderr, "[GL] FATAL: glewInit failed and GL functions unavailable\n");
+        return false;
+      }
+    } else {
+      glew_initialized = TRUE;
+      is_glew_initialized_ = true;
+      fprintf(stderr, "[GL] GLEW initialized successfully\n");
+    }
   }
   
-  if (!checkOpenGLCapabilities_gl()) {
+  cardShaderProgram_gl_ = setupShaders_gl();
+  if (cardShaderProgram_gl_ == 0) {
+    fprintf(stderr, "[GL] Failed to setup shaders\n");
     return false;
   }
+  fprintf(stderr, "[GL] Shaders compiled successfully\n");
   
-  logOpenGLInfo_gl();
+  cardQuadVAO_gl_ = setupCardQuadVAO_gl();
+  if (cardQuadVAO_gl_ == 0) {
+    fprintf(stderr, "[GL] Failed to setup VAO\n");
+    return false;
+  }
+  fprintf(stderr, "[GL] VAO setup complete\n");
   
   if (!initializeCardTextures_gl()) {
+    fprintf(stderr, "[GL] Failed to initialize card textures\n");
     return false;
   }
+  fprintf(stderr, "[GL] Card textures loaded\n");
   
   opengl_initialized_ = true;
   return true;
@@ -2605,9 +2644,23 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
 }
 
 gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
+  (void)context;  // Unused parameter
   SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  
   gtk_gl_area_make_current(area);
+  
+  int window_width = gtk_widget_get_allocated_width(GTK_WIDGET(area));
+  int window_height = gtk_widget_get_allocated_height(GTK_WIDGET(area));
+  
+  if (window_width < 10 || window_height < 10) {
+    gtk_widget_queue_draw(GTK_WIDGET(area));
+    return TRUE;
+  }
+  
   game->renderFrame_gl();
+  glFlush();
+  gtk_widget_queue_draw(GTK_WIDGET(area));
+  
   return TRUE;
 }
 

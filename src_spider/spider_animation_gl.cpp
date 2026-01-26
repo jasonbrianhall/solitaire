@@ -1407,13 +1407,9 @@ void SolitaireGame::renderFrame_gl() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     // Draw all game piles
-    //drawStockPile_gl();
-    //drawWastePile_gl();
-    //drawFoundationPiles_gl();
-    //drawTableauPiles_gl();
-    
-    // Disable blending after drawing
-    glDisable(GL_BLEND);
+    drawStockPile_gl();
+    drawFoundationPiles_gl();
+    drawTableauPiles_gl();
     
     // Draw animations if active
     if (win_animation_active_) {
@@ -1439,6 +1435,9 @@ void SolitaireGame::renderFrame_gl() {
         !stock_to_waste_animation_active_) {
         highlightSelectedCard_gl();
     }
+    
+    // Disable blending after drawing
+    glDisable(GL_BLEND);
 }
 
 // ============================================================================
@@ -1453,6 +1452,170 @@ gboolean SolitaireGame::onAutoFinishTick_gl(gpointer data) {
 
 void SolitaireGame::processNextAutoFinishMove_gl() {
     // Placeholder for auto-finish logic
+}
+
+// ============================================================================
+// OPENGL DRAWING FUNCTIONS - Mirror Cairo logic with GL calls
+// ============================================================================
+
+void SolitaireGame::drawStockPile_gl() {
+  int x = current_card_spacing_;
+  int y = current_card_spacing_;
+  
+  if (stock_.empty()) {
+    drawEmptyPile_gl(x, y);
+  } else {
+    drawCard_gl(cardlib::Card(cardlib::Suit::HEARTS, cardlib::Rank::KING), x, y, false);
+  }
+}
+
+void SolitaireGame::drawFoundationPiles_gl() {
+  int foundation_x = 2 * current_card_spacing_ + current_card_width_;
+  int foundation_y = current_card_spacing_;
+  int completed_sequences = foundation_[0].size();
+
+  if (win_animation_active_) {
+    for (int pile = 0; pile < 8; pile++) {
+      cardlib::Suit suit;
+      switch (pile % 4) {
+        case 0: suit = cardlib::Suit::HEARTS; break;
+        case 1: suit = cardlib::Suit::DIAMONDS; break;
+        case 2: suit = cardlib::Suit::CLUBS; break;
+        case 3: suit = cardlib::Suit::SPADES; break;
+      }
+      
+      cardlib::Rank rank = cardlib::Rank::KING;
+      for (int i = 0; i < 13; i++) {
+        if (pile < static_cast<int>(animated_foundation_cards_.size()) && 
+            i < static_cast<int>(animated_foundation_cards_[pile].size()) &&
+            !animated_foundation_cards_[pile][i]) {
+          rank = static_cast<cardlib::Rank>(13 - i);
+          break;
+        }
+      }
+      
+      cardlib::Card card(suit, rank);
+      drawCard_gl(card, foundation_x, foundation_y, true);
+      foundation_x += current_card_width_ + current_card_spacing_;
+    }
+  } else {
+    for (int i = 0; i < 8; i++) {
+      if (sequence_animation_active_ && i == completed_sequences) {
+        bool foundation_card_found = false;
+        for (int j = sequence_cards_.size() - 1; j >= 0; j--) {
+          if (!sequence_cards_[j].active && 
+              sequence_cards_[j].x == sequence_cards_[j].target_x && 
+              sequence_cards_[j].y == sequence_cards_[j].target_y) {
+            const cardlib::Card &card = sequence_cards_[j].card;
+            drawCard_gl(card, foundation_x, foundation_y, true);
+            foundation_card_found = true;
+            break;
+          }
+        }
+        
+        if (!foundation_card_found) {
+          drawEmptyPile_gl(foundation_x, foundation_y);
+        }
+      } else if (i < completed_sequences) {
+        const cardlib::Card &card = foundation_[0][i];
+        drawCard_gl(card, foundation_x, foundation_y, true);
+      } else {
+        drawEmptyPile_gl(foundation_x, foundation_y);
+      }
+      
+      foundation_x += current_card_width_ + current_card_spacing_;
+    }
+  }
+}
+
+void SolitaireGame::drawTableauPiles_gl() {
+  const int tableau_base_y = current_card_spacing_ +
+                           current_card_height_ +
+                           current_vert_spacing_;
+
+  for (size_t i = 0; i < tableau_.size(); i++) {
+    int x = current_card_spacing_ +
+          i * (current_card_width_ + current_card_spacing_);
+    const auto &pile = tableau_[i];
+
+    if (pile.empty()) {
+      drawEmptyPile_gl(x, tableau_base_y);
+    }
+
+    if (deal_animation_active_) {
+      drawTableauPileDuringAnimationGL(i, x, tableau_base_y);
+    } else {
+      drawNormalTableauPileGL(i, x, tableau_base_y);
+    }
+  }
+}
+
+void SolitaireGame::drawTableauPileDuringAnimationGL(size_t pile_index, int x, int tableau_base_y) {
+  const auto &pile = tableau_[pile_index];
+  
+  int cards_in_this_pile = (pile_index < 6) ? 6 : 5;
+  int total_cards_before_this_pile = 0;
+  for (int p = 0; p < pile_index; p++) {
+    total_cards_before_this_pile += (p < 6) ? 6 : 5;
+  }
+  
+  int cards_to_draw = std::min(
+      static_cast<int>(pile.size()),
+      std::max(0, cards_dealt_ - total_cards_before_this_pile));
+  
+  for (int j = 0; j < cards_to_draw; j++) {
+    bool is_animating = false;
+    for (const auto &anim_card : deal_cards_) {
+      if (anim_card.active) {
+        if (anim_card.target_pile_index == static_cast<int>(pile_index) && 
+            anim_card.target_card_index == j) {
+          is_animating = true;
+          break;
+        }
+      }
+    }
+    
+    if (!is_animating) {
+      int current_y = tableau_base_y + j * current_vert_spacing_;
+      drawCard_gl(pile[j].card, x, current_y, pile[j].face_up);
+    }
+  }
+}
+
+void SolitaireGame::drawNormalTableauPileGL(size_t pile_index, int x, int tableau_base_y) {
+  const auto &pile = tableau_[pile_index];
+  
+  for (size_t j = 0; j < pile.size(); j++) {
+    if (dragging_ && drag_source_pile_ >= 6 &&
+        drag_source_pile_ - 6 == static_cast<int>(pile_index) &&
+        j >= static_cast<size_t>(pile.size() - drag_cards_.size())) {
+      continue;
+    }
+    
+    bool skip_for_animation = false;
+    if (sequence_animation_active_ && sequence_tableau_index_ == static_cast<int>(pile_index)) {
+      for (size_t anim_idx = 0; anim_idx < sequence_cards_.size(); anim_idx++) {
+        if (sequence_cards_[anim_idx].active) {
+          for (size_t pos_idx = 0; pos_idx < anim_idx; pos_idx++) {
+            int position = sequence_card_positions_[pos_idx] - pos_idx;
+            if (j == static_cast<size_t>(position)) {
+              skip_for_animation = true;
+              break;
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    if (skip_for_animation) {
+      continue;
+    }
+    
+    int current_y = tableau_base_y + j * current_vert_spacing_;
+    const auto &tableau_card = pile[j];
+    drawCard_gl(tableau_card.card, x, current_y, tableau_card.face_up);
+  }
 }
 
 void SolitaireGame::cleanupOpenGLResources_gl() {
