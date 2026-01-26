@@ -12,6 +12,65 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+// ============================================================================
+// PYRAMID SOLITAIRE - OPENGL RENDERING ANIMATION SYSTEM
+// ============================================================================
+//
+// GAME RULES - PYRAMID SOLITAIRE:
+// ================================
+// OBJECTIVE: Remove all 28 cards from the pyramid
+//
+// PYRAMID LAYOUT:
+//   - Cards dealt in pyramid shape (7 rows, 28 total cards)
+//   - Row 1: 1 card
+//   - Row 2: 2 cards  
+//   - Row 3: 3 cards
+//   - Row 4: 4 cards
+//   - Row 5: 5 cards
+//   - Row 6: 6 cards
+//   - Row 7: 7 cards
+//
+// CARD REMOVAL RULES:
+//   - Two cards can be removed if their ranks sum to 13
+//   - Kings (K=13) can be removed alone
+//   - Rank values: A=1, 2=2, ..., 10=10, J=11, Q=12, K=13
+//
+// VALID PAIR REMOVALS:
+//   - A (1) + Q (12) = 13
+//   - 2 + J (11) = 13
+//   - 3 + 10 = 13
+//   - 4 + 9 = 13
+//   - 5 + 8 = 13
+//   - 6 + 7 = 13
+//   - K = 13 (alone)
+//
+// CARD ACCESSIBILITY:
+//   - A card can only be removed if it's not covered by cards below it
+//   - In a pyramid, a card is exposed if both positions below it are empty
+//   - Cards are removed by pairing or kings alone
+//
+// STOCK AND WASTE:
+//   - Draw one card at a time from stock to waste
+//   - Waste card can be paired with any exposed pyramid card
+//   - Waste card can be paired with top card of waste pile (if applicable)
+//   - When stock runs out, typically game ends (or reshuffle in some variants)
+//
+// GAME MODES:
+//   - STANDARD_PYRAMID: Single deck, classic 28-card pyramid
+//   - DOUBLE_PYRAMID: Two decks, larger pyramid (54 cards)
+//   - TRIPLE_PYRAMID: Three decks, even larger pyramid (104 cards)
+//
+// WIN CONDITION:
+//   - All 28 cards removed from the pyramid
+//   - Pyramid becomes completely empty
+//
+// RENDERING ENGINE:
+//   - OpenGL 3.4+ GPU-accelerated rendering
+//   - Shader-based card rendering with textures
+//   - Efficient fragment and animation rendering
+// ============================================================================
+
+
 // OpenGL 3.4 Shader sources
 static const char *VERTEX_SHADER_GL = R"(
     #version 330 core
