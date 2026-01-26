@@ -1,10 +1,10 @@
-#include "solitaire.h"
+#include "pyramid.h"
 #include <gtk/gtk.h>
 
 // Handler for keyboard events
-gboolean SolitaireGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
+gboolean SpiderGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
                                    gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  SpiderGame *game = static_cast<SpiderGame *>(data);
 
 if (game->win_animation_active_) {
   game->stopWinAnimation();
@@ -205,7 +205,7 @@ if (game->win_animation_active_) {
 }
 
 // Toggle fullscreen mode
-void SolitaireGame::toggleFullscreen() {
+void SpiderGame::toggleFullscreen() {
   if (is_fullscreen_) {
     gtk_window_unfullscreen(GTK_WINDOW(window_));
     is_fullscreen_ = false;
@@ -216,7 +216,7 @@ void SolitaireGame::toggleFullscreen() {
 }
 
 // Select the next (right) pile
-void SolitaireGame::selectNextPile() {
+void SpiderGame::selectNextPile() {
   // Calculate max foundation index (depends on game mode)
   int max_foundation_index = 2 + foundation_.size() - 1;
   // Calculate first tableau index
@@ -277,7 +277,7 @@ void SolitaireGame::selectNextPile() {
 }
 
 // Select the previous (left) pile
-void SolitaireGame::selectPreviousPile() {
+void SpiderGame::selectPreviousPile() {
   // Calculate max foundation index (depends on game mode)
   int max_foundation_index = 2 + foundation_.size() - 1;
   // Calculate first tableau index
@@ -342,7 +342,7 @@ void SolitaireGame::selectPreviousPile() {
 }
 
 // Move selection up in a tableau pile
-void SolitaireGame::selectCardUp() {
+void SpiderGame::selectCardUp() {
   // Calculate max foundation index (depends on game mode)
   int max_foundation_index = 2 + foundation_.size() - 1;
   // Calculate first tableau index
@@ -430,7 +430,7 @@ void SolitaireGame::selectCardUp() {
 
 // Move selection down in a tableau pile
 // Move selection down in a tableau pile
-void SolitaireGame::selectCardDown() {
+void SpiderGame::selectCardDown() {
   // Calculate max foundation index (depends on game mode)
   int max_foundation_index = 2 + foundation_.size() - 1;
   // Calculate first tableau index
@@ -496,7 +496,7 @@ void SolitaireGame::selectCardDown() {
   refreshDisplay();
 }
 
-void SolitaireGame::activateSelected() {
+void SpiderGame::activateSelected() {
   if (selected_pile_ == -1) {
     return;
   }
@@ -654,7 +654,7 @@ void SolitaireGame::activateSelected() {
   }
 }
 
-bool SolitaireGame::tryMoveSelectedCard() {
+bool SpiderGame::tryMoveSelectedCard() {
   if (source_pile_ == -1 || selected_pile_ == -1) {
     return false;
   }
@@ -850,7 +850,7 @@ bool SolitaireGame::tryMoveSelectedCard() {
   return true;
 }
 
-void SolitaireGame::resetKeyboardNavigation() {
+void SpiderGame::resetKeyboardNavigation() {
   keyboard_navigation_active_ = false;
   keyboard_selection_active_ = false;
   source_pile_ = -1;

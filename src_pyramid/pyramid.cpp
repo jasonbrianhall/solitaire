@@ -1,4 +1,4 @@
-#include "solitaire.h"
+#include "pyramid.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -74,7 +74,7 @@ std::string getDirectoryStructure(const std::string &directory = ".") {
   return result;
 }
 
-SolitaireGame::SolitaireGame()
+SpiderGame::SpiderGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
       window_(nullptr), game_area_(nullptr), gl_area_(nullptr),
       rendering_stack_(nullptr), buffer_surface_(nullptr),
@@ -119,7 +119,7 @@ SolitaireGame::SolitaireGame()
 // ENGINE SWITCHING IMPLEMENTATION
 // ============================================================================
 
-bool SolitaireGame::isOpenGLSupported() const {
+bool SpiderGame::isOpenGLSupported() const {
   #ifndef USEOPENGL
   return false;
   #else
@@ -127,7 +127,7 @@ bool SolitaireGame::isOpenGLSupported() const {
   #endif
 }
 
-bool SolitaireGame::setRenderingEngine(RenderingEngine engine) {
+bool SpiderGame::setRenderingEngine(RenderingEngine engine) {
   #ifdef USEOPENGL
   if (engine == RenderingEngine::OPENGL) {
     std::cout << "OpenGL not supported on Windows. Using Cairo." << std::endl;
@@ -151,7 +151,7 @@ bool SolitaireGame::setRenderingEngine(RenderingEngine engine) {
   return true;
 }
 
-bool SolitaireGame::initializeRenderingEngine() {
+bool SpiderGame::initializeRenderingEngine() {
   #ifndef USEOPENGL
   if (rendering_engine_ == RenderingEngine::OPENGL) {
     rendering_engine_ = RenderingEngine::CAIRO;
@@ -183,7 +183,7 @@ bool SolitaireGame::initializeRenderingEngine() {
   }
 }
 
-bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
+bool SpiderGame::switchRenderingEngine(RenderingEngine newEngine) {
   #ifndef USEOPENGL
   if (newEngine == RenderingEngine::OPENGL) {
     return false;
@@ -246,8 +246,8 @@ bool SolitaireGame::switchRenderingEngine(RenderingEngine newEngine) {
 
 #ifdef USEOPENGL
 // Called by GTK when GL context is created and available
-gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+gboolean SpiderGame::onGLRealize(GtkGLArea *area, gpointer data) {
+  SpiderGame *game = static_cast<SpiderGame *>(data);
   
   // Make the GL context current
   gtk_gl_area_make_current(area);
@@ -280,9 +280,9 @@ gboolean SolitaireGame::onGLRealize(GtkGLArea *area, gpointer data) {
 
 #ifdef USEOPENGL
 // Called by GTK every frame to render
-gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
+gboolean SpiderGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data) {
   (void)context;
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+  SpiderGame *game = static_cast<SpiderGame *>(data);
   
   // Ensure GL context is current before calling GL functions
   gtk_gl_area_make_current(area);
@@ -313,7 +313,7 @@ gboolean SolitaireGame::onGLRender(GtkGLArea *area, GdkGLContext *context, gpoin
 
 #ifdef USEOPENGL
 // Called from realize callback - NOW has GL context
-bool SolitaireGame::initializeOpenGLResources() {
+bool SpiderGame::initializeOpenGLResources() {
   #ifdef __linux__
   fprintf(stderr, "[GL] Setting up OpenGL rendering...\n");
   
@@ -396,7 +396,7 @@ bool SolitaireGame::initializeOpenGLResources() {
 // WIDGET SETUP - SEPARATED INTO CAIRO AND GL
 // ============================================================================
 
-void SolitaireGame::setupCairoArea() {
+void SpiderGame::setupCairoArea() {
   // Create new drawing area for Cairo rendering
   game_area_ = gtk_drawing_area_new();
   
@@ -424,7 +424,7 @@ void SolitaireGame::setupCairoArea() {
       G_OBJECT(game_area_), "size-allocate",
       G_CALLBACK(
           +[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
-            SolitaireGame *game = static_cast<SolitaireGame *>(data);
+            SpiderGame *game = static_cast<SpiderGame *>(data);
             game->updateCardDimensions(allocation->width, allocation->height);
 
             // Recreate buffer surface with new dimensions if needed
@@ -465,7 +465,7 @@ void SolitaireGame::setupCairoArea() {
 }
 
 #ifdef USEOPENGL
-void SolitaireGame::setupOpenGLArea() {
+void SpiderGame::setupOpenGLArea() {
   #ifdef __linux__
   // Create OpenGL rendering area
   gl_area_ = gtk_gl_area_new();
@@ -498,7 +498,7 @@ void SolitaireGame::setupOpenGLArea() {
   g_signal_connect(
       G_OBJECT(gl_area_), "size-allocate",
       G_CALLBACK(+[](GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
-        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+        SpiderGame *game = static_cast<SpiderGame *>(data);
         game->updateCardDimensions(allocation->width, allocation->height);
       }), this);
   // Set minimum size
@@ -510,7 +510,7 @@ void SolitaireGame::setupOpenGLArea() {
 }
 #endif
 
-void SolitaireGame::cleanupRenderingEngine() {
+void SpiderGame::cleanupRenderingEngine() {
   switch (rendering_engine_) {
     case RenderingEngine::CAIRO:
       cleanupCardCache();
@@ -529,7 +529,7 @@ void SolitaireGame::cleanupRenderingEngine() {
   }
 }
 
-std::string SolitaireGame::getRenderingEngineName() const {
+std::string SpiderGame::getRenderingEngineName() const {
   switch (rendering_engine_) {
     case RenderingEngine::CAIRO:
       return "Cairo";
@@ -540,7 +540,7 @@ std::string SolitaireGame::getRenderingEngineName() const {
   }
 }
 
-void SolitaireGame::printEngineInfo() {
+void SpiderGame::printEngineInfo() {
   std::cout << "\n=== RENDERING ENGINE ===" << std::endl;
   std::cout << "Current: " << getRenderingEngineName() << std::endl;
   #ifdef __linux__
@@ -551,7 +551,7 @@ void SolitaireGame::printEngineInfo() {
   std::cout << "========================\n" << std::endl;
 }
 
-void SolitaireGame::saveEnginePreference() {
+void SpiderGame::saveEnginePreference() {
   std::string config_file = settings_dir_ + "/graphics.ini";
   std::ofstream config(config_file);
   if (config.is_open()) {
@@ -561,7 +561,7 @@ void SolitaireGame::saveEnginePreference() {
   }
 }
 
-void SolitaireGame::loadEnginePreference() {
+void SpiderGame::loadEnginePreference() {
   std::string config_file = settings_dir_ + "/graphics.ini";
   std::ifstream config(config_file);
   if (config.is_open()) {
@@ -583,14 +583,14 @@ void SolitaireGame::loadEnginePreference() {
   }
 }
 
-void SolitaireGame::addEngineSelectionMenu(GtkWidget *menubar) {
+void SpiderGame::addEngineSelectionMenu(GtkWidget *menubar) {
   GtkWidget *graphics_menu = gtk_menu_new();
   GtkWidget *graphics_item = gtk_menu_item_new_with_label("Graphics");
 
   GtkWidget *cairo_item = gtk_menu_item_new_with_label("Use Cairo (CPU)");
   g_signal_connect(cairo_item, "activate",
                    G_CALLBACK(+[](GtkWidget *w, gpointer data) {
-                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     SpiderGame *game = static_cast<SpiderGame *>(data);
                      game->switchRenderingEngine(RenderingEngine::CAIRO);
                      game->refreshDisplay();
                    }),
@@ -601,7 +601,7 @@ void SolitaireGame::addEngineSelectionMenu(GtkWidget *menubar) {
   GtkWidget *opengl_item = gtk_menu_item_new_with_label("Use OpenGL");
   g_signal_connect(opengl_item, "activate",
                    G_CALLBACK(+[](GtkWidget *w, gpointer data) {
-                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     SpiderGame *game = static_cast<SpiderGame *>(data);
                      game->switchRenderingEngine(RenderingEngine::OPENGL);
                      game->refreshDisplay();
                    }),
@@ -614,7 +614,7 @@ void SolitaireGame::addEngineSelectionMenu(GtkWidget *menubar) {
   gtk_widget_show_all(graphics_menu);
 }
 
-void SolitaireGame::checkAndInitializeSound() {
+void SpiderGame::checkAndInitializeSound() {
   // Check if sound.zip file exists
   struct stat buffer;
   bool sound_file_exists = (stat(sounds_zip_path_.c_str(), &buffer) == 0);
@@ -637,7 +637,7 @@ void SolitaireGame::checkAndInitializeSound() {
 
 
 
-void SolitaireGame::run(int argc, char **argv) {
+void SpiderGame::run(int argc, char **argv) {
   gtk_init(&argc, &argv);
   setupWindow();
   initializeGame();  // Initialize game after GTK is ready and window exists
@@ -663,7 +663,7 @@ void SolitaireGame::run(int argc, char **argv) {
   gtk_main();
 }
 
-void SolitaireGame::initializeGame() {
+void SpiderGame::initializeGame() {
   // Check for engine switch request
   if (engine_switch_requested_) {
     switchRenderingEngine(requested_engine_);
@@ -749,7 +749,7 @@ void SolitaireGame::initializeGame() {
   std::cout << "✓ Game fully initialized - GL rendering now safe" << std::endl;
 }
 
-bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
+bool SpiderGame::isValidDragSource(int pile_index, int card_index) const {
   if (pile_index < 0)
     return false;
 
@@ -785,7 +785,7 @@ bool SolitaireGame::isValidDragSource(int pile_index, int card_index) const {
   return false;
 }
 
-std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
+std::vector<cardlib::Card> &SpiderGame::getPileReference(int pile_index) {
   if (pile_index == 0)
     return stock_;
   if (pile_index == 1)
@@ -804,7 +804,7 @@ std::vector<cardlib::Card> &SolitaireGame::getPileReference(int pile_index) {
   throw std::out_of_range("Invalid pile index");
 }
 
-void SolitaireGame::deal() {
+void SpiderGame::deal() {
   // Clear all piles first
   stock_.clear();
   waste_.clear();
@@ -847,7 +847,7 @@ void SolitaireGame::deal() {
     startDealAnimation();
 }
 
-void SolitaireGame::flipTopTableauCard(int pile_index) {
+void SpiderGame::flipTopTableauCard(int pile_index) {
   if (pile_index < 0 || pile_index >= static_cast<int>(tableau_.size())) {
     return;
   }
@@ -859,7 +859,7 @@ void SolitaireGame::flipTopTableauCard(int pile_index) {
   }
 }
 
-GtkWidget *SolitaireGame::createCardWidget(const cardlib::Card &card,
+GtkWidget *SpiderGame::createCardWidget(const cardlib::Card &card,
                                            bool face_up) {
   if (face_up) {
     if (auto img = deck_.getCardImage(card)) {
@@ -889,7 +889,7 @@ GtkWidget *SolitaireGame::createCardWidget(const cardlib::Card &card,
   return frame;
 }
 
-std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
+std::vector<cardlib::Card> SpiderGame::getTableauCardsAsCards(
     const std::vector<TableauCard> &tableau_cards, int start_index) {
   std::vector<cardlib::Card> cards;
   for (size_t i = start_index; i < tableau_cards.size(); i++) {
@@ -900,7 +900,7 @@ std::vector<cardlib::Card> SolitaireGame::getTableauCardsAsCards(
   return cards;
 }
 
-std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
+std::pair<int, int> SpiderGame::getPileAt(int x, int y) const {
   // Check stock pile
   if (x >= current_card_spacing_ &&
       x <= current_card_spacing_ + current_card_width_ &&
@@ -962,7 +962,7 @@ std::pair<int, int> SolitaireGame::getPileAt(int x, int y) const {
   return {-1, -1};
 }
 
-bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
+bool SpiderGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                                   const std::vector<cardlib::Card> &target,
                                   bool is_foundation) const {
 
@@ -1011,7 +1011,7 @@ bool SolitaireGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
   return opposite_color && lower_rank;
 }
 
-bool SolitaireGame::canMoveToFoundation(const cardlib::Card &card,
+bool SpiderGame::canMoveToFoundation(const cardlib::Card &card,
                                         int foundation_index) const {
   const auto &pile = foundation_[foundation_index];
 
@@ -1024,7 +1024,7 @@ bool SolitaireGame::canMoveToFoundation(const cardlib::Card &card,
          static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1;
 }
 
-void SolitaireGame::moveCards(std::vector<cardlib::Card> &from,
+void SpiderGame::moveCards(std::vector<cardlib::Card> &from,
                               std::vector<cardlib::Card> &to, size_t count) {
   if (count > from.size())
     return;
@@ -1034,7 +1034,7 @@ void SolitaireGame::moveCards(std::vector<cardlib::Card> &from,
   from.erase(from.end() - count, from.end());
 }
 
-void SolitaireGame::switchGameMode(GameMode mode) {
+void SpiderGame::switchGameMode(GameMode mode) {
   if (mode == current_game_mode_)
     return;
 
@@ -1060,7 +1060,7 @@ void SolitaireGame::switchGameMode(GameMode mode) {
   refreshDisplay();
 }
 
-void SolitaireGame::initializeMultiDeckGame() {
+void SpiderGame::initializeMultiDeckGame() {
   try {
     // Determine number of decks based on mode
     size_t num_decks = (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
@@ -1117,7 +1117,7 @@ void SolitaireGame::initializeMultiDeckGame() {
 }
 
 
-void SolitaireGame::dealMultiDeck() {
+void SpiderGame::dealMultiDeck() {
   // Clear all piles first
   stock_.clear();
   waste_.clear();
@@ -1149,7 +1149,7 @@ void SolitaireGame::dealMultiDeck() {
   startDealAnimation();
 }
 
-bool SolitaireGame::checkWinCondition() const {
+bool SpiderGame::checkWinCondition() const {
   // Get the number of decks based on the current mode
   size_t num_decks = (current_game_mode_ == GameMode::STANDARD_KLONDIKE) ? 1 : 
                      (current_game_mode_ == GameMode::DOUBLE_KLONDIKE) ? 2 : 3;
@@ -1168,7 +1168,7 @@ bool SolitaireGame::checkWinCondition() const {
 }
 
 // Function to refresh the display
-void SolitaireGame::refreshDisplay() {
+void SpiderGame::refreshDisplay() {
   // FIX: Refresh the correct widget based on the active rendering engine
   if (rendering_engine_ == RenderingEngine::OPENGL) {
     if (gl_area_) {
@@ -1182,12 +1182,12 @@ void SolitaireGame::refreshDisplay() {
 }
 
 int main(int argc, char **argv) {
-  SolitaireGame game;
+  SpiderGame game;
   game.run(argc, argv);
   return 0;
 }
 
-void SolitaireGame::setupWindow() {
+void SpiderGame::setupWindow() {
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   //gtk_window_set_title(GTK_WINDOW(window_), "Solitaire");
   gtk_window_set_default_size(GTK_WINDOW(window_), 1024, 768);
@@ -1217,7 +1217,7 @@ void SolitaireGame::setupWindow() {
   setupMenuBar();
 }
 
-void SolitaireGame::setupGameArea() {
+void SpiderGame::setupGameArea() {
   // Create Cairo rendering area
   setupCairoArea();
   
@@ -1248,7 +1248,7 @@ void SolitaireGame::setupGameArea() {
   // OpenGL if that's the configured preference (in run() method)
 }
 
-void SolitaireGame::setupMenuBar() {
+void SpiderGame::setupMenuBar() {
   GtkWidget *menubar = gtk_menu_bar_new();
   gtk_box_pack_start(GTK_BOX(vbox_), menubar, FALSE, FALSE, 0);
 
@@ -1266,7 +1266,7 @@ void SolitaireGame::setupMenuBar() {
   GtkWidget *restartGameItem = gtk_menu_item_new_with_label("Restart Game");
   g_signal_connect(G_OBJECT(restartGameItem), "activate", 
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<SolitaireGame *>(data)->restartGame();
+                    static_cast<SpiderGame *>(data)->restartGame();
                   }), 
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), restartGameItem);
@@ -1275,7 +1275,7 @@ void SolitaireGame::setupMenuBar() {
   GtkWidget *seedItem = gtk_menu_item_new_with_label("Enter Seed...");
   g_signal_connect(G_OBJECT(seedItem), "activate", 
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<SolitaireGame *>(data)->promptForSeed();
+                    static_cast<SpiderGame *>(data)->promptForSeed();
                   }), 
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
@@ -1284,7 +1284,7 @@ void SolitaireGame::setupMenuBar() {
   GtkWidget *autoFinishItem = gtk_menu_item_new_with_mnemonic("_Auto Finish (F)");
   g_signal_connect(G_OBJECT(autoFinishItem), "activate",
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<SolitaireGame *>(data)->autoFinishGame();
+                    static_cast<SpiderGame *>(data)->autoFinishGame();
                   }),
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
@@ -1300,7 +1300,7 @@ g_signal_connect(
     G_OBJECT(standardItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
       if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::STANDARD_KLONDIKE);
+        static_cast<SpiderGame *>(data)->switchGameMode(SpiderGame::GameMode::STANDARD_KLONDIKE);
       }
     }),
     this);
@@ -1312,7 +1312,7 @@ g_signal_connect(
     G_OBJECT(doubleItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
       if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::DOUBLE_KLONDIKE);
+        static_cast<SpiderGame *>(data)->switchGameMode(SpiderGame::GameMode::DOUBLE_KLONDIKE);
       }
     }),
     this);
@@ -1324,7 +1324,7 @@ g_signal_connect(
     G_OBJECT(tripleItem), "activate",
     G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
       if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<SolitaireGame *>(data)->switchGameMode(SolitaireGame::GameMode::TRIPLE_KLONDIKE);
+        static_cast<SpiderGame *>(data)->switchGameMode(SpiderGame::GameMode::TRIPLE_KLONDIKE);
       }
     }),
     this);
@@ -1372,7 +1372,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
       G_OBJECT(drawOneItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
         if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<SolitaireGame *>(data)->draw_three_mode_ = false;
+          static_cast<SpiderGame *>(data)->draw_three_mode_ = false;
         }
       }),
       this);
@@ -1384,7 +1384,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
       G_OBJECT(drawThreeItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
         if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-          static_cast<SolitaireGame *>(data)->draw_three_mode_ = true;
+          static_cast<SpiderGame *>(data)->draw_three_mode_ = true;
         }
       }),
       this);
@@ -1407,7 +1407,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   g_signal_connect(
       G_OBJECT(selectBackItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+        SpiderGame *game = static_cast<SpiderGame *>(data);
 
         GtkWidget *dialog = gtk_file_chooser_dialog_new(
             "Select Card Back", GTK_WINDOW(game->window_),
@@ -1444,7 +1444,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   GtkWidget *resetBackItem = gtk_menu_item_new_with_mnemonic("_Reset to Default Back");
   g_signal_connect(G_OBJECT(resetBackItem), "activate",
                    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     SpiderGame *game = static_cast<SpiderGame *>(data);
                      game->resetToDefaultBack();
                    }),
                    this);
@@ -1457,7 +1457,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   g_signal_connect(
       G_OBJECT(loadDeckItem), "activate",
       G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        SolitaireGame *game = static_cast<SolitaireGame *>(data);
+        SpiderGame *game = static_cast<SpiderGame *>(data);
 
         GtkWidget *dialog = gtk_file_chooser_dialog_new(
             "Load Deck", GTK_WINDOW(game->window_),
@@ -1492,7 +1492,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(soundItem), sound_enabled_);
   g_signal_connect(G_OBJECT(soundItem), "toggled",
                    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                     SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                     SpiderGame *game = static_cast<SpiderGame *>(data);
                      game->sound_enabled_ = gtk_check_menu_item_get_active(
                          GTK_CHECK_MENU_ITEM(widget));
                    }),
@@ -1510,7 +1510,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   GtkWidget *howToPlayItem = gtk_menu_item_new_with_mnemonic("_How To Play");
   g_signal_connect(G_OBJECT(howToPlayItem), "activate",
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                    SpiderGame *game = static_cast<SpiderGame *>(data);
                     game->showHowToPlay();
                   }),
                   this);
@@ -1520,7 +1520,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   GtkWidget *shortcutsItem = gtk_menu_item_new_with_mnemonic("_Keyboard Shortcuts");
   g_signal_connect(G_OBJECT(shortcutsItem), "activate",
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                    SpiderGame *game = static_cast<SpiderGame *>(data);
                     game->showKeyboardShortcuts();
                   }),
                   this);
@@ -1542,7 +1542,7 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   GtkWidget *testLayoutItem = gtk_menu_item_new_with_label("Test Layout");
   g_signal_connect(G_OBJECT(testLayoutItem), "activate",
                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    SolitaireGame *game = static_cast<SolitaireGame *>(data);
+                    SpiderGame *game = static_cast<SpiderGame *>(data);
                     game->dealTestLayout();
                     game->refreshDisplay();
                   }),
@@ -1553,8 +1553,8 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
 #endif
 }
 
-void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+void SpiderGame::onNewGame(GtkWidget *widget, gpointer data) {
+  SpiderGame *game = static_cast<SpiderGame *>(data);
     
   // Check if win animation is active
   if (game->win_animation_active_) {
@@ -1567,7 +1567,7 @@ void SolitaireGame::onNewGame(GtkWidget *widget, gpointer data) {
   game->refreshDisplay();
 }
 
-void SolitaireGame::restartGame() {
+void SpiderGame::restartGame() {
   // Check if win animation is active
   if (win_animation_active_) {
     stopWinAnimation();
@@ -1578,19 +1578,19 @@ void SolitaireGame::restartGame() {
   refreshDisplay();
 }
 
-void SolitaireGame::onQuit(GtkWidget *widget, gpointer data) {
+void SpiderGame::onQuit(GtkWidget *widget, gpointer data) {
   gtk_main_quit();
 }
 
-void SolitaireGame::updateWindowTitle() {
+void SpiderGame::updateWindowTitle() {
   if (window_) {
     std::string title = "Solitaire - Seed: " + std::to_string(current_seed_);
     gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
   }
 }
 
-void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+void SpiderGame::onAbout(GtkWidget * /* widget */, gpointer data) {
+  SpiderGame *game = static_cast<SpiderGame *>(data);
 
   // Create custom dialog instead of about dialog for more control
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
@@ -1705,7 +1705,7 @@ void SolitaireGame::onAbout(GtkWidget * /* widget */, gpointer data) {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::dealTestLayout() {
+void SpiderGame::dealTestLayout() {
   // Clear all piles
   if (win_animation_active_) {
     stopWinAnimation();
@@ -1750,7 +1750,7 @@ void SolitaireGame::dealTestLayout() {
   }
 }
 
-void SolitaireGame::initializeSettingsDir() {
+void SpiderGame::initializeSettingsDir() {
 #ifdef _WIN32
     char app_data[MAX_PATH];
     HRESULT hr = SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, app_data);
@@ -1776,7 +1776,7 @@ void SolitaireGame::initializeSettingsDir() {
 #endif
 }
 
-bool SolitaireGame::loadSettings() {
+bool SpiderGame::loadSettings() {
   if (settings_dir_.empty()) {
     std::cerr << "Settings directory is empty" << std::endl;
     return false;
@@ -1809,7 +1809,7 @@ bool SolitaireGame::loadSettings() {
   return true; // Return true if we successfully read the file, even if no custom back was found
 }
 
-void SolitaireGame::saveSettings() {
+void SpiderGame::saveSettings() {
   if (settings_dir_.empty()) {
     return;
   }
@@ -1833,7 +1833,7 @@ void SolitaireGame::saveSettings() {
   }
 }
 
-bool SolitaireGame::setCustomCardBack(const std::string &path) {
+bool SpiderGame::setCustomCardBack(const std::string &path) {
 
   // First read the entire file into memory
   std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -1894,7 +1894,7 @@ bool SolitaireGame::setCustomCardBack(const std::string &path) {
   }
 }
 
-bool SolitaireGame::loadDeck(const std::string &path) {
+bool SpiderGame::loadDeck(const std::string &path) {
   try {
     // Load the new deck first to validate it
     cardlib::Deck new_deck(path);
@@ -1917,18 +1917,18 @@ bool SolitaireGame::loadDeck(const std::string &path) {
   }
 }
 
-void SolitaireGame::resetToDefaultBack() {
+void SpiderGame::resetToDefaultBack() {
   clearCustomBack();
   refreshCardCache();
   refreshDisplay();
 }
 
-void SolitaireGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+void SpiderGame::onToggleFullscreen(GtkWidget *widget, gpointer data) {
+  SpiderGame *game = static_cast<SpiderGame *>(data);
   game->toggleFullscreen();
 }
 
-void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
+void SpiderGame::updateCardDimensions(int window_width, int window_height) {
   double scale = getScaleFactor(window_width, window_height);
 
   // Update current dimensions
@@ -1952,7 +1952,7 @@ void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
   initializeCardCache();
 }
 
-double SolitaireGame::getScaleFactor(int window_width, int window_height) const {
+double SpiderGame::getScaleFactor(int window_width, int window_height) const {
   // Get the display scale factor (1.0 for 100%, 2.0 for 200%, etc.)
   double display_scale = 1.0;
   if (window_) {
@@ -1994,7 +1994,7 @@ double SolitaireGame::getScaleFactor(int window_width, int window_height) const 
   return std::min(width_scale, height_scale);
 }
 
-void SolitaireGame::autoFinishGame() {
+void SpiderGame::autoFinishGame() {
   // We need to use a timer to handle the animations properly
   if (auto_finish_active_) {
     return; // Don't restart if already running
@@ -2012,7 +2012,7 @@ void SolitaireGame::autoFinishGame() {
   processNextAutoFinishMove();
 }
 
-void SolitaireGame::processNextAutoFinishMove() {
+void SpiderGame::processNextAutoFinishMove() {
   if (!auto_finish_active_) {
     return;
   }
@@ -2111,13 +2111,13 @@ void SolitaireGame::processNextAutoFinishMove() {
   }
 }
 
-gboolean SolitaireGame::onAutoFinishTick(gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+gboolean SpiderGame::onAutoFinishTick(gpointer data) {
+  SpiderGame *game = static_cast<SpiderGame *>(data);
   game->processNextAutoFinishMove();
   return FALSE; // Don't repeat the timer
 }
 
-void SolitaireGame::promptForSeed() {
+void SpiderGame::promptForSeed() {
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
       "Enter Seed", GTK_WINDOW(window_),
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
@@ -2172,7 +2172,7 @@ void SolitaireGame::promptForSeed() {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::showHowToPlay() {
+void SpiderGame::showHowToPlay() {
   // Create dialog with OK button
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
       "How To Play Solitaire", GTK_WINDOW(window_),
@@ -2250,7 +2250,7 @@ void SolitaireGame::showHowToPlay() {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::showKeyboardShortcuts() {
+void SpiderGame::showKeyboardShortcuts() {
   // Create dialog with OK button
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
       "Keyboard Shortcuts", GTK_WINDOW(window_),
@@ -2325,7 +2325,7 @@ void SolitaireGame::showKeyboardShortcuts() {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::showDirectoryStructureDialog(const std::string &directory) {
+void SpiderGame::showDirectoryStructureDialog(const std::string &directory) {
   // Create dialog with OK button
   GtkWidget *dialog = gtk_dialog_new_with_buttons(
       "Directory Contents - Debugging Info",
@@ -2374,7 +2374,7 @@ void SolitaireGame::showDirectoryStructureDialog(const std::string &directory) {
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::showMissingFileDialog(const std::string &filename, 
+void SpiderGame::showMissingFileDialog(const std::string &filename, 
                                           const std::string &details) {
   // Create a dialog to show missing file error
   GtkWidget *dialog = gtk_message_dialog_new(
@@ -2394,7 +2394,7 @@ void SolitaireGame::showMissingFileDialog(const std::string &filename,
   gtk_widget_destroy(dialog);
 }
 
-void SolitaireGame::showErrorDialog(const std::string &title, 
+void SpiderGame::showErrorDialog(const std::string &title, 
                                     const std::string &message) {
   // Create a dialog to show error
   GtkWidget *dialog = gtk_message_dialog_new(

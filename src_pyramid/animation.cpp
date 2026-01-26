@@ -1,4 +1,4 @@
-#include "solitaire.h"
+#include "pyramid.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -7,13 +7,13 @@
 #include <direct.h>
 #endif
 
-gboolean SolitaireGame::onAnimationTick(gpointer data) {
-  SolitaireGame *game = static_cast<SolitaireGame *>(data);
+gboolean SpiderGame::onAnimationTick(gpointer data) {
+  SpiderGame *game = static_cast<SpiderGame *>(data);
   game->updateWinAnimation();
   return game->win_animation_active_ ? TRUE : FALSE;
 }
 
-void SolitaireGame::updateCardFragments(AnimatedCard &card) {
+void SpiderGame::updateCardFragments(AnimatedCard &card) {
   if (!card.exploded)
     return;
 
@@ -66,7 +66,7 @@ void SolitaireGame::updateCardFragments(AnimatedCard &card) {
   }
 }
 
-void SolitaireGame::updateWinAnimation() {
+void SpiderGame::updateWinAnimation() {
   if (!win_animation_active_)
     return;
 
@@ -163,7 +163,7 @@ void SolitaireGame::updateWinAnimation() {
 }
 
 // Simple fix for the win animation in multi-deck mode
-void SolitaireGame::startWinAnimation() {
+void SpiderGame::startWinAnimation() {
   if (win_animation_active_)
     return;
 
@@ -238,7 +238,7 @@ void SolitaireGame::startWinAnimation() {
       g_timeout_add(ANIMATION_INTERVAL, onAnimationTick, this);
 }
 
-void SolitaireGame::launchNextCard() {
+void SpiderGame::launchNextCard() {
   // Early exit if all cards have been launched
   if (cards_launched_ >= 52)
     return;
@@ -363,7 +363,7 @@ void SolitaireGame::launchNextCard() {
   cards_launched_++;
 }
 
-void SolitaireGame::stopWinAnimation() {
+void SpiderGame::stopWinAnimation() {
   if (!win_animation_active_)
     return;
 
@@ -399,7 +399,7 @@ void SolitaireGame::stopWinAnimation() {
   refreshDisplay();
 }
 
-void SolitaireGame::completeDeal() {
+void SpiderGame::completeDeal() {
   deal_animation_active_ = false;
 
   if (animation_timer_id_ > 0) {
@@ -414,7 +414,7 @@ void SolitaireGame::completeDeal() {
 }
 
 // Draw the stock pile (face-down cards to draw from)
-void SolitaireGame::drawStockPile() {
+void SpiderGame::drawStockPile() {
   int x = current_card_spacing_;
   int y = current_card_spacing_;
   
@@ -445,7 +445,7 @@ void SolitaireGame::drawStockPile() {
 }
 
 // Draw the waste pile (cards drawn from stock)
-void SolitaireGame::drawWastePile() {
+void SpiderGame::drawWastePile() {
   int x = current_card_spacing_ + current_card_width_ + current_card_spacing_;
   int y = current_card_spacing_;
   
@@ -501,7 +501,7 @@ void SolitaireGame::drawWastePile() {
 }
 
 // Draw the foundation piles (where aces build up to kings)
-void SolitaireGame::drawFoundationPiles() {
+void SpiderGame::drawFoundationPiles() {
   int x = 3 * (current_card_width_ + current_card_spacing_);
   int y = current_card_spacing_;
   
@@ -543,7 +543,7 @@ void SolitaireGame::drawFoundationPiles() {
 }
 
 // Draw the tableau piles (the main playing area)
-void SolitaireGame::drawTableauPiles() {
+void SpiderGame::drawTableauPiles() {
     const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
     
     // Calculate pile index offsets to correctly identify tableau piles for drag handling
@@ -601,7 +601,7 @@ void SolitaireGame::drawTableauPiles() {
 }
 
 // Draw tableau piles during the deal animation
-void SolitaireGame::drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
+void SpiderGame::drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y) {
   // Figure out how many cards should be visible in this pile
   int cards_in_this_pile = pile_index + 1; // Each pile has (index + 1) cards
   int total_cards_before_this_pile = 0;
