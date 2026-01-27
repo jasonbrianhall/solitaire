@@ -996,7 +996,7 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
   const int HORIZ_SPACING = current_card_width_ + 15;    // Card width plus 15 pixel gap
   const int VERT_OVERLAP = current_card_height_ / 2;     // Half card height between rows
   
-  for (int row = 0; row < 7; row++) {
+  for (int row = 6; row >= 0; row--) {
     const auto &pile = tableau_[row];
     int num_cards_in_row = row + 1;
     
