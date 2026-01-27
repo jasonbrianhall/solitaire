@@ -39,36 +39,52 @@ gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
       game->playSound(GameSoundEvent::CardFlip);
 
       // Calculate drag offsets
-      int x_offset_multiplier;
       int max_foundation_index = 2 + game->foundation_.size() - 1;
       int first_tableau_index = max_foundation_index + 1;
 
       if (pile_index >= 2 && pile_index <= max_foundation_index) {
-        x_offset_multiplier = 3 + (pile_index - 2);
-      } else if (pile_index >= first_tableau_index) {
-        x_offset_multiplier = pile_index - first_tableau_index;
+        // Foundation piles - horizontal arrangement
+        int x_offset_multiplier = 3 + (pile_index - 2);
+        game->drag_offset_x_ =
+            event->x - (game->current_card_spacing_ +
+                        x_offset_multiplier * (game->current_card_width_ +
+                                               game->current_card_spacing_));
+        game->drag_offset_y_ = event->y - game->current_card_spacing_;
       } else if (pile_index == 1) {
-        x_offset_multiplier = 1;
-      } else {
-        x_offset_multiplier = 0;
-      }
-
-      game->drag_offset_x_ =
-          event->x - (game->current_card_spacing_ +
-                      x_offset_multiplier * (game->current_card_width_ +
-                                             game->current_card_spacing_));
-
-      if (pile_index >= first_tableau_index) {
+        // Waste pile - single card
+        game->drag_offset_x_ =
+            event->x - (2 * game->current_card_spacing_ + game->current_card_width_);
+        game->drag_offset_y_ = event->y - game->current_card_spacing_;
+      } else if (pile_index == 0) {
+        // Stock pile - single card
+        game->drag_offset_x_ =
+            event->x - game->current_card_spacing_;
+        game->drag_offset_y_ = event->y - game->current_card_spacing_;
+      } else if (pile_index >= first_tableau_index) {
+        // PYRAMID CARDS - horizontal within rows, vertical between rows
+        // Use same position calculation logic as getPileAt()
         int tableau_idx = pile_index - first_tableau_index;
         if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
-          game->drag_offset_y_ =
-              event->y -
-              (game->current_card_spacing_ + game->current_card_height_ +
-               game->current_vert_spacing_ +
-               card_index * game->current_vert_spacing_);
+          const int base_y = game->current_card_spacing_ + game->current_card_height_ + game->current_vert_spacing_;
+          const int HORIZ_SPACING = game->current_card_width_ + 15;    // Must match getPileAt
+          const int VERT_OVERLAP = game->current_card_height_ / 2;     // Must match getPileAt
+          
+          // Get actual window width instead of hardcoded value
+          GtkAllocation allocation;
+          gtk_widget_get_allocation(game->game_area_, &allocation);
+          int screen_width = allocation.width;
+          
+          int row = tableau_idx;
+          int num_cards_in_row = row + 1;
+          int row_width = game->current_card_width_ + (num_cards_in_row - 1) * HORIZ_SPACING;
+          int row_start_x = (screen_width - row_width) / 2;
+          int row_y = base_y + row * VERT_OVERLAP;
+          
+          int card_x = row_start_x + (card_index * HORIZ_SPACING);
+          
+          game->drag_offset_x_ = event->x - card_x;
+          game->drag_offset_y_ = event->y - row_y;
         }
-      } else {
-        game->drag_offset_y_ = event->y - game->current_card_spacing_;
       }
     }
   } else if (event->button == 3) { // Right click
