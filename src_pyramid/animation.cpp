@@ -124,11 +124,11 @@ void PyramidGame::updateWinAnimation() {
   if (!win_animation_active_)
     return;
 
-  // Launch new cards periodically
+  // Launch new cards periodically - faster launch for more exciting finale!
   launch_timer_ += ANIMATION_INTERVAL;
-  if (launch_timer_ >= 100) { // Launch a new card every 100ms
+  if (launch_timer_ >= 40) { // Launch a new card every 40ms (was 100ms) - 2.5x faster!
     launch_timer_ = 0;
-    if (rand() % 100 < 10) {
+    if (rand() % 100 < 15) {  // Increased chance for rapid multi-launches
         // Launch 4 cards in rapid succession
         for (int i = 0; i < 4; i++) {
             launchNextCard();
@@ -223,6 +223,30 @@ void PyramidGame::startWinAnimation() {
 
   resetKeyboardNavigation();
 
+  // IMPORTANT: Gather ALL 52 cards into foundation for the celebration!
+  // This creates the illusion that all cards went to foundation
+  
+  // Move all stock cards to foundation
+  while (!stock_.empty()) {
+    foundation_[0].push_back(stock_.back());
+    stock_.pop_back();
+  }
+  
+  // Move all waste cards to foundation
+  while (!waste_.empty()) {
+    foundation_[0].push_back(waste_.back());
+    waste_.pop_back();
+  }
+  
+  // Move all removed pyramid cards from tableau to foundation
+  for (auto &tableau_pile : tableau_) {
+    for (auto &card : tableau_pile) {
+      if (card.removed) {
+        foundation_[0].push_back(card.card);
+      }
+    }
+  }
+
   playSound(GameSoundEvent::WinGame);
   // Show win message
   GtkWidget *dialog = gtk_message_dialog_new(
@@ -280,11 +304,12 @@ void PyramidGame::startWinAnimation() {
     }
   }
 
-  // Set up the animation tracking structure
+  // Set up the animation tracking structure to match actual foundation state
+  // (Must match the actual number of cards in each pile!)
   animated_foundation_cards_.clear();
-  animated_foundation_cards_.resize(4); // Always 4 foundation piles (1 deck)
-  for (size_t i = 0; i < 4; i++) {
-    animated_foundation_cards_[i].resize(13, false); // 13 cards per pile
+  animated_foundation_cards_.resize(foundation_.size());
+  for (size_t i = 0; i < foundation_.size(); i++) {
+    animated_foundation_cards_[i].resize(foundation_[i].size(), false);
   }
 
   // Set up animation timer

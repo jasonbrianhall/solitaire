@@ -1207,8 +1207,8 @@ void PyramidGame::dealMultiDeck() {
 }
 
 bool PyramidGame::checkWinCondition() const {
-  // Pyramid Solitaire: Win when all cards from the pyramid and waste are moved to discard
-  // All tableau cards must be marked as removed, and waste must be empty
+  // Pyramid Solitaire: Win when all cards from the pyramid are removed
+  // Waste pile state doesn't matter - only the pyramid must be empty
   
   // Check if all pyramid cards are removed
   for (const auto &pile : tableau_) {
@@ -1218,13 +1218,8 @@ bool PyramidGame::checkWinCondition() const {
       }
     }
   }
-  
-  // Check if waste pile is empty
-  if (!waste_.empty()) {
-    return false;  // Still have cards in waste
-  }
 
-  // All pyramid and waste cards have been matched and discarded = WIN!
+  // All pyramid cards have been matched and removed = WIN!
   return true;
 }
 
@@ -1733,7 +1728,6 @@ void PyramidGame::dealTestLayout() {
   tableau_.clear();
 
   // Reset foundation and tableau
-  // Number of foundation piles depends on the game mode
   size_t num_decks = 1;
   if (current_game_mode_ == GameMode::DOUBLE_PYRAMID) {
     num_decks = 2;
@@ -1741,19 +1735,29 @@ void PyramidGame::dealTestLayout() {
     num_decks = 3;
   }
 
-  // Resize foundation based on number of decks (4 foundations per deck)
   foundation_.resize(4 * num_decks);
-  tableau_.resize(7);  // Always 7 tableau piles
+  tableau_.resize(7);
 
-  // Create a simple test layout with just one King in the pyramid
-  // This makes it easy to test the win condition and celebration animation
+  // Create ONE King in pyramid + all 51 other cards in stock
+  // Perfect for quick testing of win animation!
   tableau_[0].emplace_back(cardlib::Card(static_cast<cardlib::Suit>(0), 
                                          cardlib::Rank::KING), true);
   
-  // Add a few other cards to the stock pile for variety
-  stock_.push_back(cardlib::Card(static_cast<cardlib::Suit>(1), cardlib::Rank::QUEEN));
-  stock_.push_back(cardlib::Card(static_cast<cardlib::Suit>(2), cardlib::Rank::JACK));
+  // Add all 51 remaining cards to stock
+  for (int suit = 0; suit < 4; suit++) {
+    for (int rank = static_cast<int>(cardlib::Rank::KING);
+         rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
+      // Skip the King of Spades (already in pyramid)
+      if (suit == 0 && rank == static_cast<int>(cardlib::Rank::KING)) {
+        continue;
+      }
+      stock_.push_back(cardlib::Card(static_cast<cardlib::Suit>(suit),
+                                     static_cast<cardlib::Rank>(rank)));
+    }
+  }
 }
+
+
 
 
 void PyramidGame::initializeSettingsDir() {
