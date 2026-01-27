@@ -902,38 +902,20 @@ std::vector<cardlib::Card> PyramidGame::getTableauCardsAsCards(
 
 std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
   // DEBUG: Print complete foundation state
-  std::cerr << "\n╔════════════════════════════════════════════════════════════════╗" << std::endl;
-  std::cerr << "║ === GAME STATE SNAPSHOT ===" << std::endl;
-  std::cerr << "║ Stock: " << stock_.size() << " cards" << std::endl;
-  std::cerr << "║ Waste: " << waste_.size() << " cards";
   if (!waste_.empty()) {
     const auto& wc = waste_.back();
-    std::cerr << " | Top: " << static_cast<int>(wc.rank) << " of " << static_cast<int>(wc.suit);
   }
-  std::cerr << std::endl;
-  
-  std::cerr << "║ FOUNDATION PILES:" << std::endl;
   for (size_t i = 0; i < foundation_.size(); i++) {
-    std::cerr << "║   [" << i << "]: " << foundation_[i].size() << " cards";
     if (!foundation_[i].empty()) {
       const auto& fc = foundation_[i].back();
-      std::cerr << " | Top: Rank=" << static_cast<int>(fc.rank) << ", Suit=" << static_cast<int>(fc.suit);
     }
-    std::cerr << std::endl;
   }
-  std::cerr << "╚════════════════════════════════════════════════════════════════╝" << std::endl;
   
-  std::cerr << "\n=== getPileAt DEBUG ===" << std::endl;
-  std::cerr << "Click position: (" << x << ", " << y << ")" << std::endl;
-  std::cerr << "Card dimensions: " << current_card_width_ << "x" << current_card_height_ << std::endl;
-  std::cerr << "Card spacing: " << current_card_spacing_ << ", Vert spacing: " << current_vert_spacing_ << std::endl;
-  
-  // Check stock pile
+    // Check stock pile
   if (x >= current_card_spacing_ &&
       x <= current_card_spacing_ + current_card_width_ &&
       y >= current_card_spacing_ &&
       y <= current_card_spacing_ + current_card_height_) {
-    std::cerr << "MATCH: Stock pile" << std::endl;
     return {0, stock_.empty() ? -1 : 0};
   }
 
@@ -942,44 +924,30 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
       x <= 2 * current_card_spacing_ + 2 * current_card_width_ &&
       y >= current_card_spacing_ &&
       y <= current_card_spacing_ + current_card_height_) {
-    std::cerr << "MATCH: Waste pile" << std::endl;
     return {1, waste_.empty() ? -1 : static_cast<int>(waste_.size() - 1)};
   }
 
   // Check foundation piles
-  std::cerr << "\nChecking foundation piles (count: " << foundation_.size() << ")" << std::endl;
   int foundation_x = 3 * (current_card_width_ + current_card_spacing_);
   for (int i = 0; i < foundation_.size(); i++) {
-    std::cerr << "  Foundation[" << i << "]: x range [" << foundation_x << ", " 
-              << (foundation_x + current_card_width_) << "]";
-    std::cerr << ", y range [" << current_card_spacing_ << ", " 
-              << (current_card_spacing_ + current_card_height_) << "]";
-    std::cerr << ", size: " << foundation_[i].size();
     
     if (x >= foundation_x && x <= foundation_x + current_card_width_ &&
         y >= current_card_spacing_ &&
         y <= current_card_spacing_ + current_card_height_) {
       int card_idx = foundation_[i].empty() ? -1 : static_cast<int>(foundation_[i].size() - 1);
-      std::cerr << " <- MATCH!" << std::endl;
-      std::cerr << "Returning: pile_index=" << (2 + i) << ", card_index=" << card_idx << std::endl;
       
       // Debug: print the card if not empty
       if (card_idx >= 0 && card_idx < static_cast<int>(foundation_[i].size())) {
         const auto &card = foundation_[i][card_idx];
-        std::cerr << "  Card at index " << card_idx << ": Rank=" << static_cast<int>(card.rank) 
-                  << ", Suit=" << static_cast<int>(card.suit);
-        std::cerr << " (" << cardlib::rankToString(card.rank) << " of " << cardlib::suitToString(card.suit) << ")" << std::endl;
       }
       return {2 + i, card_idx};
     }
-    std::cerr << std::endl;
     
     foundation_x += current_card_width_ + current_card_spacing_;
   }
 
   // Calculate first tableau index
   int first_tableau_index = 2 + foundation_.size();
-  std::cerr << "\nChecking tableau piles (first_tableau_index=" << first_tableau_index << ")" << std::endl;
   
   // Check pyramid piles
   // tableau_[0] = row 1 (1 card)
@@ -1015,12 +983,6 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
       
       const auto &tableau_card = pile[card_idx];
       const auto &card = tableau_card.card;
-      std::cerr << "    [" << card_idx << "]: ";
-      std::cerr << "Rank=" << static_cast<int>(card.rank) << "(" << cardlib::rankToString(card.rank) << ") ";
-      std::cerr << "Suit=" << static_cast<int>(card.suit) << "(" << cardlib::suitToString(card.suit) << ") ";
-      std::cerr << "face_up=" << (tableau_card.face_up ? "YES" : "NO") << " ";
-      std::cerr << "removed=" << (tableau_card.removed ? "YES" : "NO") << " | ";
-      std::cerr << "x=[" << card_x << ", " << (card_x + current_card_width_) << "]";
       
       // Check if click is on this card
       if (x >= card_x && x <= card_x + current_card_width_ &&
@@ -1038,28 +1000,17 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
             // But we need to check if those blocking cards are not removed
             if (card_idx < static_cast<int>(row_below.size()) && row_below[card_idx].face_up && !row_below[card_idx].removed) {
               is_blocked = true;
-              std::cerr << " | BLOCKED by row[" << (row + 1) << "][" << card_idx << "]";
             }
             if (card_idx + 1 < static_cast<int>(row_below.size()) && row_below[card_idx + 1].face_up && !row_below[card_idx + 1].removed) {
               is_blocked = true;
-              std::cerr << " | BLOCKED by row[" << (row + 1) << "][" << (card_idx + 1) << "]";
             }
           }
           
           if (!is_blocked) {
-            std::cerr << " <- MATCH! ✓" << std::endl;
-            std::cerr << ">>> RETURNING: pile_index=" << (first_tableau_index + row) << ", card_idx=" << card_idx;
-            std::cerr << " | CARD DATA: Rank=" << static_cast<int>(card.rank) << ", Suit=" << static_cast<int>(card.suit);
-            std::cerr << " (" << cardlib::rankToString(card.rank) << " of " << cardlib::suitToString(card.suit) << ")" << std::endl;
             return {first_tableau_index + row, card_idx};
-          } else {
-            std::cerr << " <- HIT but BLOCKED (skipped)" << std::endl;
           }
-        } else {
-          std::cerr << " <- HIT but FACE DOWN (skipped)" << std::endl;
         }
       } else {
-        std::cerr << std::endl;
       }
     }
     
@@ -1076,7 +1027,6 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
     }
   }
 
-  std::cerr << "NO MATCH found for click at (" << x << ", " << y << ")" << std::endl;
   return {-1, -1};;
 }
 
@@ -1134,10 +1084,6 @@ bool PyramidGame::canMoveToFoundation(const cardlib::Card &card,
   bool rank_match = static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1;
   bool result = suit_match && rank_match;
   
-  std::cerr << " -> Top: " << cardlib::rankToString(top_card.rank) << " of " 
-            << cardlib::suitToString(top_card.suit);
-  std::cerr << " [Suit:" << (suit_match ? "✓" : "✗") << " Rank:" << (rank_match ? "✓" : "✗") << "] = " 
-            << (result ? "CAN MOVE" : "CANNOT") << std::endl;
   return result;
 }
 
