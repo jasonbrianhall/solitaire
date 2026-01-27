@@ -95,6 +95,16 @@ gboolean PyramidGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
     game->autoFinishGame();
     return TRUE;
 
+  case GDK_KEY_o:
+  case GDK_KEY_O:
+    if (ctrl_pressed) {
+      // CTRL+O: Load test layout with one King (for easy testing)
+      game->dealTestLayout();
+      game->refreshDisplay();
+      return TRUE;
+    }
+    break;
+
   default:
     break;
   }

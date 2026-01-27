@@ -1745,26 +1745,16 @@ void PyramidGame::dealTestLayout() {
   foundation_.resize(4 * num_decks);
   tableau_.resize(7);  // Always 7 tableau piles
 
-  // Set up each suit in order in the tableau
-  std::vector<cardlib::Card> all_cards;
-
-  // Create cards for each deck
-  for (size_t deck = 0; deck < num_decks; deck++) {
-    for (int suit = 0; suit < 4; suit++) {
-      // Add 13 cards of this suit to a vector in reverse order (King to Ace)
-      for (int rank = static_cast<int>(cardlib::Rank::KING);
-           rank >= static_cast<int>(cardlib::Rank::ACE); rank--) {
-        all_cards.emplace_back(static_cast<cardlib::Suit>(suit),
-                              static_cast<cardlib::Rank>(rank));
-      }
-    }
-  }
-
-  // Distribute the cards to tableau
-  for (size_t i = 0; i < all_cards.size(); i++) {
-    tableau_[i % 7].emplace_back(all_cards[i], true);  // All cards face up
-  }
+  // Create a simple test layout with just one King in the pyramid
+  // This makes it easy to test the win condition and celebration animation
+  tableau_[0].emplace_back(cardlib::Card(static_cast<cardlib::Suit>(0), 
+                                         cardlib::Rank::KING), true);
+  
+  // Add a few other cards to the stock pile for variety
+  stock_.push_back(cardlib::Card(static_cast<cardlib::Suit>(1), cardlib::Rank::QUEEN));
+  stock_.push_back(cardlib::Card(static_cast<cardlib::Suit>(2), cardlib::Rank::JACK));
 }
+
 
 void PyramidGame::initializeSettingsDir() {
 #ifdef _WIN32
