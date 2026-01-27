@@ -486,11 +486,11 @@ void PyramidGame::drawStockPile() {
     // Draw the ONE card in stock (face up)
     const auto &card = stock_.back();
     if (rendering_engine_ == RenderingEngine::CAIRO) {
-      drawCard(buffer_cr_, x, y, &card, true);
+      drawCard(buffer_cr_, x, y, &card, false);
     }
 #ifdef USEOPENGL
     else if (rendering_engine_ == RenderingEngine::OPENGL) {
-      drawCard_gl(card, x, y, true);
+      drawCard_gl(card, x, y, false);
     }
 #endif
   }
