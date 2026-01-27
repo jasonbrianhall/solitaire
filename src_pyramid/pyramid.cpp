@@ -723,7 +723,6 @@ void PyramidGame::initializeGame() {
       waste_.clear();
       foundation_.clear();
       tableau_.clear();
-      stock_redeals_ = 0;  // Reset redeal counter for new game
 
       // Initialize foundation piles (4 empty piles for aces)
       foundation_.resize(4);
@@ -754,12 +753,6 @@ void PyramidGame::initializeGame() {
 bool PyramidGame::isValidDragSource(int pile_index, int card_index) const {
   if (pile_index < 0)
     return false;
-
-  // Can drag from stock pile (top card only)
-  if (pile_index == 0) {
-    return !stock_.empty() &&
-           static_cast<size_t>(card_index) == stock_.size() - 1;
-  }
 
   // Can drag from waste pile only top card
   if (pile_index == 1) {
@@ -1168,7 +1161,6 @@ void PyramidGame::initializeMultiDeckGame() {
     waste_.clear();
     foundation_.clear();
     tableau_.clear();
-    stock_redeals_ = 0;  // Reset redeal counter for new game
 
     // For multiple decks, increase the number of foundation piles
     // Each suit appears multiple times (once per deck)
@@ -1344,67 +1336,6 @@ void PyramidGame::setupMenuBar() {
                   this);
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), seedItem);
 
-  // Auto Finish
-  GtkWidget *autoFinishItem = gtk_menu_item_new_with_mnemonic("_Auto Finish (F)");
-  g_signal_connect(G_OBJECT(autoFinishItem), "activate",
-                  G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                    static_cast<PyramidGame *>(data)->autoFinishGame();
-                  }),
-                  this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), autoFinishItem);
-
-GtkWidget *gameModeItem = gtk_menu_item_new_with_mnemonic("_Game Mode");
-GtkWidget *gameModeMenu = gtk_menu_new();
-gtk_menu_item_set_submenu(GTK_MENU_ITEM(gameModeItem), gameModeMenu);
-
-// Standard Pyramid Solitaire option (1 deck)
-GtkWidget *standardItem = gtk_radio_menu_item_new_with_mnemonic(NULL, "One Deck");
-GSList *modeGroup = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(standardItem));
-g_signal_connect(
-    G_OBJECT(standardItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::STANDARD_PYRAMID);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), standardItem);
-
-// Double Pyramid Solitaire option (2 decks)
-GtkWidget *doubleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Two Decks");
-g_signal_connect(
-    G_OBJECT(doubleItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::DOUBLE_PYRAMID);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), doubleItem);
-
-// Triple Pyramid Solitaire option (3 decks)
-GtkWidget *tripleItem = gtk_radio_menu_item_new_with_mnemonic(modeGroup, "Three Decks");
-g_signal_connect(
-    G_OBJECT(tripleItem), "activate",
-    G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-      if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(widget))) {
-        static_cast<PyramidGame *>(data)->switchGameMode(PyramidGame::GameMode::TRIPLE_PYRAMID);
-      }
-    }),
-    this);
-gtk_menu_shell_append(GTK_MENU_SHELL(gameModeMenu), tripleItem);
-
-// Set initial state based on current mode
-gtk_check_menu_item_set_active(
-    GTK_CHECK_MENU_ITEM(
-        current_game_mode_ == GameMode::STANDARD_PYRAMID ? standardItem :
-        current_game_mode_ == GameMode::DOUBLE_PYRAMID ? doubleItem : tripleItem),
-    TRUE);
-
-// Add the game mode submenu to the options menu
-gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
-
-
   // Add separator before Quit
   GtkWidget *sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), sep);
@@ -1423,63 +1354,6 @@ gtk_menu_shell_append(GTK_MENU_SHELL(gameMenu), gameModeItem);
   GtkWidget *optionsMenu = gtk_menu_new();
   GtkWidget *optionsMenuItem = gtk_menu_item_new_with_mnemonic("_Options");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(optionsMenuItem), optionsMenu);
-
-  // Draw Mode menu removed - Pyramid Solitaire only uses Draw One mode
-  
-  // Card Back menu
-  GtkWidget *cardBackMenu = gtk_menu_new();
-  GtkWidget *cardBackItem = gtk_menu_item_new_with_mnemonic("_Card Back");
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(cardBackItem), cardBackMenu);
-
-  // Select custom back option
-  GtkWidget *selectBackItem = gtk_menu_item_new_with_mnemonic("_Select Custom Back");
-  g_signal_connect(
-      G_OBJECT(selectBackItem), "activate",
-      G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-        PyramidGame *game = static_cast<PyramidGame *>(data);
-
-        GtkWidget *dialog = gtk_file_chooser_dialog_new(
-            "Select Card Back", GTK_WINDOW(game->window_),
-            GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel", GTK_RESPONSE_CANCEL,
-            "_Open", GTK_RESPONSE_ACCEPT, NULL);
-
-        GtkFileFilter *filter = gtk_file_filter_new();
-        gtk_file_filter_set_name(filter, "Image Files");
-        gtk_file_filter_add_pattern(filter, "*.png");
-        gtk_file_filter_add_pattern(filter, "*.jpg");
-        gtk_file_filter_add_pattern(filter, "*.jpeg");
-        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-          char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-          if (game->setCustomCardBack(filename)) {
-            game->refreshCardCache();
-            game->refreshDisplay();
-          } else {
-            GtkWidget *error_dialog = gtk_message_dialog_new(
-                GTK_WINDOW(game->window_), GTK_DIALOG_DESTROY_WITH_PARENT,
-                GTK_MESSAGE_ERROR, GTK_BUTTONS_OK, "Failed to load image file");
-            gtk_dialog_run(GTK_DIALOG(error_dialog));
-            gtk_widget_destroy(error_dialog);
-          }
-          g_free(filename);
-        }
-        gtk_widget_destroy(dialog);
-      }),
-      this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), selectBackItem);
-
-  // Reset to default back option
-  GtkWidget *resetBackItem = gtk_menu_item_new_with_mnemonic("_Reset to Default Back");
-  g_signal_connect(G_OBJECT(resetBackItem), "activate",
-                   G_CALLBACK(+[](GtkWidget *widget, gpointer data) {
-                     PyramidGame *game = static_cast<PyramidGame *>(data);
-                     game->resetToDefaultBack();
-                   }),
-                   this);
-  gtk_menu_shell_append(GTK_MENU_SHELL(cardBackMenu), resetBackItem);
-
-  gtk_menu_shell_append(GTK_MENU_SHELL(optionsMenu), cardBackItem);
 
   // Load Deck option
   GtkWidget *loadDeckItem = gtk_menu_item_new_with_mnemonic("_Load Deck (Ctrl+L)");
@@ -2244,8 +2118,7 @@ void PyramidGame::showHowToPlay() {
       "Controls:\n"
       "- Left-click and drag to move cards\n"
       "- Right-click to automatically move cards to the foundation piles\n"
-      "- Use the keyboard for navigation (see Keyboard Shortcuts in the Help menu)\n"
-      "- Use the Auto Finish feature (press F) when you're confident the game can be completed\n\n"
+      "- Use the keyboard for navigation (see Keyboard Shortcuts in the Help menu)\n\n"
       "Tips:\n"
       "- Try to uncover face-down cards as soon as possible\n"
       "- Keep color alternation in mind when planning moves\n"
@@ -2314,9 +2187,6 @@ void PyramidGame::showKeyboardShortcuts() {
       {"Enter", "Select a card or perform a move"},
       {"Escape", "Cancel a selection or exit fullscreen"},
       {"Space", "Draw cards from the stock pile"},
-      {"F", "Auto-finish (automatically move all possible cards to foundation)"},
-      {"1", "Switch to Draw One mode"},
-      {"3", "Switch to Draw Three mode"},
       {"F11", "Toggle fullscreen mode"},
       {"Ctrl+N", "New game"},
       {"Ctrl+L", "Load custom deck"},
