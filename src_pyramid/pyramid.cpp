@@ -965,7 +965,7 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
   const int HORIZ_SPACING = current_card_width_ + 15;    // Card width plus 15 pixel gap
   const int VERT_OVERLAP = current_card_height_ / 2;     // Half card height between rows
   
-  for (int row = 6; row >= 0; row--) {
+  for (int row = static_cast<int>(tableau_.size()) - 1; row >= 0; row--) {
     const auto &pile = tableau_[row];
     int num_cards_in_row = row + 1;
     
@@ -993,7 +993,7 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
         } else if (tableau_card.face_up) {
           // Check if this card is blocked by cards in the row below
           bool is_blocked = false;
-          if (row < 6) {  // If there is a row below (pyramid has 7 rows, indexed 0-6)
+          if (row < static_cast<int>(tableau_.size()) - 1) {  // If there is a row below
             const auto &row_below = tableau_[row + 1];
             
             // A card at (row, card_idx) is blocked by cards at (row+1, card_idx) and (row+1, card_idx+1)
@@ -1736,7 +1736,7 @@ void PyramidGame::dealTestLayout() {
   }
 
   foundation_.resize(4 * num_decks);
-  tableau_.resize(7);
+  tableau_.resize(1);  // Only 1 tableau pile needed (just the King)
 
   // Create ONE King in pyramid + all 51 other cards in stock
   // Perfect for quick testing of win animation!

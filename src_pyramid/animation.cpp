@@ -640,7 +640,7 @@ void PyramidGame::drawTableauPiles() {
     const int HORIZ_SPACING = current_card_width_ + 15;    // Card width plus 15 pixel gap
     const int VERT_OVERLAP = current_card_height_ / 2;     // Half card height between rows
     
-    for (int row = 0; row < 7; row++) {
+    for (int row = 0; row < static_cast<int>(tableau_.size()); row++) {
         const auto &pile = tableau_[row];
         int num_cards_in_row = row + 1;  // row 0 has 1 card, row 1 has 2, etc
         
