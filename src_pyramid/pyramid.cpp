@@ -76,6 +76,7 @@ std::string getDirectoryStructure(const std::string &directory = ".") {
 
 PyramidGame::PyramidGame()
     : dragging_(false), drag_source_(nullptr), drag_source_pile_(-1),
+      drag_source_card_idx_(-1),
       window_(nullptr), game_area_(nullptr), gl_area_(nullptr),
       rendering_stack_(nullptr), buffer_surface_(nullptr),
       buffer_cr_(nullptr), draw_three_mode_(false),

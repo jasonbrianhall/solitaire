@@ -162,6 +162,7 @@ private:
   GtkWidget *drag_source_ = nullptr;
   std::vector<cardlib::Card> drag_cards_;
   int drag_source_pile_;
+  int drag_source_card_idx_ = -1;  // Track which card in the pile was dragged
   int drag_start_x_, drag_start_y_;
   double drag_offset_x_;
   double drag_offset_y_;

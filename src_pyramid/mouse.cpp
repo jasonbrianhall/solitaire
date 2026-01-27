@@ -33,6 +33,8 @@ gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
     if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
       game->dragging_ = true;
       game->drag_source_pile_ = pile_index;
+      // FIX: Store the actual card index that was clicked
+      game->drag_source_card_idx_ = card_index;
       game->drag_start_x_ = event->x;
       game->drag_start_y_ = event->y;
       game->drag_cards_ = game->getDragCards(pile_index, card_index);
@@ -134,9 +136,11 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                 source_tableau_idx = game->drag_source_pile_ - first_tableau_index;
                 if (source_tableau_idx >= 0 && static_cast<size_t>(source_tableau_idx) < game->tableau_.size()) {
                   auto &source_tableau = game->tableau_[source_tableau_idx];
-                  if (!source_tableau.empty()) {
-                    game->foundation_[0].push_back(source_tableau.back().card);  // Move to discard
-                    source_tableau.pop_back();
+                  // FIX: Use the actual card index that was dragged, not .back()
+                  int source_card_idx = game->drag_source_card_idx_;
+                  if (source_card_idx >= 0 && source_card_idx < static_cast<int>(source_tableau.size())) {
+                    game->foundation_[0].push_back(source_tableau[source_card_idx].card);
+                    source_tableau.erase(source_tableau.begin() + source_card_idx);
                     // Flip new top card if exists
                     if (!source_tableau.empty() && !source_tableau.back().face_up) {
                       source_tableau.back().face_up = true;
@@ -180,9 +184,11 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
               source_tableau_idx = game->drag_source_pile_ - first_tableau_index;
               if (source_tableau_idx >= 0 && static_cast<size_t>(source_tableau_idx) < game->tableau_.size()) {
                 auto &source_tableau = game->tableau_[source_tableau_idx];
-                if (!source_tableau.empty()) {
-                  game->foundation_[0].push_back(source_tableau.back().card);  // Move to discard
-                  source_tableau.pop_back();
+                // FIX: Use the actual card index that was dragged, not .back()
+                int source_card_idx = game->drag_source_card_idx_;
+                if (source_card_idx >= 0 && source_card_idx < static_cast<int>(source_tableau.size())) {
+                  game->foundation_[0].push_back(source_tableau[source_card_idx].card);
+                  source_tableau.erase(source_tableau.begin() + source_card_idx);
                   if (!source_tableau.empty() && !source_tableau.back().face_up) {
                     source_tableau.back().face_up = true;
                   }
@@ -213,6 +219,7 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
     game->dragging_ = false;
     game->drag_cards_.clear();
     game->drag_source_pile_ = -1;
+    game->drag_source_card_idx_ = -1;  // FIX: Reset the card index
     gtk_widget_queue_draw(game->game_area_);
   }
 
@@ -263,9 +270,10 @@ std::vector<cardlib::Card> PyramidGame::getDragCards(int pile_index,
     int tableau_idx = pile_index - first_tableau_index;
     if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
       const auto &tableau_pile = tableau_[tableau_idx];
-      // Only get the top card (not a sequence like in other solitaire games)
-      if (!tableau_pile.empty() && tableau_pile.back().face_up) {
-        return {tableau_pile.back().card};
+      // FIX: Use the specific card that was clicked, not .back()
+      if (card_index >= 0 && card_index < static_cast<int>(tableau_pile.size()) && 
+          tableau_pile[card_index].face_up) {
+        return {tableau_pile[card_index].card};
       }
     }
     return std::vector<cardlib::Card>();
