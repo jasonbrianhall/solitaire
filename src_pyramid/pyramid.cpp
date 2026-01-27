@@ -754,6 +754,12 @@ bool PyramidGame::isValidDragSource(int pile_index, int card_index) const {
   if (pile_index < 0)
     return false;
 
+  // Can drag from stock pile (top card only)
+  if (pile_index == 0) {
+    return !stock_.empty() &&
+           static_cast<size_t>(card_index) == stock_.size() - 1;
+  }
+
   // Can drag from waste pile only top card
   if (pile_index == 1) {
     return !waste_.empty() &&

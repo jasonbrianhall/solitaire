@@ -25,11 +25,23 @@ gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
     auto [pile_index, card_index] = game->getPileAt(event->x, event->y);
 
     if (pile_index == 0) { // Stock pile
-      game->handleStockPileClick();
+      // If empty, reset stock from waste
+      if (game->stock_.empty()) {
+        game->handleStockPileClick();
+        return TRUE;
+      }
+      // If not empty: record for potential drag, but don't start dragging yet
+      // Motion detection will activate drag mode if user moves the mouse
+      // If user just clicks, onButtonRelease will treat it as a stock click (deal card)
+      game->drag_source_pile_ = 0;
+      game->drag_source_card_idx_ = 0;
+      game->drag_start_x_ = event->x;
+      game->drag_start_y_ = event->y;
+      // DON'T set dragging_ = true yet - wait for motion in onMotionNotify
       return TRUE;
     }
 
-    // In Pyramid, we can only pick up exposed cards from pyramid or waste
+    // In Pyramid, we can only pick up exposed cards from pyramid, waste, or stock
     if (pile_index >= 0 && game->isValidDragSource(pile_index, card_index)) {
       game->dragging_ = true;
       game->drag_source_pile_ = pile_index;
@@ -102,6 +114,16 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
   PyramidGame *game = static_cast<PyramidGame *>(data);
   game->keyboard_navigation_active_ = false;
 
+  // Handle stock pile click without drag (user just clicked without moving)
+  if (event->button == 1 && game->drag_source_pile_ == 0 && !game->dragging_) {
+    // Stock was selected but not dragged - treat as a stock pile click (deal card)
+    game->handleStockPileClick();
+    game->drag_source_pile_ = -1;
+    game->drag_source_card_idx_ = -1;
+    gtk_widget_queue_draw(game->game_area_);
+    return TRUE;
+  }
+
   if (event->button == 1 && game->dragging_) {
     auto [target_pile, card_index] = game->getPileAt(event->x, event->y);
 
@@ -151,6 +173,12 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
             if (!game->waste_.empty()) {
               game->foundation_[0].push_back(game->waste_.back());
               game->waste_.pop_back();
+            }
+          } else if (game->drag_source_pile_ == 0) {
+            // From stock pile
+            if (!game->stock_.empty()) {
+              game->foundation_[0].push_back(game->stock_.back());
+              game->stock_.pop_back();
             }
           }
           
@@ -205,6 +233,12 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                   game->foundation_[0].push_back(game->waste_.back());  // Move to foundation
                   game->waste_.pop_back();
                 }
+              } else if (game->drag_source_pile_ == 0) {
+                // From stock pile
+                if (!game->stock_.empty()) {
+                  game->foundation_[0].push_back(game->stock_.back());  // Move to foundation
+                  game->stock_.pop_back();
+                }
               }
 
               // Move target to foundation - MUST remove the same card we just paired with
@@ -257,6 +291,18 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                     }
                   }
                 }
+              }
+            } else if (game->drag_source_pile_ == 0) {
+              // From stock pile
+              if (!game->stock_.empty()) {
+                game->foundation_[0].push_back(game->stock_.back());
+                game->stock_.pop_back();
+              }
+            } else if (game->drag_source_pile_ == 1) {
+              // From waste pile (dragging waste to waste to pair with itself)
+              if (!game->waste_.empty()) {
+                game->foundation_[0].push_back(game->waste_.back());
+                game->waste_.pop_back();
               }
             }
 
@@ -315,6 +361,26 @@ gboolean PyramidGame::onMotionNotify(GtkWidget *widget, GdkEventMotion *event,
                                        gpointer data) {
   PyramidGame *game = static_cast<PyramidGame *>(data);
 
+  // Check if stock pile is pending (button pressed but not yet dragging)
+  if (game->drag_source_pile_ == 0 && !game->dragging_) {
+    // Calculate mouse movement distance
+    int dx = event->x - game->drag_start_x_;
+    int dy = event->y - game->drag_start_y_;
+    int distance_squared = dx * dx + dy * dy;
+    
+    // Drag threshold: 25 pixels squared (5 pixel movement)
+    const int DRAG_THRESHOLD = 25;
+    
+    if (distance_squared > DRAG_THRESHOLD) {
+      // Mouse moved enough - activate drag mode
+      game->dragging_ = true;
+      game->drag_cards_ = game->getDragCards(0, 0);
+      game->drag_offset_x_ = event->x - game->current_card_spacing_;
+      game->drag_offset_y_ = event->y - game->current_card_spacing_;
+      game->playSound(GameSoundEvent::CardFlip);
+    }
+  }
+
   if (game->dragging_) {
     game->drag_start_x_ = event->x;
     game->drag_start_y_ = event->y;
@@ -351,8 +417,11 @@ std::vector<cardlib::Card> PyramidGame::getDragCards(int pile_index,
     return std::vector<cardlib::Card>();
   }
 
-  // Stock pile (can't drag from it)
+  // Stock pile
   if (pile_index == 0) {
+    if (!stock_.empty()) {
+      return {stock_.back()};
+    }
     return std::vector<cardlib::Card>();
   }
 

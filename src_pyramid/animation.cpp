@@ -508,16 +508,36 @@ void PyramidGame::drawStockPile() {
     }
 #endif
   } else {
-    // Draw the ONE card in stock (face up)
-    const auto &card = stock_.back();
-    if (rendering_engine_ == RenderingEngine::CAIRO) {
-      drawCard(buffer_cr_, x, y, &card, false);
-    }
+    // Check if the top card is being dragged
+    bool top_card_dragging =
+        (dragging_ && drag_source_pile_ == 0 &&
+         drag_cards_.size() == 1 && stock_.size() >= 1 &&
+         drag_cards_[0].suit == stock_.back().suit &&
+         drag_cards_[0].rank == stock_.back().rank);
+
+    if (!top_card_dragging) {
+      // Draw the top card if it's not being dragged
+      const auto &card = stock_.back();
+      if (rendering_engine_ == RenderingEngine::CAIRO) {
+        drawCard(buffer_cr_, x, y, &card, true);
+      }
 #ifdef USEOPENGL
-    else if (rendering_engine_ == RenderingEngine::OPENGL) {
-      drawCard_gl(card, x, y, false);
-    }
+      else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawCard_gl(card, x, y, true);
+      }
 #endif
+    } else {
+      // Draw empty placeholder if card is being dragged
+#ifdef USEOPENGL
+      if (rendering_engine_ == RenderingEngine::CAIRO) {
+        drawEmptyPile(buffer_cr_, x, y);
+      } else if (rendering_engine_ == RenderingEngine::OPENGL) {
+        drawEmptyPile_gl(x, y);
+      }
+#else
+      drawEmptyPile(buffer_cr_, x, y);
+#endif
+    }
   }
 }
 
