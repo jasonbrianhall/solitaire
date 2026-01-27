@@ -1024,11 +1024,31 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
       if (x >= card_x && x <= card_x + current_card_width_ &&
           y >= row_y && y <= row_y + current_card_height_) {
         if (tableau_card.face_up) {
-          std::cerr << " <- MATCH! ✓" << std::endl;
-          std::cerr << ">>> RETURNING: pile_index=" << (first_tableau_index + row) << ", card_idx=" << card_idx;
-          std::cerr << " | CARD DATA: Rank=" << static_cast<int>(card.rank) << ", Suit=" << static_cast<int>(card.suit);
-          std::cerr << " (" << cardlib::rankToString(card.rank) << " of " << cardlib::suitToString(card.suit) << ")" << std::endl;
-          return {first_tableau_index + row, card_idx};
+          // Check if this card is blocked by cards in the row below
+          bool is_blocked = false;
+          if (row < 6) {  // If there is a row below (pyramid has 7 rows, indexed 0-6)
+            const auto &row_below = tableau_[row + 1];
+            
+            // A card at (row, card_idx) is blocked by cards at (row+1, card_idx) and (row+1, card_idx+1)
+            if (card_idx < static_cast<int>(row_below.size()) && row_below[card_idx].face_up) {
+              is_blocked = true;
+              std::cerr << " | BLOCKED by row[" << (row + 1) << "][" << card_idx << "]";
+            }
+            if (card_idx + 1 < static_cast<int>(row_below.size()) && row_below[card_idx + 1].face_up) {
+              is_blocked = true;
+              std::cerr << " | BLOCKED by row[" << (row + 1) << "][" << (card_idx + 1) << "]";
+            }
+          }
+          
+          if (!is_blocked) {
+            std::cerr << " <- MATCH! ✓" << std::endl;
+            std::cerr << ">>> RETURNING: pile_index=" << (first_tableau_index + row) << ", card_idx=" << card_idx;
+            std::cerr << " | CARD DATA: Rank=" << static_cast<int>(card.rank) << ", Suit=" << static_cast<int>(card.suit);
+            std::cerr << " (" << cardlib::rankToString(card.rank) << " of " << cardlib::suitToString(card.suit) << ")" << std::endl;
+            return {first_tableau_index + row, card_idx};
+          } else {
+            std::cerr << " <- HIT but BLOCKED (skipped)" << std::endl;
+          }
         } else {
           std::cerr << " <- HIT but FACE DOWN (skipped)" << std::endl;
         }
