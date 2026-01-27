@@ -663,6 +663,13 @@ void PyramidGame::drawTableauPiles() {
                 continue;
             }
             
+            // Skip the card if it's currently being dragged
+            int current_pile_index = first_tableau_index + row;
+            if (dragging_ && drag_source_pile_ == current_pile_index && 
+                drag_source_card_idx_ == card_idx) {
+                continue;
+            }
+            
             // X position - each card is spaced by full card width plus gap
             int card_x = row_start_x + (card_idx * HORIZ_SPACING);
             int card_y = row_y;
