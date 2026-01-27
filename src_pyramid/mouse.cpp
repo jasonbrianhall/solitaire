@@ -134,10 +134,15 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
               int source_card_idx = game->drag_source_card_idx_;
               if (source_card_idx >= 0 && source_card_idx < static_cast<int>(source_tableau.size())) {
                 game->foundation_[0].push_back(source_tableau[source_card_idx].card);
-                source_tableau.erase(source_tableau.begin() + source_card_idx);
-                // Flip new top card if exists
-                if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                  source_tableau.back().face_up = true;
+                source_tableau[source_card_idx].removed = true;  // Mark as removed, don't erase
+                // Flip new top card if exists (find first non-removed card from back)
+                for (int i = static_cast<int>(source_tableau.size()) - 1; i >= 0; --i) {
+                  if (!source_tableau[i].removed) {
+                    if (!source_tableau[i].face_up) {
+                      source_tableau[i].face_up = true;
+                    }
+                    break;
+                  }
                 }
               }
             }
@@ -176,10 +181,15 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                   int source_card_idx = game->drag_source_card_idx_;
                   if (source_card_idx >= 0 && source_card_idx < static_cast<int>(source_tableau.size())) {
                     game->foundation_[0].push_back(source_tableau[source_card_idx].card);
-                    source_tableau.erase(source_tableau.begin() + source_card_idx);
+                    source_tableau[source_card_idx].removed = true;  // Mark as removed
                     // Flip new top card if exists
-                    if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                      source_tableau.back().face_up = true;
+                    for (int i = static_cast<int>(source_tableau.size()) - 1; i >= 0; --i) {
+                      if (!source_tableau[i].removed) {
+                        if (!source_tableau[i].face_up) {
+                          source_tableau[i].face_up = true;
+                        }
+                        break;
+                      }
                     }
                   }
                 }
@@ -193,11 +203,22 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
 
               // Move target to foundation
               if (!tableau_pile.empty()) {
-                game->foundation_[0].push_back(tableau_pile.back().card);  // Move to foundation
-                tableau_pile.pop_back();
-                // Flip new top card if exists
-                if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
-                  tableau_pile.back().face_up = true;
+                // Find the top non-removed card
+                for (int i = static_cast<int>(tableau_pile.size()) - 1; i >= 0; --i) {
+                  if (!tableau_pile[i].removed) {
+                    game->foundation_[0].push_back(tableau_pile[i].card);
+                    tableau_pile[i].removed = true;  // Mark as removed
+                    // Flip new top card if exists
+                    for (int j = i - 1; j >= 0; --j) {
+                      if (!tableau_pile[j].removed) {
+                        if (!tableau_pile[j].face_up) {
+                          tableau_pile[j].face_up = true;
+                        }
+                        break;
+                      }
+                    }
+                    break;
+                  }
                 }
               }
 
@@ -224,9 +245,15 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                 int source_card_idx = game->drag_source_card_idx_;
                 if (source_card_idx >= 0 && source_card_idx < static_cast<int>(source_tableau.size())) {
                   game->foundation_[0].push_back(source_tableau[source_card_idx].card);
-                  source_tableau.erase(source_tableau.begin() + source_card_idx);
-                  if (!source_tableau.empty() && !source_tableau.back().face_up) {
-                    source_tableau.back().face_up = true;
+                  source_tableau[source_card_idx].removed = true;  // Mark as removed
+                  // Flip new top card if exists
+                  for (int i = static_cast<int>(source_tableau.size()) - 1; i >= 0; --i) {
+                    if (!source_tableau[i].removed) {
+                      if (!source_tableau[i].face_up) {
+                        source_tableau[i].face_up = true;
+                      }
+                      break;
+                    }
                   }
                 }
               }
@@ -306,9 +333,9 @@ std::vector<cardlib::Card> PyramidGame::getDragCards(int pile_index,
     int tableau_idx = pile_index - first_tableau_index;
     if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
       const auto &tableau_pile = tableau_[tableau_idx];
-      // FIX: Use the specific card that was clicked, not .back()
+      // Skip removed cards when determining if we can drag
       if (card_index >= 0 && card_index < static_cast<int>(tableau_pile.size()) && 
-          tableau_pile[card_index].face_up) {
+          !tableau_pile[card_index].removed && tableau_pile[card_index].face_up) {
         return {tableau_pile[card_index].card};
       }
     }

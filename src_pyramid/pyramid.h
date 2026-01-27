@@ -58,8 +58,10 @@ struct AnimatedCard {
 struct TableauCard {
   cardlib::Card card;
   bool face_up;
+  bool removed;  // Mark card as removed without shifting position
 
-  TableauCard(const cardlib::Card &c, bool up) : card(c), face_up(up) {}
+  TableauCard(const cardlib::Card &c, bool up, bool rem = false) 
+      : card(c), face_up(up), removed(rem) {}
 };
 
 // ============================================================================

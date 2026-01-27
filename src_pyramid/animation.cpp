@@ -631,11 +631,16 @@ void PyramidGame::drawTableauPiles() {
         
         // Draw all cards in this pile (which forms one row of the pyramid)
         for (int card_idx = 0; card_idx < pile.size(); card_idx++) {
+            const auto &tableau_card = pile[card_idx];
+            
+            // Skip cards that have been removed (matched and sent to foundation)
+            if (tableau_card.removed) {
+                continue;
+            }
+            
             // X position - each card is spaced by full card width plus gap
             int card_x = row_start_x + (card_idx * HORIZ_SPACING);
             int card_y = row_y;
-            
-            const auto &tableau_card = pile[card_idx];
             
             if (rendering_engine_ == RenderingEngine::CAIRO) {
                 drawCard(buffer_cr_, card_x, card_y, &tableau_card.card, tableau_card.face_up);

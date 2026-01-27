@@ -772,14 +772,15 @@ bool PyramidGame::isValidDragSource(int pile_index, int card_index) const {
     return !pile.empty() && static_cast<size_t>(card_index) == pile.size() - 1;
   }
 
-  // Can drag from tableau if cards are face up
+  // Can drag from tableau if cards are face up and not removed
   if (pile_index >= first_tableau_index) {
     int tableau_idx = pile_index - first_tableau_index;
     if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < tableau_.size()) {
       const auto &pile = tableau_[tableau_idx];
       return !pile.empty() && card_index >= 0 &&
              static_cast<size_t>(card_index) < pile.size() &&
-             pile[card_index].face_up; // Make sure card is face up
+             pile[card_index].face_up &&  // Make sure card is face up
+             !pile[card_index].removed;   // Make sure card is not removed
     }
   }
 
@@ -1017,24 +1018,29 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
       std::cerr << "    [" << card_idx << "]: ";
       std::cerr << "Rank=" << static_cast<int>(card.rank) << "(" << cardlib::rankToString(card.rank) << ") ";
       std::cerr << "Suit=" << static_cast<int>(card.suit) << "(" << cardlib::suitToString(card.suit) << ") ";
-      std::cerr << "face_up=" << (tableau_card.face_up ? "YES" : "NO") << " | ";
+      std::cerr << "face_up=" << (tableau_card.face_up ? "YES" : "NO") << " ";
+      std::cerr << "removed=" << (tableau_card.removed ? "YES" : "NO") << " | ";
       std::cerr << "x=[" << card_x << ", " << (card_x + current_card_width_) << "]";
       
       // Check if click is on this card
       if (x >= card_x && x <= card_x + current_card_width_ &&
           y >= row_y && y <= row_y + current_card_height_) {
-        if (tableau_card.face_up) {
+        // Skip removed cards - they shouldn't be clickable
+        if (tableau_card.removed) {
+          std::cerr << " <- HIT but REMOVED (skipped)" << std::endl;
+        } else if (tableau_card.face_up) {
           // Check if this card is blocked by cards in the row below
           bool is_blocked = false;
           if (row < 6) {  // If there is a row below (pyramid has 7 rows, indexed 0-6)
             const auto &row_below = tableau_[row + 1];
             
             // A card at (row, card_idx) is blocked by cards at (row+1, card_idx) and (row+1, card_idx+1)
-            if (card_idx < static_cast<int>(row_below.size()) && row_below[card_idx].face_up) {
+            // But we need to check if those blocking cards are not removed
+            if (card_idx < static_cast<int>(row_below.size()) && row_below[card_idx].face_up && !row_below[card_idx].removed) {
               is_blocked = true;
               std::cerr << " | BLOCKED by row[" << (row + 1) << "][" << card_idx << "]";
             }
-            if (card_idx + 1 < static_cast<int>(row_below.size()) && row_below[card_idx + 1].face_up) {
+            if (card_idx + 1 < static_cast<int>(row_below.size()) && row_below[card_idx + 1].face_up && !row_below[card_idx + 1].removed) {
               is_blocked = true;
               std::cerr << " | BLOCKED by row[" << (row + 1) << "][" << (card_idx + 1) << "]";
             }
@@ -1256,12 +1262,14 @@ void PyramidGame::dealMultiDeck() {
 
 bool PyramidGame::checkWinCondition() const {
   // Pyramid Solitaire: Win when all cards from the pyramid and waste are moved to discard
-  // The pyramid and waste must be empty (all cards discarded as matches)
+  // All tableau cards must be marked as removed, and waste must be empty
   
-  // Check if all pyramid cards are gone
+  // Check if all pyramid cards are removed
   for (const auto &pile : tableau_) {
-    if (!pile.empty()) {
-      return false;  // Still have cards in the pyramid
+    for (const auto &card : pile) {
+      if (!card.removed) {
+        return false;  // Still have cards in the pyramid that haven't been removed
+      }
     }
   }
   
