@@ -1561,7 +1561,7 @@ void PyramidGame::onAbout(GtkWidget * /* widget */, gpointer data) {
       "- Ctrl+H for help\n\n"
       "Written by Jason Hall\n"
       "Licensed under the MIT License\n"
-      "https://github.com/jasonbrianhall/pyramid";
+      "https://github.com/jasonbrianhall/solitaire";
 
   gtk_text_buffer_set_text(buffer, instructions, -1);
 
