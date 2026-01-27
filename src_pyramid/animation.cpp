@@ -635,14 +635,23 @@ void PyramidGame::drawTableauPiles() {
             
             const auto &tableau_card = pile[card_idx];
             
-            if (rendering_engine_ == RenderingEngine::CAIRO) {
-                drawCard(buffer_cr_, card_x, card_y, &tableau_card.card, tableau_card.face_up);
-            }
+            // Check if this card is being dragged - if so, skip drawing it
+            // This reveals what's underneath (the next card in the pile)
+            bool card_is_dragging = 
+                (dragging_ && 
+                 drag_source_pile_ == (first_tableau_index + row) &&
+                 drag_source_card_idx_ == card_idx);
+            
+            if (!card_is_dragging) {
+                if (rendering_engine_ == RenderingEngine::CAIRO) {
+                    drawCard(buffer_cr_, card_x, card_y, &tableau_card.card, tableau_card.face_up);
+                }
 #ifdef USEOPENGL            
-            else if (rendering_engine_ == RenderingEngine::OPENGL) {
-                drawCard_gl(tableau_card.card, card_x, card_y, tableau_card.face_up);
-            }
+                else if (rendering_engine_ == RenderingEngine::OPENGL) {
+                    drawCard_gl(tableau_card.card, card_x, card_y, tableau_card.face_up);
+                }
 #endif
+            }
         }
         
         // Draw empty pile outline if this row/pile is empty
