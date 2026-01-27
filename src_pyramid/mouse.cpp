@@ -163,11 +163,17 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
         if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
           auto &tableau_pile = game->tableau_[tableau_idx];
 
-          // Get the target card
-          if (!tableau_pile.empty()) {
-            std::vector<cardlib::Card> target_cards = {tableau_pile.back().card};
+          // Get the target card - use the actual card that was clicked (card_index from getPileAt)
+          cardlib::Card *target_card_ptr = nullptr;
+          if (card_index >= 0 && card_index < static_cast<int>(tableau_pile.size())) {
+            if (!tableau_pile[card_index].removed) {
+              target_card_ptr = &tableau_pile[card_index].card;
+            }
+          }
 
-            // Check if cards can be paired (sum to 13)
+          // Check if cards can be paired (sum to 13)
+          if (target_card_ptr != nullptr) {
+            std::vector<cardlib::Card> target_cards = {*target_card_ptr};
             if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
               // Move both cards to foundation pile
               
@@ -201,21 +207,16 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
                 }
               }
 
-              // Move target to foundation
-              if (!tableau_pile.empty()) {
-                // Find the top non-removed card
+              // Move target to foundation - MUST remove the same card we just paired with
+              if (card_index >= 0 && card_index < static_cast<int>(tableau_pile.size()) &&
+                  !tableau_pile[card_index].removed) {
+                game->foundation_[0].push_back(tableau_pile[card_index].card);
+                tableau_pile[card_index].removed = true;  // Mark as removed
+                // Flip new top card if exists (find first non-removed card from back)
                 for (int i = static_cast<int>(tableau_pile.size()) - 1; i >= 0; --i) {
                   if (!tableau_pile[i].removed) {
-                    game->foundation_[0].push_back(tableau_pile[i].card);
-                    tableau_pile[i].removed = true;  // Mark as removed
-                    // Flip new top card if exists
-                    for (int j = i - 1; j >= 0; --j) {
-                      if (!tableau_pile[j].removed) {
-                        if (!tableau_pile[j].face_up) {
-                          tableau_pile[j].face_up = true;
-                        }
-                        break;
-                      }
+                    if (!tableau_pile[i].face_up) {
+                      tableau_pile[i].face_up = true;
                     }
                     break;
                   }

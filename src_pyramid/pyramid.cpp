@@ -1108,9 +1108,9 @@ bool PyramidGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
   const auto &card2 = target[0];
 
   // Calculate rank values (A=1, 2=2, ..., Q=12, K=13)
-  // cardlib uses 0-based ranks (A=0 to K=12), so add 1 to get face values
-  int rank1 = static_cast<int>(card1.rank) + 1;
-  int rank2 = static_cast<int>(card2.rank) + 1;
+  // cardlib uses 1-based ranks (A=1 to K=13), no conversion needed
+  int rank1 = static_cast<int>(card1.rank);
+  int rank2 = static_cast<int>(card2.rank);
 
   // Cards pair if their ranks sum to 13
   return (rank1 + rank2) == 13;
