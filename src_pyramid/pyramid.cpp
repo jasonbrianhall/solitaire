@@ -723,6 +723,7 @@ void PyramidGame::initializeGame() {
       waste_.clear();
       foundation_.clear();
       tableau_.clear();
+      stock_redeals_ = 0;  // Reset redeal counter for new game
 
       // Initialize foundation piles (4 empty piles for aces)
       foundation_.resize(4);
@@ -1167,6 +1168,7 @@ void PyramidGame::initializeMultiDeckGame() {
     waste_.clear();
     foundation_.clear();
     tableau_.clear();
+    stock_redeals_ = 0;  // Reset redeal counter for new game
 
     // For multiple decks, increase the number of foundation piles
     // Each suit appears multiple times (once per deck)

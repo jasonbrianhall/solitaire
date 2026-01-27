@@ -156,6 +156,8 @@ private:
   std::vector<cardlib::Card> waste_;                       // Faced-up cards from stock
   std::vector<std::vector<cardlib::Card>> foundation_;     // 4 piles for aces
   std::vector<std::vector<TableauCard>> tableau_;
+  
+  int stock_redeals_ = 0;                                  // Track number of waste redeals (max 2)
 
   // ========================================================================
   // GAME STATE - DRAG AND DROP

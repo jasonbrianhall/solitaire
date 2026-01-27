@@ -338,12 +338,19 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
 
 void PyramidGame::handleStockPileClick() {
   if (stock_.empty()) {
-    // Reset: move waste back to stock
-    while (!waste_.empty()) {
-      stock_.push_back(waste_.back());
-      waste_.pop_back();
+    // Reset: move waste back to stock (but limit to 2 redeals max)
+    if (stock_redeals_ < 2) {
+      while (!waste_.empty()) {
+        stock_.push_back(waste_.back());
+        waste_.pop_back();
+      }
+      stock_redeals_++;
+      refreshDisplay();
+    } else {
+      // No more redeals allowed - game ends
+      showErrorDialog("Stock Exhausted", "No more cards in stock and redeals exhausted. Game over.");
+      refreshDisplay();
     }
-    refreshDisplay();
   } else {
     if (stock_to_waste_animation_active_) {
       return;
