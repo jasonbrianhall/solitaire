@@ -22,6 +22,11 @@ SRCS_COMMON_FREECELL = src_freecell/freecell.cpp src_freecell/cardlib.cpp src_fr
 SRCS_LINUX_FREECELL = src_freecell/pulseaudioplayer.cpp src_freecell/animation_gl.cpp
 SRCS_WIN_FREECELL = src_freecell/windowsaudioplayer.cpp
 
+# Source files for Pyramid Solitaire
+SRCS_COMMON_PYRAMID = src_pyramid/pyramid.cpp src_pyramid/cardlib.cpp src_pyramid/sound.cpp src_pyramid/animation_cairo.cpp src_pyramid/keyboard.cpp src_pyramid/audiomanager.cpp src_pyramid/mouse.cpp src_pyramid/animation.cpp
+SRCS_LINUX_PYRAMID = src_pyramid/pulseaudioplayer.cpp src_pyramid/animation_gl.cpp 
+SRCS_WIN_PYRAMID = src_pyramid/windowsaudioplayer.cpp
+
 # Use pkg-config for dependencies
 GTK_CFLAGS_LINUX := $(shell pkg-config --cflags gtk+-3.0)
 GTK_LIBS_LINUX := $(shell pkg-config --libs gtk+-3.0)
@@ -73,6 +78,12 @@ OBJS_WIN_FREECELL = $(SRCS_COMMON_FREECELL:.cpp=.win.o) $(SRCS_WIN_FREECELL:.cpp
 OBJS_LINUX_DEBUG_FREECELL = $(SRCS_COMMON_FREECELL:.cpp=.debug.o) $(SRCS_LINUX_FREECELL:.cpp=.debug.o)
 OBJS_WIN_DEBUG_FREECELL = $(SRCS_COMMON_FREECELL:.cpp=.win.debug.o) $(SRCS_WIN_FREECELL:.cpp=.win.debug.o)
 
+# Object files for Pyramid Solitaire
+OBJS_LINUX_PYRAMID = $(SRCS_COMMON_PYRAMID:.cpp=.o) $(SRCS_LINUX_PYRAMID:.cpp=.o)
+OBJS_WIN_PYRAMID = $(SRCS_COMMON_PYRAMID:.cpp=.win.o) $(SRCS_WIN_PYRAMID:.cpp=.win.o)
+OBJS_LINUX_DEBUG_PYRAMID = $(SRCS_COMMON_PYRAMID:.cpp=.debug.o) $(SRCS_LINUX_PYRAMID:.cpp=.debug.o)
+OBJS_WIN_DEBUG_PYRAMID = $(SRCS_COMMON_PYRAMID:.cpp=.win.debug.o) $(SRCS_WIN_PYRAMID:.cpp=.win.debug.o)
+
 # Target executables for Klondike Solitaire
 TARGET_LINUX_KLONDIKE = solitaire
 TARGET_WIN_KLONDIKE = solitaire.exe
@@ -91,6 +102,12 @@ TARGET_WIN_FREECELL = freecell.exe
 TARGET_LINUX_DEBUG_FREECELL = freecell_debug
 TARGET_WIN_DEBUG_FREECELL = freecell_debug.exe
 
+# Target executables for Pyramid Solitaire
+TARGET_LINUX_PYRAMID = pyramid
+TARGET_WIN_PYRAMID = pyramid.exe
+TARGET_LINUX_DEBUG_PYRAMID = pyramid_debug
+TARGET_WIN_DEBUG_PYRAMID = pyramid_debug.exe
+
 # Build directories
 BUILD_DIR = build
 BUILD_DIR_LINUX = $(BUILD_DIR)/linux
@@ -102,21 +119,21 @@ BUILD_DIR_WIN_DEBUG = $(BUILD_DIR)/windows_debug
 DLL_SOURCE_DIR = /usr/x86_64-w64-mingw32/sys-root/mingw/bin
 
 # Create necessary directories
-$(shell mkdir -p $(BUILD_DIR_LINUX)/src_klondike $(BUILD_DIR_LINUX)/src_spider $(BUILD_DIR_LINUX)/src_freecell \
-	$(BUILD_DIR_WIN)/src_klondike $(BUILD_DIR_WIN)/src_spider $(BUILD_DIR_WIN)/src_freecell \
-	$(BUILD_DIR_LINUX_DEBUG)/src_klondike $(BUILD_DIR_LINUX_DEBUG)/src_spider $(BUILD_DIR_LINUX_DEBUG)/src_freecell \
-	$(BUILD_DIR_WIN_DEBUG)/src_klondike $(BUILD_DIR_WIN_DEBUG)/src_spider $(BUILD_DIR_WIN_DEBUG)/src_freecell)
+$(shell mkdir -p $(BUILD_DIR_LINUX)/src_klondike $(BUILD_DIR_LINUX)/src_spider $(BUILD_DIR_LINUX)/src_freecell $(BUILD_DIR_LINUX)/src_pyramid \
+	$(BUILD_DIR_WIN)/src_klondike $(BUILD_DIR_WIN)/src_spider $(BUILD_DIR_WIN)/src_freecell $(BUILD_DIR_WIN)/src_pyramid \
+	$(BUILD_DIR_LINUX_DEBUG)/src_klondike $(BUILD_DIR_LINUX_DEBUG)/src_spider $(BUILD_DIR_LINUX_DEBUG)/src_freecell $(BUILD_DIR_LINUX_DEBUG)/src_pyramid \
+	$(BUILD_DIR_WIN_DEBUG)/src_klondike $(BUILD_DIR_WIN_DEBUG)/src_spider $(BUILD_DIR_WIN_DEBUG)/src_freecell $(BUILD_DIR_WIN_DEBUG)/src_pyramid)
 
 # Default target - build all games for Linux
 .PHONY: all
-all: klondike-linux spider-linux freecell-linux
+all: klondike-linux spider-linux freecell-linux pyramid-linux
 
 # OS-specific builds
 .PHONY: windows
-windows: klondike-windows spider-windows freecell-windows
+windows: klondike-windows spider-windows freecell-windows pyramid-windows
 
 .PHONY: linux
-linux: klondike-linux spider-linux freecell-linux
+linux: klondike-linux spider-linux freecell-linux pyramid-linux
 
 # Individual game targets
 .PHONY: klondike
@@ -127,6 +144,9 @@ spider: spider-linux
 
 .PHONY: freecell
 freecell: freecell-linux
+
+.PHONY: pyramid
+pyramid: pyramid-linux
 
 .PHONY: solitaire
 solitaire: klondike-linux
@@ -141,19 +161,22 @@ all-spider: spider-linux spider-windows
 .PHONY: all-freecell
 all-freecell: freecell-linux freecell-windows
 
+.PHONY: all-pyramid
+all-pyramid: pyramid-linux pyramid-windows
+
 .PHONY: all-solitaire
 all-solitaire: klondike-linux klondike-windows
 
 # Combined targets by platform
 .PHONY: all-linux
-all-linux: klondike-linux spider-linux freecell-linux
+all-linux: klondike-linux spider-linux freecell-linux pyramid-linux
 
 .PHONY: all-windows
-all-windows: klondike-windows spider-windows freecell-windows
+all-windows: klondike-windows spider-windows freecell-windows pyramid-windows
 
 # Debug targets
 .PHONY: all-debug
-all-debug: klondike-linux-debug klondike-windows-debug spider-linux-debug spider-windows-debug freecell-linux-debug freecell-windows-debug
+all-debug: klondike-linux-debug klondike-windows-debug spider-linux-debug spider-windows-debug freecell-linux-debug freecell-windows-debug pyramid-linux-debug pyramid-windows-debug
 
 #
 # Linux build targets
@@ -178,6 +201,13 @@ $(BUILD_DIR_LINUX)/$(TARGET_LINUX_SPIDER): $(addprefix $(BUILD_DIR_LINUX)/,$(OBJ
 freecell-linux: $(BUILD_DIR_LINUX)/$(TARGET_LINUX_FREECELL)
 
 $(BUILD_DIR_LINUX)/$(TARGET_LINUX_FREECELL): $(addprefix $(BUILD_DIR_LINUX)/,$(OBJS_LINUX_FREECELL))
+	$(CXX_LINUX) $^ -o $@ $(LDFLAGS_LINUX)
+
+# Pyramid Solitaire
+.PHONY: pyramid-linux
+pyramid-linux: $(BUILD_DIR_LINUX)/$(TARGET_LINUX_PYRAMID)
+
+$(BUILD_DIR_LINUX)/$(TARGET_LINUX_PYRAMID): $(addprefix $(BUILD_DIR_LINUX)/,$(OBJS_LINUX_PYRAMID))
 	$(CXX_LINUX) $^ -o $@ $(LDFLAGS_LINUX)
 
 # Generic compilation rules for Linux
@@ -209,6 +239,13 @@ freecell-linux-debug: $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_FREECELL)
 $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_FREECELL): $(addprefix $(BUILD_DIR_LINUX_DEBUG)/,$(OBJS_LINUX_DEBUG_FREECELL))
 	$(CXX_LINUX) $^ -o $@ $(LDFLAGS_LINUX)
 
+# Pyramid Solitaire
+.PHONY: pyramid-linux-debug
+pyramid-linux-debug: $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_PYRAMID)
+
+$(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_PYRAMID): $(addprefix $(BUILD_DIR_LINUX_DEBUG)/,$(OBJS_LINUX_DEBUG_PYRAMID))
+	$(CXX_LINUX) $^ -o $@ $(LDFLAGS_LINUX)
+
 # Generic compilation rules for Linux debug
 $(BUILD_DIR_LINUX_DEBUG)/%.debug.o: %.cpp
 	$(CXX_LINUX) $(CXXFLAGS_LINUX_DEBUG) -c $< -o $@
@@ -238,6 +275,13 @@ freecell-windows: $(BUILD_DIR_WIN)/$(TARGET_WIN_FREECELL) freecell-collect-dlls
 $(BUILD_DIR_WIN)/$(TARGET_WIN_FREECELL): $(addprefix $(BUILD_DIR_WIN)/,$(OBJS_WIN_FREECELL))
 	$(CXX_WIN) $^ -o $@ $(LDFLAGS_WIN)
 
+# Pyramid Solitaire
+.PHONY: pyramid-windows
+pyramid-windows: $(BUILD_DIR_WIN)/$(TARGET_WIN_PYRAMID) pyramid-collect-dlls
+
+$(BUILD_DIR_WIN)/$(TARGET_WIN_PYRAMID): $(addprefix $(BUILD_DIR_WIN)/,$(OBJS_WIN_PYRAMID))
+	$(CXX_WIN) $^ -o $@ $(LDFLAGS_WIN)
+
 # Generic compilation rules for Windows
 $(BUILD_DIR_WIN)/%.win.o: %.cpp
 	$(CXX_WIN) $(CXXFLAGS_WIN) -c $< -o $@
@@ -265,6 +309,13 @@ $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_SPIDER): $(addprefix $(BUILD_DIR_WIN_D
 freecell-windows-debug: $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_FREECELL) freecell-collect-debug-dlls
 
 $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_FREECELL): $(addprefix $(BUILD_DIR_WIN_DEBUG)/,$(OBJS_WIN_DEBUG_FREECELL))
+	$(CXX_WIN) $^ -o $@ $(LDFLAGS_WIN)
+
+# Pyramid Solitaire
+.PHONY: pyramid-windows-debug
+pyramid-windows-debug: $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID) pyramid-collect-debug-dlls
+
+$(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID): $(addprefix $(BUILD_DIR_WIN_DEBUG)/,$(OBJS_WIN_DEBUG_PYRAMID))
 	$(CXX_WIN) $^ -o $@ $(LDFLAGS_WIN)
 
 # Generic compilation rules for Windows debug
@@ -308,6 +359,17 @@ freecell-collect-debug-dlls: $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_FREECELL)
 	@echo "Collecting Debug DLLs for FreeCell..."
 	@build/windows/collect_dlls.sh $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_FREECELL) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN_DEBUG)
 
+# Pyramid Solitaire
+.PHONY: pyramid-collect-dlls
+pyramid-collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN_PYRAMID)
+	@echo "Collecting DLLs for Pyramid Solitaire..."
+	@build/windows/collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN_PYRAMID) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
+
+.PHONY: pyramid-collect-debug-dlls
+pyramid-collect-debug-dlls: $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID)
+	@echo "Collecting Debug DLLs for Pyramid Solitaire..."
+	@build/windows/collect_dlls.sh $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN_DEBUG)
+
 # Clean targets
 .PHONY: clean
 clean:
@@ -320,6 +382,8 @@ clean:
 	rm -f $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_SPIDER)
 	rm -f $(BUILD_DIR_LINUX)/$(TARGET_LINUX_FREECELL)
 	rm -f $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_FREECELL)
+	rm -f $(BUILD_DIR_LINUX)/$(TARGET_LINUX_PYRAMID)
+	rm -f $(BUILD_DIR_LINUX_DEBUG)/$(TARGET_LINUX_DEBUG_PYRAMID)
 
 # Help target
 .PHONY: help
@@ -332,11 +396,13 @@ help:
 	@echo "  make klondike         - Build Klondike Solitaire for Linux with dual-engine support"
 	@echo "  make spider           - Build Spider Solitaire for Linux"
 	@echo "  make freecell         - Build FreeCell for Linux"
+	@echo "  make pyramid          - Build Pyramid Solitaire for Linux with dual-engine support"
 	@echo "  make solitaire        - Alias for make klondike"
 	@echo ""
 	@echo "  make all-klondike     - Build Klondike Solitaire for Linux and Windows"
 	@echo "  make all-spider       - Build Spider Solitaire for Linux and Windows"
 	@echo "  make all-freecell     - Build FreeCell for Linux and Windows"
+	@echo "  make all-pyramid      - Build Pyramid Solitaire for Linux and Windows"
 	@echo "  make all-solitaire    - Alias for make all-klondike"
 	@echo ""
 	@echo "  make all-linux        - Build all games for Linux with OpenGL support"
@@ -345,24 +411,28 @@ help:
 	@echo "  make klondike-linux   - Build Klondike Solitaire for Linux with OpenGL support"
 	@echo "  make spider-linux     - Build Spider Solitaire for Linux"
 	@echo "  make freecell-linux   - Build FreeCell for Linux"
+	@echo "  make pyramid-linux    - Build Pyramid Solitaire for Linux with OpenGL support"
 	@echo ""
 	@echo "  make klondike-linux-debug - Build Klondike Solitaire for Linux with debug symbols and OpenGL"
 	@echo "  make spider-linux-debug   - Build Spider Solitaire for Linux with debug symbols"
 	@echo "  make freecell-linux-debug - Build FreeCell for Linux with debug symbols"
+	@echo "  make pyramid-linux-debug  - Build Pyramid Solitaire for Linux with debug symbols"
 	@echo ""
 	@echo "  make klondike-windows     - Build Klondike Solitaire for Windows (requires MinGW)"
 	@echo "  make spider-windows       - Build Spider Solitaire for Windows (requires MinGW)"
 	@echo "  make freecell-windows     - Build FreeCell for Windows (requires MinGW)"
+	@echo "  make pyramid-windows      - Build Pyramid Solitaire for Windows (requires MinGW)"
 	@echo ""
 	@echo "  make klondike-windows-debug - Build Klondike Solitaire for Windows with debug symbols"
 	@echo "  make spider-windows-debug   - Build Spider Solitaire for Windows with debug symbols"
 	@echo "  make freecell-windows-debug - Build FreeCell for Windows with debug symbols"
+	@echo "  make pyramid-windows-debug  - Build Pyramid Solitaire for Windows with debug symbols"
 	@echo ""
 	@echo "  make all-debug        - Build all games for Linux and Windows with debug symbols"
 	@echo "  make clean            - Remove all build files"
 	@echo "  make help             - Show this help message"
 	@echo ""
-	@echo "Klondike Solitaire now includes dual-engine support:"
+	@echo "Klondike and Pyramid Solitaire now include dual-engine support:"
 	@echo "  - Cairo (CPU-based, all platforms)"
 	@echo "  - OpenGL 3.4 (GPU-accelerated, Linux only)"
 	@echo ""
