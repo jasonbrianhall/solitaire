@@ -552,23 +552,17 @@ void PyramidGame::drawWastePile() {
   }
 }
 
-// Draw the foundation piles (where aces build up to kings)
-// DISABLED FOR PYRAMID SOLITAIRE - not used in this game
+// Draw the foundation piles (removed cards that sum to 13 or Kings alone)
+// In Pyramid Solitaire, this shows the pile of removed card pairs
 void PyramidGame::drawFoundationPiles() {
-  // Foundation piles not used in Pyramid Solitaire - do nothing
-  return;
-}
-
-// Draw the discard pile (matched cards that sum to 13)
-void PyramidGame::drawDiscardPile() {
-  // Position discard pile on far right of waste pile
-  // waste is at: current_card_spacing_ + current_card_width_ + current_card_spacing_
-  // discard is further right: waste_x + current_card_width_ + current_card_spacing_
-  int x = current_card_spacing_ + (2 * current_card_width_) + (2 * current_card_spacing_);
+  // Position foundation pile next to the discard pile on the right
+  // Layout: Stock | Waste | Foundation (Removed Cards) | Discard
+  int x = current_card_spacing_ + (3 * current_card_width_) + (3 * current_card_spacing_);
   int y = current_card_spacing_;
   
+  // Draw foundation pile for removed cards (sum to 13)
   if (foundation_[0].empty()) {
-    // Draw empty pile outline if no cards discarded yet
+    // Draw empty pile outline
     if (rendering_engine_ == RenderingEngine::CAIRO) {
       drawEmptyPile(buffer_cr_, x, y);
     }
@@ -578,7 +572,7 @@ void PyramidGame::drawDiscardPile() {
     }
 #endif
   } else {
-    // Draw the top card of the discard pile
+    // Draw the top card of the removed pile
     const auto &top_card = foundation_[0].back();
     if (rendering_engine_ == RenderingEngine::CAIRO) {
       drawCard(buffer_cr_, x, y, &top_card, true);
@@ -589,6 +583,14 @@ void PyramidGame::drawDiscardPile() {
     }
 #endif
   }
+}
+
+// Draw removed cards count (complementary display to foundation pile)
+void PyramidGame::drawDiscardPile() {
+  // This space can be used for card count or other UI elements
+  // The actual removed cards are displayed in drawFoundationPiles()
+  // Optionally show a count here
+  return;
 }
 
 // Draw the tableau piles (the main playing area)
@@ -635,23 +637,14 @@ void PyramidGame::drawTableauPiles() {
             
             const auto &tableau_card = pile[card_idx];
             
-            // Check if this card is being dragged - if so, skip drawing it
-            // This reveals what's underneath (the next card in the pile)
-            bool card_is_dragging = 
-                (dragging_ && 
-                 drag_source_pile_ == (first_tableau_index + row) &&
-                 drag_source_card_idx_ == card_idx);
-            
-            if (!card_is_dragging) {
-                if (rendering_engine_ == RenderingEngine::CAIRO) {
-                    drawCard(buffer_cr_, card_x, card_y, &tableau_card.card, tableau_card.face_up);
-                }
-#ifdef USEOPENGL            
-                else if (rendering_engine_ == RenderingEngine::OPENGL) {
-                    drawCard_gl(tableau_card.card, card_x, card_y, tableau_card.face_up);
-                }
-#endif
+            if (rendering_engine_ == RenderingEngine::CAIRO) {
+                drawCard(buffer_cr_, card_x, card_y, &tableau_card.card, tableau_card.face_up);
             }
+#ifdef USEOPENGL            
+            else if (rendering_engine_ == RenderingEngine::OPENGL) {
+                drawCard_gl(tableau_card.card, card_x, card_y, tableau_card.face_up);
+            }
+#endif
         }
         
         // Draw empty pile outline if this row/pile is empty

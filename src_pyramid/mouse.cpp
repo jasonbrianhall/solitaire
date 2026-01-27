@@ -112,11 +112,47 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
       int first_tableau_index = max_foundation_index + 1;
 
       // In Pyramid Solitaire:
-      // - Can't drag to foundation piles
-      // - Can only drag to pyramid/waste cards to pair them
+      // - Can drag Kings to foundation pile (they are removed alone)
+      // - Can drag any card pair that sums to 13 to foundation pile
+      // - Can also drag to pyramid/waste cards to pair them
       // - Pair removal: two cards that sum to 13, or King alone
 
-      if (target_pile >= first_tableau_index) {
+      // Dragging to Foundation pile (where removed cards go)
+      if (target_pile == 2) {
+        // Check if dragged card is a King (can be removed alone)
+        std::vector<cardlib::Card> empty_target;
+        
+        if (game->canMoveToPile(game->drag_cards_, empty_target, true)) {
+          // King alone - remove it to foundation
+          
+          // Remove from source
+          int source_tableau_idx = -1;
+          if (game->drag_source_pile_ >= first_tableau_index) {
+            source_tableau_idx = game->drag_source_pile_ - first_tableau_index;
+            if (source_tableau_idx >= 0 && static_cast<size_t>(source_tableau_idx) < game->tableau_.size()) {
+              auto &source_tableau = game->tableau_[source_tableau_idx];
+              int source_card_idx = game->drag_source_card_idx_;
+              if (source_card_idx >= 0 && source_card_idx < static_cast<int>(source_tableau.size())) {
+                game->foundation_[0].push_back(source_tableau[source_card_idx].card);
+                source_tableau.erase(source_tableau.begin() + source_card_idx);
+                // Flip new top card if exists
+                if (!source_tableau.empty() && !source_tableau.back().face_up) {
+                  source_tableau.back().face_up = true;
+                }
+              }
+            }
+          } else if (game->drag_source_pile_ == 1) {
+            // From waste pile
+            if (!game->waste_.empty()) {
+              game->foundation_[0].push_back(game->waste_.back());
+              game->waste_.pop_back();
+            }
+          }
+          
+          move_successful = true;
+          game->playSound(GameSoundEvent::CardPlace);
+        }
+      } else if (target_pile >= first_tableau_index) {
         // Dragging to a pyramid card
         int tableau_idx = target_pile - first_tableau_index;
         if (tableau_idx >= 0 && static_cast<size_t>(tableau_idx) < game->tableau_.size()) {
@@ -128,7 +164,7 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
 
             // Check if cards can be paired (sum to 13)
             if (game->canMoveToPile(game->drag_cards_, target_cards, false)) {
-              // Move both cards to discard pile
+              // Move both cards to foundation pile
               
               // Remove from source
               int source_tableau_idx = -1;
@@ -150,14 +186,14 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
               } else if (game->drag_source_pile_ == 1) {
                 // From waste pile
                 if (!game->waste_.empty()) {
-                  game->foundation_[0].push_back(game->waste_.back());  // Move to discard
+                  game->foundation_[0].push_back(game->waste_.back());  // Move to foundation
                   game->waste_.pop_back();
                 }
               }
 
-              // Move target to discard
+              // Move target to foundation
               if (!tableau_pile.empty()) {
-                game->foundation_[0].push_back(tableau_pile.back().card);  // Move to discard
+                game->foundation_[0].push_back(tableau_pile.back().card);  // Move to foundation
                 tableau_pile.pop_back();
                 // Flip new top card if exists
                 if (!tableau_pile.empty() && !tableau_pile.back().face_up) {
@@ -176,7 +212,7 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
           std::vector<cardlib::Card> waste_card = {game->waste_.back()};
 
           if (game->canMoveToPile(game->drag_cards_, waste_card, false)) {
-            // Move both to discard pile
+            // Move both to foundation pile
             
             // Remove dragged card
             int source_tableau_idx = -1;
@@ -196,9 +232,9 @@ gboolean PyramidGame::onButtonRelease(GtkWidget *widget,
               }
             }
 
-            // Move waste card to discard
+            // Move waste card to foundation
             if (!game->waste_.empty()) {
-              game->foundation_[0].push_back(game->waste_.back());  // Move to discard
+              game->foundation_[0].push_back(game->waste_.back());  // Move to foundation
               game->waste_.pop_back();
             }
 
