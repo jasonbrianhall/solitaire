@@ -683,6 +683,22 @@ void PyramidGame::drawTableauPiles() {
                 continue;
             }
             
+            // DEAL ANIMATION FIX: Skip cards currently being animated in deal
+            if (deal_animation_active_) {
+                bool is_animating = false;
+                for (const auto &anim_card : deal_cards_) {
+                    if (anim_card.active &&
+                        anim_card.card.suit == tableau_card.card.suit &&
+                        anim_card.card.rank == tableau_card.card.rank) {
+                        is_animating = true;
+                        break;
+                    }
+                }
+                if (is_animating) {
+                    continue;  // Skip this card - it's being animated
+                }
+            }
+            
             // Skip the card if it's currently being dragged
             int current_pile_index = first_tableau_index + row;
             if (dragging_ && drag_source_pile_ == current_pile_index && 

@@ -472,12 +472,21 @@ void PyramidGame::dealNextCard() {
   double start_x = current_card_spacing_;
   double start_y = current_card_spacing_;
 
-  // Calculate target position
-  double target_x = current_card_spacing_ +
-                    pile_index * (current_card_width_ + current_card_spacing_);
-  double target_y =
-      (current_card_spacing_ + current_card_height_ + current_vert_spacing_) +
-      card_index * current_vert_spacing_;
+  // FIXED: Calculate target position to match drawTableauPiles() positioning
+  int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+  int screen_width = 1024;
+  
+  const int HORIZ_SPACING = current_card_width_ + 15;
+  const int VERT_OVERLAP = current_card_height_ / 2;
+  
+  int row = pile_index;
+  int num_cards_in_row = row + 1;
+  int row_width = current_card_width_ + (num_cards_in_row - 1) * HORIZ_SPACING;
+  int row_start_x = (screen_width - row_width) / 2;
+  int row_y = base_y + row * VERT_OVERLAP;
+  
+  double target_x = row_start_x + (card_index * HORIZ_SPACING);
+  double target_y = row_y;
 
   // Create animation card
   AnimatedCard anim_card;

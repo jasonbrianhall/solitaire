@@ -320,6 +320,7 @@ private:
   void drawFoundationDuringWinAnimation(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
   void drawNormalFoundationPile(size_t pile_index, const std::vector<cardlib::Card> &pile, int x, int y);
   void drawTableauPiles();
+  void drawTableauDuringDeal();  // Draw tableau while skipping cards being animated (DEAL ANIMATION FIX)
   void drawTableauDuringDealAnimation(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y);
   void drawNormalTableauPile(size_t pile_index, const std::vector<TableauCard> &pile, int x, int base_y);
   void drawDraggedCards();
