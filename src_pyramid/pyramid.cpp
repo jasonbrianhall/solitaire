@@ -966,7 +966,17 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
   
   // Get actual window width instead of hardcoded value
   GtkAllocation allocation;
+  // CRITICAL FIX: Get allocation from correct widget in OpenGL mode
+  // getPileAt calculates hit detection, must match drawTableauPiles() calculations!
+  #ifdef USEOPENGL
+  if (rendering_engine_ == RenderingEngine::OPENGL && gl_area_) {
+    gtk_widget_get_allocation(gl_area_, &allocation);
+  } else {
+    gtk_widget_get_allocation(game_area_, &allocation);
+  }
+  #else
   gtk_widget_get_allocation(game_area_, &allocation);
+  #endif
   int screen_width = allocation.width;
   
   const int HORIZ_SPACING = current_card_width_ + 15;    // Card width plus 15 pixel gap

@@ -465,6 +465,7 @@ private:
 #ifdef USEOPENGL
   static gboolean onGLRealize(GtkGLArea *area, gpointer data);
   static gboolean onGLRender(GtkGLArea *area, GdkGLContext *context, gpointer data);
+  static void onGLAreaSizeAllocate(GtkWidget *widget, GtkAllocation *allocation, gpointer data);
 #endif
 
   // ========================================================================

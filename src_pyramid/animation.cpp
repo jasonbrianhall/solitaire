@@ -72,7 +72,16 @@ void PyramidGame::updateCardFragments(AnimatedCard &card) {
     return;
 
   GtkAllocation allocation;
+  // FIX: Get allocation from correct widget in OpenGL mode
+  #ifdef USEOPENGL
+  if (rendering_engine_ == RenderingEngine::OPENGL && gl_area_) {
+    gtk_widget_get_allocation(gl_area_, &allocation);
+  } else {
+    gtk_widget_get_allocation(game_area_, &allocation);
+  }
+  #else
   gtk_widget_get_allocation(game_area_, &allocation);
+  #endif
 
   // Simple approach: just update existing fragments without creating new ones
   for (auto &fragment : card.fragments) {
@@ -145,7 +154,16 @@ void PyramidGame::updateWinAnimation() {
   // Update physics for all active cards
   bool all_cards_finished = true;
   GtkAllocation allocation;
+  // FIX: Get allocation from correct widget in OpenGL mode
+  #ifdef USEOPENGL
+  if (rendering_engine_ == RenderingEngine::OPENGL && gl_area_) {
+    gtk_widget_get_allocation(gl_area_, &allocation);
+  } else {
+    gtk_widget_get_allocation(game_area_, &allocation);
+  }
+  #else
   gtk_widget_get_allocation(game_area_, &allocation);
+  #endif
 
   const double explosion_min = allocation.height * EXPLOSION_THRESHOLD_MIN;
   const double explosion_max = allocation.height * EXPLOSION_THRESHOLD_MAX;
@@ -642,7 +660,21 @@ void PyramidGame::drawDiscardPile() {
 void PyramidGame::drawTableauPiles() {
     const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
     GtkAllocation allocation;
+    
+    // CRITICAL FIX: Get allocation from correct widget based on rendering engine
+    // In OpenGL mode, game_area_ is the Cairo widget (hidden in stack), but gl_area_ is the active one
+    // In Cairo mode, game_area_ is the active widget
+    // They have different sizes! This was the bug - we were getting the wrong width for centering!
+    #ifdef USEOPENGL
+    if (rendering_engine_ == RenderingEngine::OPENGL && gl_area_) {
+        gtk_widget_get_allocation(gl_area_, &allocation);
+    } else {
+        gtk_widget_get_allocation(game_area_, &allocation);
+    }
+    #else
     gtk_widget_get_allocation(game_area_, &allocation);
+    #endif
+    
     int screen_width = allocation.width;
     
     // Calculate pile index offsets

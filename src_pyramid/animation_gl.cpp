@@ -1456,6 +1456,32 @@ void PyramidGame::processNextAutoFinishMove_gl() {
     // Placeholder for auto-finish logic
 }
 
+// ============================================================================
+// OpenGL Window Resize Handler
+// ============================================================================
+// This handler ensures cards recenter when the OpenGL window is resized,
+// matching the behavior of Cairo mode. When the window is resized, we need to:
+// 1. Update card dimensions based on new window size
+// 2. Queue a render to redraw with new positions
+//
+// This solves the issue where in OpenGL mode, cards would stay on the left
+// side during a resize instead of recentering like in Cairo mode.
+
+void PyramidGame::onGLAreaSizeAllocate(GtkWidget *widget, GtkAllocation *allocation, gpointer data) {
+    PyramidGame *game = static_cast<PyramidGame *>(data);
+    
+    if (!game || !game->gl_area_) {
+        return;
+    }
+    
+    // Update card dimensions based on the new window size
+    game->updateCardDimensions(allocation->width, allocation->height);
+    
+    // Queue a render to force redraw with new card positions
+    // This is the critical fix that makes OpenGL behave like Cairo
+    gtk_gl_area_queue_render(GTK_GL_AREA(game->gl_area_));
+}
+
 void PyramidGame::cleanupOpenGLResources_gl() {
     if (cardShaderProgram_gl_ != 0) {
         glDeleteProgram(cardShaderProgram_gl_);

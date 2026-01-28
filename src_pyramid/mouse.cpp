@@ -85,7 +85,17 @@ gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
           
           // Get actual window width instead of hardcoded value
           GtkAllocation allocation;
+          // CRITICAL FIX: Get allocation from correct widget in OpenGL mode
+          // Drag offset calculations must match getPileAt() and drawTableauPiles()!
+          #ifdef USEOPENGL
+          if (game->rendering_engine_ == PyramidGame::RenderingEngine::OPENGL && game->gl_area_) {
+            gtk_widget_get_allocation(game->gl_area_, &allocation);
+          } else {
+            gtk_widget_get_allocation(game->game_area_, &allocation);
+          }
+          #else
           gtk_widget_get_allocation(game->game_area_, &allocation);
+          #endif
           int screen_width = allocation.width;
           
           int row = tableau_idx;
