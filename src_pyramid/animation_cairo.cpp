@@ -474,7 +474,9 @@ void PyramidGame::dealNextCard() {
 
   // FIXED: Calculate target position to match drawTableauPiles() positioning
   int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-  int screen_width = 1024;
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(game_area_, &allocation);
+  int screen_width = allocation.width;
   
   const int HORIZ_SPACING = current_card_width_ + 15;
   const int VERT_OVERLAP = current_card_height_ / 2;

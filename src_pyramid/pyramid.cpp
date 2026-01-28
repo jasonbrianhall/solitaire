@@ -228,6 +228,13 @@ bool PyramidGame::switchRenderingEngine(RenderingEngine newEngine) {
     gtk_widget_queue_draw(current_widget);
   }
   
+  
+  // ✅ FIX: Update cached dimensions when switching engines
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(current_widget, &allocation);
+  if (allocation.width > 0 && allocation.height > 0) {
+    updateCardDimensions(allocation.width, allocation.height);
+  }
   // CLEAR AND REBUILD ALL CACHES - Forces complete redraw of entire screen
   clearAndRebuildCaches();
   
