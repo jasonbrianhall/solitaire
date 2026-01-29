@@ -24,7 +24,7 @@ SRCS_WIN_FREECELL = src_freecell/windowsaudioplayer.cpp
 
 # Source files for Pyramid Solitaire
 SRCS_COMMON_PYRAMID = src_pyramid/pyramid.cpp src_pyramid/cardlib.cpp src_pyramid/sound.cpp src_pyramid/animation_cairo.cpp src_pyramid/keyboard.cpp src_pyramid/audiomanager.cpp src_pyramid/mouse.cpp src_pyramid/animation.cpp
-SRCS_LINUX_PYRAMID = src_pyramid/pulseaudioplayer.cpp src_pyramid/animation_gl.cpp 
+SRCS_LINUX_PYRAMID = src_pyramid/pulseaudioplayer.cpp src_pyramid/animation_gl.cpp  src_pyramid/render_gl_text.cpp
 SRCS_WIN_PYRAMID = src_pyramid/windowsaudioplayer.cpp
 
 # Use pkg-config for dependencies
