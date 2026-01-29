@@ -111,8 +111,12 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   // ========================================================================
   {
       const double margin = 10.0;
-      const int title_font_size = 24;
-      const int rules_font_size = 14;
+      
+      // Make font sizes responsive based on window width
+      // Title: scales from ~16px (small screen) to ~32px (large screen)
+      // Rules: scales from ~10px (small screen) to ~18px (large screen)
+      int title_font_size = std::max(16, std::min(32, allocation.width / 60));
+      int rules_font_size = std::max(10, std::min(18, allocation.width / 100));
       
       // Gold color: #FFD700 = RGB(1.0, 0.843, 0.0)
       const double gold_r = 1.0;
@@ -150,14 +154,15 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
       
       // Draw rules below title with matching gold color
       double rules_y = title_y + 30.0;
-      double rules_line_height = 16.0;
+      double rules_line_height = rules_font_size + 2.0;
       
       const char *rules[] = {
+          "Goal: Clear the pyramid by removing all 28 cards",
           "Match pairs that sum to 13:",
           "A+Q=13   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
       };
       
-      for (int i = 0; i < 2; i++) {
+      for (int i = 0; i < 3; i++) {
           double rule_width = cairo_get_text_width(game->buffer_cr_, rules[i], rules_font_size);
           double rule_x = allocation.width - rule_width - margin;
           

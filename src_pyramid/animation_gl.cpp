@@ -1453,12 +1453,17 @@ void PyramidGame::renderFrame_gl() {
     // Draw "Pyramid Solitaire Rules" title with drop shadow in top right corner
     // ========================================================================
     {
+        // Make font sizes responsive based on window width
+        // Title: scales from ~16px (small screen) to ~32px (large screen)
+        // Rules: scales from ~10px (small screen) to ~18px (large screen)
+        int font_size = std::max(16, std::min(32, allocation.width / 60));
+        int rules_font_size = std::max(10, std::min(18, allocation.width / 100));
+        int margin = 10;
+        
         // Gold color: #FFD700 = RGB(1.0, 0.843, 0.0)
         gl_set_color(1.0f, 0.843f, 0.0f);  // Warm gold text
         
         const char *title_text = "Pyramid Solitaire Rules";
-        int font_size = 24;
-        int margin = 10;
         
         // Calculate text width to position from right edge
         float text_width = gl_calculate_text_width(title_text, font_size);
@@ -1479,15 +1484,15 @@ void PyramidGame::renderFrame_gl() {
         
         // Draw rules below the title
         int rules_y = text_y + 30;
-        int rules_font_size = 14;
-        int rules_line_height = 16;
+        int rules_line_height = rules_font_size + 2;
         
         const char *rules[] = {
+            "Goal: Clear the pyramid by removing all 28 cards",
             "Match pairs that sum to 13:",
             "A+Q=13\n   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
         };
         
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
             float rule_width = gl_calculate_text_width(rules[i], rules_font_size);
             int rule_x = allocation.width - (int)rule_width - margin;
             
