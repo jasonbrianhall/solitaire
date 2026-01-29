@@ -1047,6 +1047,96 @@ std::pair<int, int> PyramidGame::getPileAt(int x, int y) const {
   return {-1, -1};;
 }
 
+std::pair<int,int> PyramidGame::getPileLocation(int pile_index) const
+{
+    // --- 1. STOCK (pile 0) ---
+    if (pile_index == 0) {
+        int x = current_card_spacing_;
+        int y = current_card_spacing_;
+        return {x, y};
+    }
+
+    // --- 2. WASTE (pile 1) ---
+    if (pile_index == 1) {
+        int x = 2 * current_card_spacing_ + current_card_width_;
+        int y = current_card_spacing_;
+        return {x, y};
+    }
+
+    // --- 3. FOUNDATIONS (pile 2 ... 2+foundation_.size()-1) ---
+    int foundation_start = 2;
+    int foundation_end   = foundation_start + static_cast<int>(foundation_.size()) - 1;
+
+    if (pile_index >= foundation_start && pile_index <= foundation_end) {
+        int idx = pile_index - foundation_start;
+
+        int x = 3 * (current_card_width_ + current_card_spacing_) +
+                idx * (current_card_width_ + current_card_spacing_);
+        int y = current_card_spacing_;
+        return {x, y};
+    }
+
+    // --- 4. TABLEAU (pyramid rows) ---
+    int tableau_start = foundation_end + 1;
+    int tableau_row   = pile_index - tableau_start;
+
+    if (tableau_row >= 0 && tableau_row < static_cast<int>(tableau_.size())) {
+
+        // Compute screen width (must match getPileAt)
+        GtkAllocation allocation;
+    #ifdef USEOPENGL
+        if (rendering_engine_ == RenderingEngine::OPENGL && gl_area_) {
+            gtk_widget_get_allocation(gl_area_, &allocation);
+        } else {
+            gtk_widget_get_allocation(game_area_, &allocation);
+        }
+    #else
+        gtk_widget_get_allocation(game_area_, &allocation);
+    #endif
+        int screen_width = allocation.width;
+
+        const int HORIZ_SPACING = current_card_width_ + 15;
+        const int VERT_OVERLAP  = current_card_height_ / 2;
+
+        int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+
+        int num_cards = tableau_row + 1;
+        int row_width = current_card_width_ + (num_cards - 1) * HORIZ_SPACING;
+        int row_start_x = (screen_width - row_width) / 2;
+        int row_y = base_y + tableau_row * VERT_OVERLAP;
+
+        // Find the accessible card in this row
+        const auto &row = tableau_[tableau_row];
+
+        // Scan from rightmost to leftmost (topmost visible)
+        for (int i = static_cast<int>(row.size()) - 1; i >= 0; i--) {
+            const auto &tc = row[i];
+            if (!tc.removed && tc.face_up) {
+                // Check if blocked
+                bool blocked = false;
+                if (tableau_row < static_cast<int>(tableau_.size()) - 1) {
+                    const auto &below = tableau_[tableau_row + 1];
+                    if (i < below.size() && below[i].face_up && !below[i].removed)
+                        blocked = true;
+                    if (i + 1 < below.size() && below[i+1].face_up && !below[i+1].removed)
+                        blocked = true;
+                }
+                if (!blocked) {
+                    int x = row_start_x + i * HORIZ_SPACING;
+                    return {x, row_y};
+                }
+            }
+        }
+
+        // If row is empty or all removed → return slot position
+        return {row_start_x, row_y};
+    }
+
+    // --- INVALID ---
+    return {-1, -1};
+}
+
+
 bool PyramidGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
                                   const std::vector<cardlib::Card> &target,
                                   bool is_foundation) const {

@@ -507,6 +507,7 @@ private:
   // UTILITY METHODS
   // ========================================================================
   std::pair<int, int> getPileAt(int x, int y) const;
+  std::pair<int, int> getPileLocation(int pile_index) const;
   void refreshDisplay();
   void toggleFullscreen();
   void restartGame();
