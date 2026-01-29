@@ -4,6 +4,8 @@
 // Pyramid Solitaire - Complete Keyboard input handling
 // Arrow keys navigate cards, Enter to select/pair, Space for stock
 
+static int location=0;
+
 gboolean PyramidGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
                                    gpointer data) {
   (void)widget;  // Unused parameter
@@ -80,15 +82,25 @@ gboolean PyramidGame::onKeyPress(GtkWidget *widget, GdkEventKey *event,
 
   case GDK_KEY_Up:
   case GDK_KEY_w:
-  case GDK_KEY_W:
+  case GDK_KEY_W: {
     // Navigate up through pyramid (toward top)
     game->navigateKeyboard(-1);
+    auto loc = game->getPileLocation(location);
+    printf("getPileLocation(%d) -> x=%d y=%d\n",
+           location, loc.first, loc.second);
+    location--;
     return TRUE;
+  }
 
-  case GDK_KEY_Down:
+  case GDK_KEY_Down: {
     // Navigate down through pyramid (toward bottom)
     game->navigateKeyboard(1);
+    auto loc = game->getPileLocation(location);
+    printf("getPileLocation(%d) -> x=%d y=%d\n",
+           location, loc.first, loc.second);
+    location++;
     return TRUE;
+  }
 
   case GDK_KEY_Left:
   case GDK_KEY_a:
@@ -234,9 +246,6 @@ void PyramidGame::navigateKeyboard(int direction) {
     int tableau_idx = selected_pile_ - first_tableau_index;
     
     if (tableau_idx >= 0 && tableau_idx < static_cast<int>(tableau_.size())) {
-      const auto &pile = tableau_[tableau_idx];
-      int num_cards_in_row = tableau_idx + 1;
-      
       // Handle vertical navigation (up/down to different rows)
       if (direction > 0) {
         // Move down (toward bottom row, more cards)
