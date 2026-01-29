@@ -2,6 +2,132 @@
 #include <GL/gl.h>
 #include "render_gl_text.h"
 #include "Monospace.h"
+#include <stdio.h>
+#include <stddef.h>
+
+static Mat4 mat4_identity(void) {
+    Mat4 m = {0};
+    m.m[0] = m.m[5] = m.m[10] = m.m[15] = 1.0f;
+    return m;
+}
+
+static Mat4 mat4_ortho(float left, float right, float bottom, float top, float near, float far) {
+    Mat4 m = mat4_identity();
+    m.m[0] = 2.0f / (right - left);
+    m.m[5] = 2.0f / (top - bottom);
+    m.m[10] = -2.0f / (far - near);
+    m.m[12] = -(right + left) / (right - left);
+    m.m[13] = -(top + bottom) / (top - bottom);
+    m.m[14] = -(far + near) / (far - near);
+    return m;
+}
+
+// Shader sources
+static const char *vertex_shader = 
+    "#version 330 core\n"
+    "layout(location = 0) in vec2 position;\n"
+    "layout(location = 1) in vec4 color;\n"
+    "uniform mat4 projection;\n"
+    "out vec4 vertexColor;\n"
+    "void main() {\n"
+    "    gl_Position = projection * vec4(position, 0.0, 1.0);\n"
+    "    vertexColor = color;\n"
+    "}\n";
+
+static const char *fragment_shader =
+    "#version 330 core\n"
+    "in vec4 vertexColor;\n"
+    "out vec4 FragColor;\n"
+    "void main() {\n"
+    "    FragColor = vertexColor;\n"
+    "}\n";
+
+static GLuint compile_shader(const char *src, GLenum type) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &src, NULL);
+    glCompileShader(shader);
+    
+    int success;
+    char log[512];
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(shader, 512, NULL, log);
+        fprintf(stderr, "[GL] Text shader compile error: %s\n", log);
+    }
+    return shader;
+}
+
+static GLuint create_program(const char *vs_src, const char *fs_src) {
+    GLuint vs = compile_shader(vs_src, GL_VERTEX_SHADER);
+    GLuint fs = compile_shader(fs_src, GL_FRAGMENT_SHADER);
+    GLuint prog = glCreateProgram();
+    glAttachShader(prog, vs);
+    glAttachShader(prog, fs);
+    glLinkProgram(prog);
+    
+    int success;
+    char log[512];
+    glGetProgramiv(prog, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(prog, 512, NULL, log);
+        fprintf(stderr, "[GL] Text program link error: %s\n", log);
+    }
+    
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    return prog;
+}
+
+void gl_init(void) {
+    if (gl_state.program) return;  // Already initialized
+    
+    fprintf(stderr, "[GL] Initializing text renderer\n");
+    
+    gl_state.program = create_program(vertex_shader, fragment_shader);
+    
+    glGenVertexArrays(1, &gl_state.vao);
+    glGenBuffers(1, &gl_state.vbo);
+    
+    glBindVertexArray(gl_state.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, gl_state.vbo);
+    glBufferData(GL_ARRAY_BUFFER, 100000 * sizeof(Vertex), NULL, GL_DYNAMIC_DRAW);
+    
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, x));
+    glEnableVertexAttribArray(0);
+    
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, r));
+    glEnableVertexAttribArray(1);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    
+    gl_state.color[0] = 1.0f;
+    gl_state.color[1] = 1.0f;
+    gl_state.color[2] = 1.0f;
+    gl_state.color[3] = 1.0f;
+    
+    fprintf(stderr, "[GL] Text renderer initialized\n");
+}
+
+void gl_setup_2d_projection(int width, int height) {
+    if (width <= 0) width = 1920;
+    if (height <= 0) height = 1080;
+    gl_state.projection = mat4_ortho(0, width, height, 0, -1, 1);
+}
+
+void gl_set_color(float r, float g, float b) {
+    gl_state.color[0] = r;
+    gl_state.color[1] = g;
+    gl_state.color[2] = b;
+    gl_state.color[3] = 1.0f;
+}
+
+void gl_set_color_alpha(float r, float g, float b, float a) {
+    gl_state.color[0] = r;
+    gl_state.color[1] = g;
+    gl_state.color[2] = b;
+    gl_state.color[3] = a;
+}
 
 // Calculate actual text width based on glyph metrics
 // Use advance field which includes proper character spacing
@@ -85,10 +211,11 @@ void gl_draw_text_simple(const char *text, int x, int y, int font_size) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         draw_vertices(verts, vert_count, GL_TRIANGLES);
+        glDisable(GL_BLEND);
     }
 }
 
-void draw_vertices(Vertex *verts, int count, GLenum mode) {
+static void draw_vertices(Vertex *verts, int count, GLenum mode) {
     glUseProgram(gl_state.program);
     
     GLint proj_loc = glGetUniformLocation(gl_state.program, "projection");
