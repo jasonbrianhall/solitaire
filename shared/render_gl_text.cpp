@@ -1,22 +1,11 @@
 #include <GL/glew.h>
 #include <GL/gl.h>
+#include "render_gl_text.h"
 #include "Monospace.h"
-
-// These should be defined elsewhere in your render system
-extern struct {
-    float color[4];
-} gl_state;
-
-extern void draw_vertices(void *verts, int count, int mode);
-
-typedef struct {
-    float x, y;
-    float r, g, b, a;
-} Vertex;
 
 // Calculate actual text width based on glyph metrics
 // Use advance field which includes proper character spacing
-static float gl_calculate_text_width(const char *text, int font_size) {
+float gl_calculate_text_width(const char *text, int font_size) {
     if (!text || !text[0]) return 0.0f;
     
     float ref_height = (float)FONT_MAX_HEIGHT;
@@ -97,4 +86,17 @@ void gl_draw_text_simple(const char *text, int x, int y, int font_size) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         draw_vertices(verts, vert_count, GL_TRIANGLES);
     }
+}
+
+void draw_vertices(Vertex *verts, int count, GLenum mode) {
+    glUseProgram(gl_state.program);
+    
+    GLint proj_loc = glGetUniformLocation(gl_state.program, "projection");
+    glUniformMatrix4fv(proj_loc, 1, GL_FALSE, gl_state.projection.m);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, gl_state.vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(Vertex), verts);
+    
+    glBindVertexArray(gl_state.vao);
+    glDrawArrays(mode, 0, count);
 }
