@@ -482,15 +482,21 @@ private:
   void flipTopTableauCard(int tableau_index);
 
   // ========================================================================
-  // KEYBOARD NAVIGATION METHODS
+  // KEYBOARD NAVIGATION METHODS - COMPLETE IMPLEMENTATION
   // ========================================================================
-  void selectNextPile();
-  void selectPreviousPile();
-  void selectCardUp();
-  void selectCardDown();
-  void activateSelected();
+  // Core keyboard handling
+  void handleStockPileKeyboard();              // Draw from stock via keyboard
+  void navigateKeyboard(int direction);        // Navigate to next/prev card
+  void cycleFocusKeyboard();                   // Tab between sections
+  void handleCardSelectionKeyboard();          // Select/pair cards with keyboard
+  void showKeyboardHelp();                     // Display keyboard help
+  
+  // Keyboard helper functions
+  bool isValidNavigationTarget(int pile_index, int card_idx);   // Check if can navigate to
+  bool isTableauCardAccessible(int row_idx, int card_idx);      // Check if pyramid card is accessible
+  
+  // Legacy support
   void resetKeyboardNavigation();
-  bool tryMoveSelectedCard();
   void highlightSelectedCard(cairo_t *cr);
 
 #ifdef USEOPENGL

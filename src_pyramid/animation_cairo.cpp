@@ -107,82 +107,38 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   }
 
   // ========================================================================
-  // Draw "Pyramid Solitaire Rules" title with drop shadow in top right corner
+  // Draw "Pyramid Solitaire" title and rules in top right corner
   // ========================================================================
   {
       const double margin = 10.0;
-      
-      // Make font sizes responsive based on window width
-      // Title: scales from ~16px (small screen) to ~32px (large screen)
-      // Rules: scales from ~10px (small screen) to ~18px (large screen)
-      int title_font_size = std::max(16, std::min(32, allocation.width / 60));
-      int rules_font_size = std::max(10, std::min(18, allocation.width / 100));
-      
-      // Gold color: #FFD700 = RGB(1.0, 0.843, 0.0)
-      const double gold_r = 1.0;
-      const double gold_g = 0.843;
-      const double gold_b = 0.0;
-      
-      // Shadow color (dark semi-transparent)
-      const double shadow_r = 0.0;
-      const double shadow_g = 0.0;
-      const double shadow_b = 0.0;
-      const double shadow_opacity = 0.6;
+      const int title_font_size = 24;
+      const int rules_font_size = 14;
       
       // Get text dimensions
-      double title_width = cairo_get_text_width(game->buffer_cr_, "Pyramid Solitaire Rules", title_font_size);
+      double title_width = cairo_get_text_width(game->buffer_cr_, "Pyramid Solitaire", title_font_size);
       double title_x = allocation.width - title_width - margin;
       double title_y = margin + title_font_size;
       
-      // Draw drop shadow (offset by 2 pixels right and down)
-      const double shadow_offset_x = 2.0;
-      const double shadow_offset_y = 2.0;
+      // Draw title in white
+      cairo_draw_text(game->buffer_cr_, "Pyramid Solitaire", title_x, title_y, 
+                     title_font_size, 1.0, 1.0, 1.0);
       
-      cairo_set_source_rgba(game->buffer_cr_, shadow_r, shadow_g, shadow_b, shadow_opacity);
-      cairo_select_font_face(game->buffer_cr_, "Monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-      cairo_set_font_size(game->buffer_cr_, title_font_size);
-      
-      cairo_text_extents_t extents;
-      cairo_text_extents(game->buffer_cr_, "Pyramid Solitaire Rules", &extents);
-      cairo_move_to(game->buffer_cr_, title_x - extents.x_bearing + shadow_offset_x, 
-                    title_y - extents.y_bearing + shadow_offset_y);
-      cairo_show_text(game->buffer_cr_, "Pyramid Solitaire Rules");
-      
-      // Draw title in warm gold with shadow effect
-      cairo_draw_text(game->buffer_cr_, "Pyramid Solitaire Rules", title_x, title_y, 
-                     title_font_size, gold_r, gold_g, gold_b);
-      
-      // Draw rules below title with matching gold color
+      // Draw rules below title
       double rules_y = title_y + 30.0;
-      double rules_line_height = rules_font_size + 2.0;
+      double rules_line_height = 16.0;
       
       const char *rules[] = {
-          "Goal: Clear the pyramid by removing all 28 cards",
-          "Match pairs that sum to 13:",
+          "Rules - Match pairs that sum to 13:",
           "A+Q=13   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
       };
       
-      for (int i = 0; i < 3; i++) {
+      for (int i = 0; i < 2; i++) {
           double rule_width = cairo_get_text_width(game->buffer_cr_, rules[i], rules_font_size);
           double rule_x = allocation.width - rule_width - margin;
           
-          // Draw shadow for rules text
-          cairo_set_source_rgba(game->buffer_cr_, shadow_r, shadow_g, shadow_b, shadow_opacity);
-          cairo_select_font_face(game->buffer_cr_, "Monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-          cairo_set_font_size(game->buffer_cr_, rules_font_size);
-          
-          cairo_text_extents_t rule_extents;
-          cairo_text_extents(game->buffer_cr_, rules[i], &rule_extents);
-          cairo_move_to(game->buffer_cr_, rule_x - rule_extents.x_bearing + shadow_offset_x,
-                       rules_y + (i * rules_line_height) - rule_extents.y_bearing + shadow_offset_y);
-          cairo_show_text(game->buffer_cr_, rules[i]);
-          
-          // Draw rules text in gold with slightly reduced brightness
-          const double rules_gold_r = 0.98;
-          const double rules_gold_g = 0.82;
-          const double rules_gold_b = 0.0;
+          // Slightly dimmer white for rules
           cairo_draw_text(game->buffer_cr_, rules[i], rule_x, rules_y + (i * rules_line_height),
-                         rules_font_size, rules_gold_r, rules_gold_g, rules_gold_b);
+                         rules_font_size, 0.9, 0.9, 0.9);
       }
   }
 
@@ -939,7 +895,7 @@ void PyramidGame::highlightSelectedCard(cairo_t *cr) {
   }
 
   // Calculate max foundation index (depends on game mode)
-  int max_foundation_index = 2 + foundation_.size() - 1;
+  int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
   // Calculate first tableau index
   int first_tableau_index = max_foundation_index + 1;
   
@@ -951,14 +907,14 @@ void PyramidGame::highlightSelectedCard(cairo_t *cr) {
       invalid_source = true;
     } else if (source_pile_ >= first_tableau_index) {
       int tableau_idx = source_pile_ - first_tableau_index;
-      if (tableau_idx < 0 || tableau_idx >= tableau_.size()) {
+      if (tableau_idx < 0 || tableau_idx >= static_cast<int>(tableau_.size())) {
         invalid_source = true;
       }
     } else if (source_pile_ == 1 && waste_.empty()) {
       invalid_source = true;
     } else if (source_pile_ >= 2 && source_pile_ <= max_foundation_index) {
       int foundation_idx = source_pile_ - 2;
-      if (foundation_idx < 0 || foundation_idx >= foundation_.size()) {
+      if (foundation_idx < 0 || foundation_idx >= static_cast<int>(foundation_.size())) {
         invalid_source = true;
       }
     }
@@ -972,6 +928,11 @@ void PyramidGame::highlightSelectedCard(cairo_t *cr) {
     }
   }
 
+  // Get screen width for pyramid centering calculations
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(game_area_, &allocation);
+  int screen_width = allocation.width;
+
   // Determine position based on pile type
   if (selected_pile_ == 0) {
     // Stock pile
@@ -982,35 +943,38 @@ void PyramidGame::highlightSelectedCard(cairo_t *cr) {
     x = 2 * current_card_spacing_ + current_card_width_;
     y = current_card_spacing_;
   } else if (selected_pile_ >= 2 && selected_pile_ <= max_foundation_index) {
-    // Foundation piles - critical fix here
+    // Foundation piles
     int foundation_idx = selected_pile_ - 2;
     
-    // Make sure foundation_idx is valid
-    if (foundation_idx >= 0 && foundation_idx < foundation_.size()) {
+    if (foundation_idx >= 0 && foundation_idx < static_cast<int>(foundation_.size())) {
       // Match the exact calculation from drawFoundationPiles()
       x = 3 * (current_card_width_ + current_card_spacing_) + 
           foundation_idx * (current_card_width_ + current_card_spacing_);
       y = current_card_spacing_;
     }
   } else if (selected_pile_ >= first_tableau_index) {
-    // Tableau piles
-    int tableau_idx = selected_pile_ - first_tableau_index;
-    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
-      x = current_card_spacing_ +
-          tableau_idx * (current_card_width_ + current_card_spacing_);
-
-      // For empty tableau piles, highlight the empty space
-      const auto &tableau_pile = tableau_[tableau_idx];
-      if (tableau_pile.empty()) {
-        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
-      } else if (selected_card_idx_ == -1 || selected_card_idx_ >= static_cast<int>(tableau_pile.size())) {
-        // If no card is selected or the index is invalid, highlight the top card
-        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-            (tableau_pile.size() - 1) * current_vert_spacing_;
-      } else {
-        // Highlight the specific selected card
-        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-            selected_card_idx_ * current_vert_spacing_;
+    // PYRAMID TABLEAU PILES - Must match drawTableauPiles() calculations exactly!
+    int row = selected_pile_ - first_tableau_index;
+    
+    if (row >= 0 && row < static_cast<int>(tableau_.size())) {
+      const auto &pile = tableau_[row];
+      
+      // Match drawTableauPiles() constants
+      const int HORIZ_SPACING = current_card_width_ + 15;
+      const int VERT_OVERLAP = current_card_height_ / 2;
+      const int base_y = current_card_spacing_ + current_card_height_ + current_vert_spacing_;
+      
+      int num_cards_in_row = row + 1;
+      int row_width = current_card_width_ + (num_cards_in_row - 1) * HORIZ_SPACING;
+      int row_start_x = (screen_width - row_width) / 2;
+      int row_y = base_y + row * VERT_OVERLAP;
+      
+      // Default to first card if no specific card index
+      int card_idx = (selected_card_idx_ == -1) ? 0 : selected_card_idx_;
+      
+      if (card_idx >= 0 && card_idx < static_cast<int>(pile.size())) {
+        x = row_start_x + (card_idx * HORIZ_SPACING);
+        y = row_y;
       }
     }
   }
@@ -1029,36 +993,6 @@ void PyramidGame::highlightSelectedCard(cairo_t *cr) {
   cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
                   current_card_height_ + 4);
   cairo_stroke(cr);
-
-  // If we have a card selected for movement, highlight all cards below it in a
-  // tableau pile
-  if (keyboard_selection_active_ && source_pile_ >= first_tableau_index && source_card_idx_ >= 0) {
-    int tableau_idx = source_pile_ - first_tableau_index;
-    if (tableau_idx >= 0 && tableau_idx < tableau_.size()) {
-      auto &tableau_pile = tableau_[tableau_idx];
-
-      if (!tableau_pile.empty() && source_card_idx_ < tableau_pile.size()) {
-        // Highlight all cards from the selected one to the bottom
-        cairo_set_source_rgba(cr, 0.0, 0.5, 1.0, 0.3); // Lighter blue for stack
-
-        x = current_card_spacing_ +
-            tableau_idx * (current_card_width_ + current_card_spacing_);
-        y = current_card_spacing_ + current_card_height_ + current_vert_spacing_ +
-            source_card_idx_ * current_vert_spacing_;
-
-        // Draw a single rectangle that covers all cards in the stack
-        int stack_height =
-            (tableau_pile.size() - source_card_idx_ - 1) * current_vert_spacing_ +
-            current_card_height_;
-
-        if (stack_height > 0) {
-          cairo_rectangle(cr, x - 2, y - 2, current_card_width_ + 4,
-                          stack_height + 4);
-          cairo_stroke(cr);
-        }
-      }
-    }
-  }
 }
 
 PyramidGame::~PyramidGame() {
