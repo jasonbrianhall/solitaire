@@ -107,28 +107,53 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   }
 
   // ========================================================================
-  // Draw "Pyramid Solitaire" title and rules in top right corner
+  // Draw "Pyramid Solitaire Rules" title with drop shadow in top right corner
   // ========================================================================
   {
       const double margin = 10.0;
       const int title_font_size = 24;
       const int rules_font_size = 14;
       
+      // Gold color: #FFD700 = RGB(1.0, 0.843, 0.0)
+      const double gold_r = 1.0;
+      const double gold_g = 0.843;
+      const double gold_b = 0.0;
+      
+      // Shadow color (dark semi-transparent)
+      const double shadow_r = 0.0;
+      const double shadow_g = 0.0;
+      const double shadow_b = 0.0;
+      const double shadow_opacity = 0.6;
+      
       // Get text dimensions
-      double title_width = cairo_get_text_width(game->buffer_cr_, "Pyramid Solitaire", title_font_size);
+      double title_width = cairo_get_text_width(game->buffer_cr_, "Pyramid Solitaire Rules", title_font_size);
       double title_x = allocation.width - title_width - margin;
       double title_y = margin + title_font_size;
       
-      // Draw title in white
-      cairo_draw_text(game->buffer_cr_, "Pyramid Solitaire", title_x, title_y, 
-                     title_font_size, 1.0, 1.0, 1.0);
+      // Draw drop shadow (offset by 2 pixels right and down)
+      const double shadow_offset_x = 2.0;
+      const double shadow_offset_y = 2.0;
       
-      // Draw rules below title
+      cairo_set_source_rgba(game->buffer_cr_, shadow_r, shadow_g, shadow_b, shadow_opacity);
+      cairo_select_font_face(game->buffer_cr_, "Monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+      cairo_set_font_size(game->buffer_cr_, title_font_size);
+      
+      cairo_text_extents_t extents;
+      cairo_text_extents(game->buffer_cr_, "Pyramid Solitaire Rules", &extents);
+      cairo_move_to(game->buffer_cr_, title_x - extents.x_bearing + shadow_offset_x, 
+                    title_y - extents.y_bearing + shadow_offset_y);
+      cairo_show_text(game->buffer_cr_, "Pyramid Solitaire Rules");
+      
+      // Draw title in warm gold with shadow effect
+      cairo_draw_text(game->buffer_cr_, "Pyramid Solitaire Rules", title_x, title_y, 
+                     title_font_size, gold_r, gold_g, gold_b);
+      
+      // Draw rules below title with matching gold color
       double rules_y = title_y + 30.0;
       double rules_line_height = 16.0;
       
       const char *rules[] = {
-          "Rules - Match pairs that sum to 13:",
+          "Match pairs that sum to 13:",
           "A+Q=13   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
       };
       
@@ -136,9 +161,23 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
           double rule_width = cairo_get_text_width(game->buffer_cr_, rules[i], rules_font_size);
           double rule_x = allocation.width - rule_width - margin;
           
-          // Slightly dimmer white for rules
+          // Draw shadow for rules text
+          cairo_set_source_rgba(game->buffer_cr_, shadow_r, shadow_g, shadow_b, shadow_opacity);
+          cairo_select_font_face(game->buffer_cr_, "Monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+          cairo_set_font_size(game->buffer_cr_, rules_font_size);
+          
+          cairo_text_extents_t rule_extents;
+          cairo_text_extents(game->buffer_cr_, rules[i], &rule_extents);
+          cairo_move_to(game->buffer_cr_, rule_x - rule_extents.x_bearing + shadow_offset_x,
+                       rules_y + (i * rules_line_height) - rule_extents.y_bearing + shadow_offset_y);
+          cairo_show_text(game->buffer_cr_, rules[i]);
+          
+          // Draw rules text in gold with slightly reduced brightness
+          const double rules_gold_r = 0.98;
+          const double rules_gold_g = 0.82;
+          const double rules_gold_b = 0.0;
           cairo_draw_text(game->buffer_cr_, rules[i], rule_x, rules_y + (i * rules_line_height),
-                         rules_font_size, 0.9, 0.9, 0.9);
+                         rules_font_size, rules_gold_r, rules_gold_g, rules_gold_b);
       }
   }
 

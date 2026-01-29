@@ -1450,12 +1450,13 @@ void PyramidGame::renderFrame_gl() {
     }
     
     // ========================================================================
-    // Draw "Pyramid Solitaire" title in top right corner
+    // Draw "Pyramid Solitaire Rules" title with drop shadow in top right corner
     // ========================================================================
     {
-        gl_set_color(1.0f, 1.0f, 1.0f);  // White text
+        // Gold color: #FFD700 = RGB(1.0, 0.843, 0.0)
+        gl_set_color(1.0f, 0.843f, 0.0f);  // Warm gold text
         
-        const char *title_text = "Pyramid Solitaire";
+        const char *title_text = "Pyramid Solitaire Rules";
         int font_size = 24;
         int margin = 10;
         
@@ -1466,23 +1467,37 @@ void PyramidGame::renderFrame_gl() {
         int text_x = allocation.width - (int)text_width - margin;
         int text_y = margin + font_size;
         
-        // Draw the title
+        // Draw drop shadow (offset by 2 pixels right and down)
+        const int shadow_offset_x = 2;
+        const int shadow_offset_y = 2;
+        gl_set_color(0.0f, 0.0f, 0.0f);  // Black shadow
+        gl_draw_text_simple(title_text, text_x + shadow_offset_x, text_y + shadow_offset_y, font_size);
+        
+        // Draw the main title in gold
+        gl_set_color(1.0f, 0.843f, 0.0f);  // Warm gold
         gl_draw_text_simple(title_text, text_x, text_y, font_size);
         
         // Draw rules below the title
-        gl_set_color(0.9f, 0.9f, 0.9f);  // Slightly dimmer white for rules
         int rules_y = text_y + 30;
         int rules_font_size = 14;
         int rules_line_height = 16;
         
         const char *rules[] = {
-            "Rules - Match pairs that sum to 13:",
+            "Match pairs that sum to 13:",
             "A+Q=13\n   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
         };
         
         for (int i = 0; i < 2; i++) {
             float rule_width = gl_calculate_text_width(rules[i], rules_font_size);
             int rule_x = allocation.width - (int)rule_width - margin;
+            
+            // Draw shadow for rules
+            gl_set_color(0.0f, 0.0f, 0.0f);  // Black shadow
+            gl_draw_text_simple(rules[i], rule_x + shadow_offset_x, 
+                              rules_y + (i * rules_line_height) + shadow_offset_y, rules_font_size);
+            
+            // Draw rules text in slightly dimmer gold
+            gl_set_color(0.98f, 0.82f, 0.0f);  // Slightly warmer gold
             gl_draw_text_simple(rules[i], rule_x, rules_y + (i * rules_line_height), rules_font_size);
         }
     }
