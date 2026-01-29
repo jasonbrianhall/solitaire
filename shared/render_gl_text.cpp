@@ -90,7 +90,8 @@ void gl_init(void) {
     
     glBindVertexArray(gl_state.vao);
     glBindBuffer(GL_ARRAY_BUFFER, gl_state.vbo);
-    glBufferData(GL_ARRAY_BUFFER, 100000 * sizeof(Vertex), NULL, GL_DYNAMIC_DRAW);
+    // INCREASED BUFFER SIZE: 1M vertices instead of 100K to prevent overflow
+    glBufferData(GL_ARRAY_BUFFER, 1000000 * sizeof(Vertex), NULL, GL_DYNAMIC_DRAW);
     
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, x));
     glEnableVertexAttribArray(0);
@@ -159,11 +160,13 @@ void gl_draw_text_simple(const char *text, int x, int y, int font_size) {
     float current_x = (float)x;
     float baseline_y = (float)y;
     
-    // Build vertex array
-    static Vertex verts[100000];
+    // Build vertex array - INCREASED SIZE to prevent overflow
+    // Each pixel becomes 2 triangles (6 vertices), so 1M vertices allows ~166K pixels
+    static Vertex verts[1000000];
     int vert_count = 0;
+    const int MAX_VERTS = 999994;  // Leave room for safety
     
-    for (int i = 0; text[i] && vert_count < 99990; i++) {
+    for (int i = 0; text[i] && vert_count < MAX_VERTS - 6; i++) {
         unsigned char ch = (unsigned char)text[i];
         const GlyphData *glyph = get_glyph(ch);
         
@@ -177,13 +180,13 @@ void gl_draw_text_simple(const char *text, int x, int y, int font_size) {
         float pixel_scale = scale;
         float glyph_top = baseline_y - (float)glyph->yoffset * scale;
         
-        for (int row = 0; row < glyph->height; row++) {
+        for (int row = 0; row < glyph->height && vert_count < MAX_VERTS - 6; row++) {
             float pixel_y = glyph_top + row * pixel_scale;
             
-            for (int col = 0; col < glyph->width; col++) {
+            for (int col = 0; col < glyph->width && vert_count < MAX_VERTS - 6; col++) {
                 unsigned char pixel = glyph->bitmap[row * glyph->width + col];
                 
-                if (pixel > 3 && vert_count < 99994) {
+                if (pixel > 3) {
                     float pixel_x = current_x + col * pixel_scale;
                     float alpha = gl_state.color[3] * ((float)pixel / 255.0f);
                     
