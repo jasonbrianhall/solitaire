@@ -187,6 +187,7 @@ void PyramidGame::handleStockPileKeyboard() {
 }
 
 void PyramidGame::navigateKeyboard(int direction) {
+  printf("Navigate Keyboard called\n");
   // Calculate pile indices (must match animation.cpp)
   int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
   int first_tableau_index = max_foundation_index + 1;
@@ -201,10 +202,6 @@ void PyramidGame::navigateKeyboard(int direction) {
     } else if (!waste_.empty()) {
       selected_pile_ = 1;  // Waste pile
       selected_card_idx_ = static_cast<int>(waste_.size()) - 1;  // Top card
-    } else if (!tableau_.empty()) {
-      // Start in pyramid - first row, first card
-      selected_pile_ = first_tableau_index;  // First tableau pile
-      selected_card_idx_ = 0;
     }
     refreshDisplay();
     return;

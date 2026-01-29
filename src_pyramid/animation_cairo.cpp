@@ -107,38 +107,67 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
   }
 
   // ========================================================================
-  // Draw "Pyramid Solitaire" title and rules in top right corner
+  // Draw "Pyramid Solitaire Rules" title with drop shadow in top right corner
   // ========================================================================
   {
       const double margin = 10.0;
-      const int title_font_size = 24;
-      const int rules_font_size = 14;
+      
+      // Make font sizes responsive based on window width
+      // Title: scales from ~16px (small screen) to ~32px (large screen)
+      // Rules: scales from ~10px (small screen) to ~18px (large screen)
+      int title_font_size = std::max(16, std::min(32, allocation.width / 60));
+      int rules_font_size = std::max(10, std::min(18, allocation.width / 100));
+      
+      const int shadow_offset_x = 2;
+      const int shadow_offset_y = 2;
+      
+      // Gold color: #FFD700 = RGB(1.0, 0.843, 0.0)
+      const double gold_r = 1.0;
+      const double gold_g = 0.843;
+      const double gold_b = 0.0;
+      
+      // Slightly warmer gold for rules
+      const double rules_gold_r = 0.98;
+      const double rules_gold_g = 0.82;
+      const double rules_gold_b = 0.0;
+      
+      const char *title_text = "Pyramid Solitaire Rules";
       
       // Get text dimensions
-      double title_width = cairo_get_text_width(game->buffer_cr_, "Pyramid Solitaire", title_font_size);
+      double title_width = cairo_get_text_width(game->buffer_cr_, title_text, title_font_size);
       double title_x = allocation.width - title_width - margin;
       double title_y = margin + title_font_size;
       
-      // Draw title in white
-      cairo_draw_text(game->buffer_cr_, "Pyramid Solitaire", title_x, title_y, 
-                     title_font_size, 1.0, 1.0, 1.0);
+      // Draw title shadow in black
+      cairo_draw_text(game->buffer_cr_, title_text, title_x + shadow_offset_x, title_y + shadow_offset_y, 
+                     title_font_size, 0.0, 0.0, 0.0);
+      
+      // Draw the main title in gold
+      cairo_draw_text(game->buffer_cr_, title_text, title_x, title_y, 
+                     title_font_size, gold_r, gold_g, gold_b);
       
       // Draw rules below title
       double rules_y = title_y + 30.0;
-      double rules_line_height = 16.0;
+      double rules_line_height = rules_font_size + 2;
       
       const char *rules[] = {
-          "Rules - Match pairs that sum to 13:",
-          "A+Q=13   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
+          "Goal: Clear the pyramid by removing all 28 cards",
+          "Match pairs that sum to 13:",
+          "A+Q=13  2+J=13  3+10=13  4+9=13  5+8=13  6+7=13  K=13"
       };
       
-      for (int i = 0; i < 2; i++) {
+      for (int i = 0; i < 3; i++) {
           double rule_width = cairo_get_text_width(game->buffer_cr_, rules[i], rules_font_size);
           double rule_x = allocation.width - rule_width - margin;
           
-          // Slightly dimmer white for rules
+          // Draw shadow for rules
+          cairo_draw_text(game->buffer_cr_, rules[i], rule_x + shadow_offset_x, 
+                         rules_y + (i * rules_line_height) + shadow_offset_y,
+                         rules_font_size, 0.0, 0.0, 0.0);
+          
+          // Draw rules text in slightly dimmer gold
           cairo_draw_text(game->buffer_cr_, rules[i], rule_x, rules_y + (i * rules_line_height),
-                         rules_font_size, 0.9, 0.9, 0.9);
+                         rules_font_size, rules_gold_r, rules_gold_g, rules_gold_b);
       }
   }
 
