@@ -9,8 +9,10 @@
 #include <GLFW/glfw3.h>
 #include <cmath>
 
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include "render_gl_text.h"
 
 // OpenGL 3.4 Shader sources
 static const char *VERTEX_SHADER_GL = R"(
@@ -1370,6 +1372,12 @@ void PyramidGame::renderFrame_gl() {
     GtkAllocation allocation;
     gtk_widget_get_allocation(gl_area_, &allocation);
     
+    // Initialize text rendering (only runs once)
+    gl_init();
+    
+    // Set up 2D projection for text rendering
+    gl_setup_2d_projection(allocation.width, allocation.height);
+    
     static int prev_width = -1, prev_height = -1;
     static bool first = true;
     if (first || allocation.width != prev_width || allocation.height != prev_height) {
@@ -1439,6 +1447,27 @@ void PyramidGame::renderFrame_gl() {
         !foundation_move_animation_active_ &&
         !stock_to_waste_animation_active_) {
         highlightSelectedCard_gl();
+    }
+    
+    // ========================================================================
+    // Draw "Pyramid Solitaire" title in top right corner
+    // ========================================================================
+    {
+        gl_set_color(1.0f, 1.0f, 1.0f);  // White text
+        
+        const char *title_text = "Pyramid Solitaire";
+        int font_size = 24;
+        int margin = 10;
+        
+        // Calculate text width to position from right edge
+        float text_width = gl_calculate_text_width(title_text, font_size);
+        
+        // Position at top right corner
+        int text_x = allocation.width - (int)text_width - margin;
+        int text_y = margin + font_size;
+        
+        // Draw the text
+        gl_draw_text_simple(title_text, text_x, text_y, font_size);
     }
 }
 

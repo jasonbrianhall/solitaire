@@ -3,9 +3,15 @@
 #include <fstream>
 #include <iostream>
 #include <sys/stat.h>
+
+#ifdef USEOPENGL
+#include "render_gl_text.h"
+#endif
+
 #ifdef _WIN32
 #include <direct.h>
 #endif
+
 
 // ============================================================================
 // PYRAMID SOLITAIRE - ANIMATION SYSTEM
