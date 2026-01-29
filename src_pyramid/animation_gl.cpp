@@ -1466,8 +1466,25 @@ void PyramidGame::renderFrame_gl() {
         int text_x = allocation.width - (int)text_width - margin;
         int text_y = margin + font_size;
         
-        // Draw the text
+        // Draw the title
         gl_draw_text_simple(title_text, text_x, text_y, font_size);
+        
+        // Draw rules below the title
+        gl_set_color(0.9f, 0.9f, 0.9f);  // Slightly dimmer white for rules
+        int rules_y = text_y + 30;
+        int rules_font_size = 14;
+        int rules_line_height = 16;
+        
+        const char *rules[] = {
+            "Rules - Match pairs that sum to 13:",
+            "A+Q=13\n   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
+        };
+        
+        for (int i = 0; i < 2; i++) {
+            float rule_width = gl_calculate_text_width(rules[i], rules_font_size);
+            int rule_x = allocation.width - (int)rule_width - margin;
+            gl_draw_text_simple(rules[i], rule_x, rules_y + (i * rules_line_height), rules_font_size);
+        }
     }
 }
 

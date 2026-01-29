@@ -7,6 +7,40 @@
 #include <direct.h>
 #endif
 
+// ============================================================================
+// CAIRO TEXT RENDERING HELPERS
+// ============================================================================
+
+// Helper function to draw text in Cairo
+static void cairo_draw_text(cairo_t *cr, const char *text, double x, double y, 
+                           double font_size, double r, double g, double b) {
+    cairo_set_source_rgb(cr, r, g, b);
+    
+    cairo_select_font_face(cr, "Monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_font_size(cr, font_size);
+    
+    cairo_text_extents_t extents;
+    cairo_text_extents(cr, text, &extents);
+    
+    cairo_move_to(cr, x - extents.x_bearing, y - extents.y_bearing);
+    cairo_show_text(cr, text);
+}
+
+// Helper function to get text width in Cairo
+static double cairo_get_text_width(cairo_t *cr, const char *text, double font_size) {
+    cairo_select_font_face(cr, "Monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_font_size(cr, font_size);
+    
+    cairo_text_extents_t extents;
+    cairo_text_extents(cr, text, &extents);
+    
+    return extents.width;
+}
+
+// ============================================================================
+// DRAWING FUNCTIONS
+// ============================================================================
+
 void PyramidGame::drawCardFragment(cairo_t *cr,
                                      const CardFragment &fragment) {
   // Skip inactive fragments or those without a surface
@@ -70,6 +104,42 @@ gboolean PyramidGame::onDraw(GtkWidget *widget, cairo_t *cr, gpointer data) {
       !game->foundation_move_animation_active_ &&
       !game->stock_to_waste_animation_active_) {
     game->highlightSelectedCard(game->buffer_cr_);
+  }
+
+  // ========================================================================
+  // Draw "Pyramid Solitaire" title and rules in top right corner
+  // ========================================================================
+  {
+      const double margin = 10.0;
+      const int title_font_size = 24;
+      const int rules_font_size = 14;
+      
+      // Get text dimensions
+      double title_width = cairo_get_text_width(game->buffer_cr_, "Pyramid Solitaire", title_font_size);
+      double title_x = allocation.width - title_width - margin;
+      double title_y = margin + title_font_size;
+      
+      // Draw title in white
+      cairo_draw_text(game->buffer_cr_, "Pyramid Solitaire", title_x, title_y, 
+                     title_font_size, 1.0, 1.0, 1.0);
+      
+      // Draw rules below title
+      double rules_y = title_y + 30.0;
+      double rules_line_height = 16.0;
+      
+      const char *rules[] = {
+          "Rules - Match pairs that sum to 13:",
+          "A+Q=13   2+J=13   3+10=13   4+9=13   5+8=13   6+7=13   K=13"
+      };
+      
+      for (int i = 0; i < 2; i++) {
+          double rule_width = cairo_get_text_width(game->buffer_cr_, rules[i], rules_font_size);
+          double rule_x = allocation.width - rule_width - margin;
+          
+          // Slightly dimmer white for rules
+          cairo_draw_text(game->buffer_cr_, rules[i], rule_x, rules_y + (i * rules_line_height),
+                         rules_font_size, 0.9, 0.9, 0.9);
+      }
   }
 
   // Copy buffer to window
