@@ -187,6 +187,17 @@ jobs:
         SOFTWARE.
         "@ | Out-File -FilePath "artifacts\build\windows\LICENSE.txt" -Encoding UTF8
 
+    - name: Convert PNG Icons to ICO
+      working-directory: artifacts/build/windows
+      run: |
+        # Convert PNG files to ICO for MSI references
+        if (Test-Path "pyramid.png") {
+          magick pyramid.png -define icon:auto-resize=256,128,96,64,48,32,16 pyramid.ico
+        }
+        if (Test-Path "minesweeper.png") {
+          magick minesweeper.png -define icon:auto-resize=256,128,96,64,48,32,16 minesweeper.ico
+        }
+
     - name: Generate Advanced MSI Installer
       working-directory: artifacts/build/windows
       run: |
