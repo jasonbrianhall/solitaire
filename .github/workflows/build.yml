@@ -58,6 +58,9 @@ jobs:
         if [ -f "spider.ico" ] && [ ! -f "spider.png" ]; then
           convert spider.ico[0] -resize 256x256 spider.png
         fi
+        if [ -f "pyramid.ico" ] && [ ! -f "pyramid.png" ]; then
+          convert pyramid.ico[0] -resize 256x256 pyramid.png
+        fi
         
         # Use solitaire icon as main app icon if available
         if [ -f "solitaire.png" ]; then
@@ -82,6 +85,7 @@ jobs:
         cp ../../solitaire.png . 2>/dev/null || true
         cp ../../freecell.png . 2>/dev/null || true
         cp ../../spider.png . 2>/dev/null || true
+        cp ../../pyramid.png . 2>/dev/null || true
         cp ../../icon.png . 2>/dev/null || true
         
         # Copy DLLs explicitly
@@ -233,6 +237,7 @@ jobs:
                     <!-- Game executables -->
                     <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe"/>
                     <File Id="SpiderEXE" Name="spider.exe" Source="spider.exe"/>
+                    <File Id="PyramidEXE" Name="pyramid.exe" Source="pyramid.exe"/>
                     
                     <!-- Application files -->
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
@@ -240,6 +245,7 @@ jobs:
                     <File Id="SolitaireIconFile" Name="solitaire.ico" Source="solitaire.ico"/>
                     <File Id="FreecellIconFile" Name="freecell.ico" Source="freecell.ico"/>
                     <File Id="SpiderIconFile" Name="spider.ico" Source="spider.ico"/>
+                    <File Id="PyramidIconFile" Name="pyramid.ico" Source="pyramid.ico"/>
                     <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
                     <File Id="README" Name="README.md" Source="README.md"/>
                     <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
@@ -330,6 +336,12 @@ jobs:
                              WorkingDirectory="INSTALLFOLDER"
                              Description="Play Spider Solitaire"
                              Icon="SpiderIcon"/>
+                    <Shortcut Id="ApplicationStartMenuPyramid"
+                             Name="Pyramid Solitaire"
+                             Target="[INSTALLFOLDER]pyramid.exe"
+                             WorkingDirectory="INSTALLFOLDER"
+                             Description="Play Pyramid Solitaire"
+                             Icon="PyramidIcon"/>
                     <Shortcut Id="UninstallShortcut"
                              Name="Uninstall Solitaire Essentials"
                              Target="[SystemFolder]msiexec.exe"
@@ -379,6 +391,17 @@ jobs:
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                Name="SpiderDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
+                <Component Id="PyramidDesktopShortcut" Guid="C9G5B463-E7F9-5G05-ACDE-D85E0D1F2EB7">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="PyramidDesktopShortcut" 
+                           Name="Pyramid Solitaire" 
+                           Target="[INSTALLFOLDER]pyramid.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play Pyramid Solitaire"
+                           Icon="PyramidIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="PyramidDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
               </Directory>
             </Directory>
             
@@ -405,12 +428,14 @@ jobs:
               <ComponentRef Id="SolitaireDesktopShortcut" />
               <ComponentRef Id="FreecellDesktopShortcut" />
               <ComponentRef Id="SpiderDesktopShortcut" />
+              <ComponentRef Id="PyramidDesktopShortcut" />
             </Feature>
             
             <!-- Application icons -->
             <Icon Id="SolitaireIcon" SourceFile="solitaire.ico"/>
             <Icon Id="FreecellIcon" SourceFile="freecell.ico"/>
             <Icon Id="SpiderIcon" SourceFile="spider.ico"/>
+            <Icon Id="PyramidIcon" SourceFile="pyramid.ico"/>
             
             <!-- Custom actions for cleanup -->
             <CustomAction Id="CleanupRegistryOnUninstall" 
@@ -544,6 +569,7 @@ jobs:
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
         $freecellIcon = "artifacts/build/windows/freecell.png"
         $spiderIcon = "artifacts/build/windows/spider.png"
+        $pyramidIcon = "artifacts/build/windows/pyramid.png"
         
         # Fallback if PNGs don't exist
         if (-not (Test-Path $solitaireIcon)) {
@@ -606,6 +632,14 @@ jobs:
         } else {
           Write-Host "Spider icon not found, using Solitaire icon"
           Create-GameAssets -IconPath $solitaireIcon -GameName "Spider"
+        }
+        
+        # Create assets for Pyramid (use pyramid icon if available, otherwise solitaire)
+        if (Test-Path $pyramidIcon) {
+          Create-GameAssets -IconPath $pyramidIcon -GameName "Pyramid"
+        } else {
+          Write-Host "Pyramid icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "Pyramid"
         }
         
         Write-Host "All Microsoft Store assets created successfully"
@@ -691,6 +725,23 @@ jobs:
                   </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
                 <uap:SplashScreen Image="Assets\SpiderLogo.scale-100.png" />
+              </uap:VisualElements>
+            </Application>
+            
+            <Application Id="Pyramid" Executable="Files\pyramid.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Pyramid Solitaire"
+                                  Description="Ancient pyramid card game"
+                                  Square150x150Logo="Assets\PyramidLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Pyramid44x44.scale-100.png"
+                                  BackgroundColor="#2c3e50">
+                <uap:DefaultTile Wide310x150Logo="Assets\PyramidWide.scale-100.png"
+                                ShortName="Pyramid">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\PyramidLogo.scale-100.png" />
               </uap:VisualElements>
             </Application>
           </Applications>
