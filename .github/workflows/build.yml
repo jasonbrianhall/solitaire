@@ -46,6 +46,25 @@ jobs:
           binutils make zip unzip libzip-devel \
           ImageMagick
 
+    - name: Download Minesweeper Executable and Icon
+      run: |
+        echo "Downloading Minesweeper executable..."
+        wget -O minesweeper.exe https://github.com/jasonbrianhall/minesweeper/releases/download/v243/minesweeper.exe
+        if [ $? -ne 0 ]; then
+          echo "Warning: Failed to download minesweeper.exe, build will continue without it"
+        fi
+        
+        echo "Downloading Minesweeper icon..."
+        wget -O minesweeper.jpg https://raw.githubusercontent.com/jasonbrianhall/minesweeper/main/windows/icon.jpg
+        if [ $? -ne 0 ]; then
+          echo "Warning: Failed to download minesweeper icon, build will continue without it"
+        fi
+        
+        # Convert JPG to ICO for MSI/desktop shortcuts
+        if [ -f "minesweeper.jpg" ]; then
+          convert minesweeper.jpg -resize 256x256 minesweeper.ico
+        fi
+
     - name: Convert Icons to PNG
       run: |
         # Convert ICO files to PNG for MSIX if they don't already exist
@@ -60,6 +79,9 @@ jobs:
         fi
         if [ -f "pyramid.ico" ] && [ ! -f "pyramid.png" ]; then
           convert pyramid.ico[0] -resize 256x256 pyramid.png
+        fi
+        if [ -f "minesweeper.ico" ] && [ ! -f "minesweeper.png" ]; then
+          convert minesweeper.ico[0] -resize 256x256 minesweeper.png
         fi
         
         # Use solitaire icon as main app icon if available
@@ -86,6 +108,7 @@ jobs:
         cp ../../freecell.png . 2>/dev/null || true
         cp ../../spider.png . 2>/dev/null || true
         cp ../../pyramid.png . 2>/dev/null || true
+        cp ../../minesweeper.png . 2>/dev/null || true
         cp ../../icon.png . 2>/dev/null || true
         
         # Copy DLLs explicitly
@@ -238,6 +261,7 @@ jobs:
                     <File Id="FreecellEXE" Name="freecell.exe" Source="freecell.exe"/>
                     <File Id="SpiderEXE" Name="spider.exe" Source="spider.exe"/>
                     <File Id="PyramidEXE" Name="pyramid.exe" Source="pyramid.exe"/>
+                    <File Id="MinesweepperEXE" Name="minesweeper.exe" Source="minesweeper.exe"/>
                     
                     <!-- Application files -->
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
@@ -246,6 +270,7 @@ jobs:
                     <File Id="FreecellIconFile" Name="freecell.ico" Source="freecell.ico"/>
                     <File Id="SpiderIconFile" Name="spider.ico" Source="spider.ico"/>
                     <File Id="PyramidIconFile" Name="pyramid.ico" Source="pyramid.ico"/>
+                    <File Id="MinesweepperIconFile" Name="minesweeper.ico" Source="minesweeper.ico"/>
                     <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
                     <File Id="README" Name="README.md" Source="README.md"/>
                     <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
@@ -342,6 +367,12 @@ jobs:
                              WorkingDirectory="INSTALLFOLDER"
                              Description="Play Pyramid Solitaire"
                              Icon="PyramidIcon"/>
+                    <Shortcut Id="ApplicationStartMenuMinesweeper"
+                             Name="Minesweeper"
+                             Target="[INSTALLFOLDER]minesweeper.exe"
+                             WorkingDirectory="INSTALLFOLDER"
+                             Description="Play Minesweeper"
+                             Icon="MinesweepperIcon"/>
                     <Shortcut Id="UninstallShortcut"
                              Name="Uninstall Solitaire Essentials"
                              Target="[SystemFolder]msiexec.exe"
@@ -402,6 +433,17 @@ jobs:
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                Name="PyramidDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
+                <Component Id="MinesweepperDesktopShortcut" Guid="D0H6C574-F8G0-6H16-BDEF-E96F1E2G3FC8">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="MinesweepperDesktopShortcut" 
+                           Name="Minesweeper" 
+                           Target="[INSTALLFOLDER]minesweeper.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play Minesweeper"
+                           Icon="MinesweepperIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
+                               Name="MinesweepperDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
               </Directory>
             </Directory>
             
@@ -429,6 +471,7 @@ jobs:
               <ComponentRef Id="FreecellDesktopShortcut" />
               <ComponentRef Id="SpiderDesktopShortcut" />
               <ComponentRef Id="PyramidDesktopShortcut" />
+              <ComponentRef Id="MinesweepperDesktopShortcut" />
             </Feature>
             
             <!-- Application icons -->
@@ -436,6 +479,7 @@ jobs:
             <Icon Id="FreecellIcon" SourceFile="freecell.ico"/>
             <Icon Id="SpiderIcon" SourceFile="spider.ico"/>
             <Icon Id="PyramidIcon" SourceFile="pyramid.ico"/>
+            <Icon Id="MinesweepperIcon" SourceFile="minesweeper.ico"/>
             
             <!-- Custom actions for cleanup -->
             <CustomAction Id="CleanupRegistryOnUninstall" 
@@ -570,6 +614,7 @@ jobs:
         $freecellIcon = "artifacts/build/windows/freecell.png"
         $spiderIcon = "artifacts/build/windows/spider.png"
         $pyramidIcon = "artifacts/build/windows/pyramid.png"
+        $minesweepperIcon = "artifacts/build/windows/minesweeper.png"
         
         # Fallback if PNGs don't exist
         if (-not (Test-Path $solitaireIcon)) {
@@ -640,6 +685,14 @@ jobs:
         } else {
           Write-Host "Pyramid icon not found, using Solitaire icon"
           Create-GameAssets -IconPath $solitaireIcon -GameName "Pyramid"
+        }
+        
+        # Create assets for Minesweeper (use minesweeper icon if available, otherwise solitaire)
+        if (Test-Path $minesweepperIcon) {
+          Create-GameAssets -IconPath $minesweepperIcon -GameName "Minesweeper"
+        } else {
+          Write-Host "Minesweeper icon not found, using Solitaire icon"
+          Create-GameAssets -IconPath $solitaireIcon -GameName "Minesweeper"
         }
         
         Write-Host "All Microsoft Store assets created successfully"
@@ -742,6 +795,23 @@ jobs:
                   </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
                 <uap:SplashScreen Image="Assets\PyramidLogo.scale-100.png" />
+              </uap:VisualElements>
+            </Application>
+            
+            <Application Id="Minesweeper" Executable="Files\minesweeper.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Minesweeper"
+                                  Description="Classic mine-finding puzzle game"
+                                  Square150x150Logo="Assets\MinesweeperLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Minesweeper44x44.scale-100.png"
+                                  BackgroundColor="#34495e">
+                <uap:DefaultTile Wide310x150Logo="Assets\MinesweeperWide.scale-100.png"
+                                ShortName="Minesweeper">
+                  <uap:ShowNameOnTiles>
+                    <uap:ShowOn Tile="square150x150Logo"/>
+                    <uap:ShowOn Tile="wide310x150Logo"/>
+                  </uap:ShowNameOnTiles>
+                </uap:DefaultTile>
+                <uap:SplashScreen Image="Assets\MinesweeperLogo.scale-100.png" />
               </uap:VisualElements>
             </Application>
           </Applications>
