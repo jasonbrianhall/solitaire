@@ -44,7 +44,8 @@ jobs:
           mingw64-libzip \
           wine wine-devel \
           binutils make zip unzip libzip-devel \
-          ImageMagick
+          ImageMagick \
+          wget
 
     - name: Download Minesweeper Executable and Icon
       run: |
