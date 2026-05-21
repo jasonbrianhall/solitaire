@@ -422,7 +422,7 @@ jobs:
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                Name="SpiderDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
-                <Component Id="PyramidDesktopShortcut" Guid="C9G5B463-E7F9-5G05-ACDE-D85E0D1F2EB7">
+                <Component Id="PyramidDesktopShortcut" Guid="C9F5B463-E7F9-5F05-ACDE-D85E0D1F2EB7">
                   <Condition>DESKTOP_SHORTCUT</Condition>
                   <Shortcut Id="PyramidDesktopShortcut" 
                            Name="Pyramid Solitaire" 
@@ -433,7 +433,7 @@ jobs:
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                Name="PyramidDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
-                <Component Id="MinesweepperDesktopShortcut" Guid="D0H6C574-F8G0-6H16-BDEF-E96F1E2G3FC8">
+                <Component Id="MinesweepperDesktopShortcut" Guid="D0F6C574-F8F0-6F16-BDEF-E96F1E2G3FC8">
                   <Condition>DESKTOP_SHORTCUT</Condition>
                   <Shortcut Id="MinesweepperDesktopShortcut" 
                            Name="Minesweeper" 
