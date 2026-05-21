@@ -56,34 +56,24 @@ jobs:
         fi
         
         echo "Downloading Minesweeper icon..."
-        wget -O minesweeper.jpg https://raw.githubusercontent.com/jasonbrianhall/minesweeper/main/windows/icon.jpg
+        wget -O minesweeper.jpg https://raw.githubusercontent.com/jasonbrianhall/minesweeper/main/src/icon.jpg
         if [ $? -ne 0 ]; then
           echo "Warning: Failed to download minesweeper icon, build will continue without it"
         fi
         
         # Convert JPG to ICO for MSI/desktop shortcuts
         if [ -f "minesweeper.jpg" ]; then
-          convert minesweeper.jpg -resize 256x256 minesweeper.ico
+          magick minesweeper.jpg -resize 256x256 minesweeper.ico 2>/dev/null || echo "Note: JPG to ICO conversion skipped"
         fi
 
     - name: Convert Icons to PNG
       run: |
         # Convert ICO files to PNG for MSIX if they don't already exist
-        if [ -f "solitaire.ico" ] && [ ! -f "solitaire.png" ]; then
-          convert solitaire.ico[0] -resize 256x256 solitaire.png
-        fi
-        if [ -f "freecell.ico" ] && [ ! -f "freecell.png" ]; then
-          convert freecell.ico[0] -resize 256x256 freecell.png
-        fi
-        if [ -f "spider.ico" ] && [ ! -f "spider.png" ]; then
-          convert spider.ico[0] -resize 256x256 spider.png
-        fi
-        if [ -f "pyramid.ico" ] && [ ! -f "pyramid.png" ]; then
-          convert pyramid.ico[0] -resize 256x256 pyramid.png
-        fi
-        if [ -f "minesweeper.ico" ] && [ ! -f "minesweeper.png" ]; then
-          convert minesweeper.ico[0] -resize 256x256 minesweeper.png
-        fi
+        [ -f "solitaire.ico" ] && [ ! -f "solitaire.png" ] && magick "solitaire.ico[0]" -resize 256x256 solitaire.png 2>/dev/null || true
+        [ -f "freecell.ico" ] && [ ! -f "freecell.png" ] && magick "freecell.ico[0]" -resize 256x256 freecell.png 2>/dev/null || true
+        [ -f "spider.ico" ] && [ ! -f "spider.png" ] && magick "spider.ico[0]" -resize 256x256 spider.png 2>/dev/null || true
+        [ -f "pyramid.ico" ] && [ ! -f "pyramid.png" ] && magick "pyramid.ico[0]" -resize 256x256 pyramid.png 2>/dev/null || true
+        [ -f "minesweeper.ico" ] && [ ! -f "minesweeper.png" ] && magick "minesweeper.ico[0]" -resize 256x256 minesweeper.png 2>/dev/null || true
         
         # Use solitaire icon as main app icon if available
         if [ -f "solitaire.png" ]; then
