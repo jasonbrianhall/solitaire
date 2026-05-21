@@ -424,7 +424,7 @@ jobs:
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                Name="PyramidDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
-                <Component Id="MinesweepperDesktopShortcut" Guid="D0F6C574-F8F0-6F16-BDEF-E96F1E2G3FC8">
+                <Component Id="MinesweepperDesktopShortcut" Guid="D0F6C574-F8F0-6F16-BDEF-E96F1E2F3FC8">
                   <Condition>DESKTOP_SHORTCUT</Condition>
                   <Shortcut Id="MinesweepperDesktopShortcut" 
                            Name="Minesweeper" 
