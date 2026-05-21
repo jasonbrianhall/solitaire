@@ -614,8 +614,10 @@ jobs:
         New-Item -ItemType Directory -Path "msix-package/Files" -Force
         New-Item -ItemType Directory -Path "msix-package/Assets" -Force
         
-        # Copy extracted files to msix package
-        Copy-Item "artifacts/build/windows/*" "msix-package/Files/" -Recurse -Force
+        # Copy only executables and DLLs to msix package (flat structure, no subdirs)
+        Get-ChildItem "artifacts/build/windows/" -File | Where-Object {$_.Extension -in @('.exe', '.dll')} | ForEach-Object {
+          Copy-Item $_.FullName "msix-package/Files/" -Force
+        }
         
         # Define icon paths for each game
         $solitaireIcon = "artifacts/build/windows/solitaire.png"
