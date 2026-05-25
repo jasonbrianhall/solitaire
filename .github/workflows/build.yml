@@ -712,9 +712,9 @@ jobs:
         <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
                  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
                  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
-          <Identity Name="JasonBrianHall.11616B2499C78"
+          <Identity Name="SolitaireEssentials"
                     Version="${{ needs.build-linux.outputs.version }}.0"
-                    Publisher="CN=7A3CF65F-504C-42F2-BABD-6A0512A0A017"
+                    Publisher="CN=PLACEHOLDER_FROM_PARTNER_CENTER"
                     ProcessorArchitecture="x86" />
           
           <Properties>
