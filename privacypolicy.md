@@ -11,7 +11,7 @@ Local File Access:
 - All processing happens locally on your device
 
 Data Storage:
-- The application may store user preferences locally on your device
+- The application may store user preferences locally on your device (either via file system or via registry)
 - No personal data is transmitted over the internet
 
 
