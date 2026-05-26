@@ -50,7 +50,7 @@ jobs:
     - name: Download Minesweeper Executable and Icon
       run: |
         echo "Downloading Minesweeper executable..."
-        wget -O minesweeper.exe https://github.com/jasonbrianhall/minesweeper/releases/download/v256/minesweeper.exe
+        wget -O minesweeper.exe https://github.com/jasonbrianhall/minesweeper/releases/download/v259/minesweeper.exe
         if [ $? -ne 0 ]; then
           echo "Warning: Failed to download minesweeper.exe"
         fi
