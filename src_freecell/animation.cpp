@@ -29,7 +29,7 @@ void FreecellGame::updateWinAnimation() {
             }
         }
     } else {    
-       // Randomly choose launch source
+       // Randomly choose launch source; win animation
        if (rand() % 2 == 0) {
            launchNextCard();          // Launch from foundation
        } else {
