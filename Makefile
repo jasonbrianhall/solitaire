@@ -108,6 +108,11 @@ TARGET_WIN_PYRAMID = pyramid.exe
 TARGET_LINUX_DEBUG_PYRAMID = pyramid_debug
 TARGET_WIN_DEBUG_PYRAMID = pyramid_debug.exe
 
+# Source files and target for Launcher (Windows only)
+SRCS_LAUNCHER = launcher/solitaire_launcher.cpp
+OBJS_WIN_LAUNCHER = $(SRCS_LAUNCHER:.cpp=.win.o)
+TARGET_WIN_LAUNCHER = solitaire_launcher.exe
+
 # Build directories
 BUILD_DIR = build
 BUILD_DIR_LINUX = $(BUILD_DIR)/linux
@@ -122,7 +127,8 @@ DLL_SOURCE_DIR = /usr/x86_64-w64-mingw32/sys-root/mingw/bin
 $(shell mkdir -p $(BUILD_DIR_LINUX)/src_klondike $(BUILD_DIR_LINUX)/src_spider $(BUILD_DIR_LINUX)/src_freecell $(BUILD_DIR_LINUX)/src_pyramid \
 	$(BUILD_DIR_WIN)/src_klondike $(BUILD_DIR_WIN)/src_spider $(BUILD_DIR_WIN)/src_freecell $(BUILD_DIR_WIN)/src_pyramid \
 	$(BUILD_DIR_LINUX_DEBUG)/src_klondike $(BUILD_DIR_LINUX_DEBUG)/src_spider $(BUILD_DIR_LINUX_DEBUG)/src_freecell $(BUILD_DIR_LINUX_DEBUG)/src_pyramid \
-	$(BUILD_DIR_WIN_DEBUG)/src_klondike $(BUILD_DIR_WIN_DEBUG)/src_spider $(BUILD_DIR_WIN_DEBUG)/src_freecell $(BUILD_DIR_WIN_DEBUG)/src_pyramid)
+	$(BUILD_DIR_WIN_DEBUG)/src_klondike $(BUILD_DIR_WIN_DEBUG)/src_spider $(BUILD_DIR_WIN_DEBUG)/src_freecell $(BUILD_DIR_WIN_DEBUG)/src_pyramid \
+	$(BUILD_DIR_WIN)/launcher $(BUILD_DIR_WIN_DEBUG)/launcher)
 
 # Default target - build all games for Linux
 .PHONY: all
@@ -130,7 +136,7 @@ all: klondike-linux spider-linux freecell-linux pyramid-linux
 
 # OS-specific builds
 .PHONY: windows
-windows: klondike-windows spider-windows freecell-windows pyramid-windows
+windows: klondike-windows spider-windows freecell-windows pyramid-windows launcher-windows
 
 .PHONY: linux
 linux: klondike-linux spider-linux freecell-linux pyramid-linux
@@ -172,7 +178,7 @@ all-solitaire: klondike-linux klondike-windows
 all-linux: klondike-linux spider-linux freecell-linux pyramid-linux
 
 .PHONY: all-windows
-all-windows: klondike-windows spider-windows freecell-windows pyramid-windows
+all-windows: klondike-windows spider-windows freecell-windows pyramid-windows launcher-windows
 
 # Debug targets
 .PHONY: all-debug
@@ -322,6 +328,14 @@ $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID): $(addprefix $(BUILD_DIR_WIN_
 $(BUILD_DIR_WIN_DEBUG)/%.win.debug.o: %.cpp
 	$(CXX_WIN) $(CXXFLAGS_WIN_DEBUG) -c $< -o $@
 
+
+# Launcher (Windows only)
+.PHONY: launcher-windows
+launcher-windows: $(BUILD_DIR_WIN)/$(TARGET_WIN_LAUNCHER) launcher-collect-dlls
+
+$(BUILD_DIR_WIN)/$(TARGET_WIN_LAUNCHER): $(addprefix $(BUILD_DIR_WIN)/,$(OBJS_WIN_LAUNCHER))
+	$(CXX_WIN) $^ -o $@ $(LDFLAGS_WIN)
+
 #
 # DLL collection for Windows builds
 #
@@ -369,6 +383,13 @@ pyramid-collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN_PYRAMID)
 pyramid-collect-debug-dlls: $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID)
 	@echo "Collecting Debug DLLs for Pyramid Solitaire..."
 	@build/windows/collect_dlls.sh $(BUILD_DIR_WIN_DEBUG)/$(TARGET_WIN_DEBUG_PYRAMID) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN_DEBUG)
+
+# Launcher
+.PHONY: launcher-collect-dlls
+launcher-collect-dlls: $(BUILD_DIR_WIN)/$(TARGET_WIN_LAUNCHER)
+	@echo "Collecting DLLs for Launcher..."
+	@build/windows/collect_dlls.sh $(BUILD_DIR_WIN)/$(TARGET_WIN_LAUNCHER) $(DLL_SOURCE_DIR) $(BUILD_DIR_WIN)
+
 
 # Clean targets
 .PHONY: clean
