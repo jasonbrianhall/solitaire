@@ -668,40 +668,8 @@ jobs:
           & magick "$IconPath" -resize 300x300 -background "#0a5a2d" -gravity center -extent 620x300 "msix-package/Assets/${GameName}Wide.scale-200.png"
         }
         
-        # Create assets for Solitaire
-        Create-GameAssets -IconPath $solitaireIcon -GameName "Solitaire"
-        
-        # Create assets for FreeCell (use freecell icon if available, otherwise solitaire)
-        if (Test-Path $freecellIcon) {
-          Create-GameAssets -IconPath $freecellIcon -GameName "FreeCell"
-        } else {
-          Write-Host "FreeCell icon not found, using Solitaire icon"
-          Create-GameAssets -IconPath $solitaireIcon -GameName "FreeCell"
-        }
-        
-        # Create assets for Spider (use spider icon if available, otherwise solitaire)
-        if (Test-Path $spiderIcon) {
-          Create-GameAssets -IconPath $spiderIcon -GameName "Spider"
-        } else {
-          Write-Host "Spider icon not found, using Solitaire icon"
-          Create-GameAssets -IconPath $solitaireIcon -GameName "Spider"
-        }
-        
-        # Create assets for Pyramid (use pyramid icon if available, otherwise solitaire)
-        if (Test-Path $pyramidIcon) {
-          Create-GameAssets -IconPath $pyramidIcon -GameName "Pyramid"
-        } else {
-          Write-Host "Pyramid icon not found, using Solitaire icon"
-          Create-GameAssets -IconPath $solitaireIcon -GameName "Pyramid"
-        }
-        
-        # Create assets for Minesweeper (use minesweeper icon if available, otherwise solitaire)
-        if (Test-Path $minesweepperIcon) {
-          Create-GameAssets -IconPath $minesweepperIcon -GameName "Minesweeper"
-        } else {
-          Write-Host "Minesweeper icon not found, using Solitaire icon"
-          Create-GameAssets -IconPath $solitaireIcon -GameName "Minesweeper"
-        }
+        # Create assets for Launcher (solitaire icon only)
+        Create-GameAssets -IconPath $solitaireIcon -GameName "Launcher"
         
         Write-Host "All Microsoft Store assets created successfully"
 
@@ -738,88 +706,20 @@ jobs:
           </Capabilities>
           
           <Applications>
-            <Application Id="Solitaire" Executable="Files\solitaire.exe" EntryPoint="Windows.FullTrustApplication">
-              <uap:VisualElements DisplayName="Solitaire"
-                                  Description="Classic Klondike Solitaire card game"
-                                  Square150x150Logo="Assets\SolitaireLogo.scale-100.png"
-                                  Square44x44Logo="Assets\Solitaire44x44.scale-100.png"
+            <Application Id="SolitaireEssentials" Executable="Files\solitaire_launcher.exe" EntryPoint="Windows.FullTrustApplication">
+              <uap:VisualElements DisplayName="Solitaire Essentials"
+                                  Description="Classic card games including Klondike Solitaire, FreeCell, Spider, Pyramid, and Minesweeper"
+                                  Square150x150Logo="Assets\LauncherLogo.scale-100.png"
+                                  Square44x44Logo="Assets\Launcher44x44.scale-100.png"
                                   BackgroundColor="#0a5a2d">
-                <uap:DefaultTile Wide310x150Logo="Assets\SolitaireWide.scale-100.png"
+                <uap:DefaultTile Wide310x150Logo="Assets\LauncherWide.scale-100.png"
                                 ShortName="Solitaire">
                   <uap:ShowNameOnTiles>
                     <uap:ShowOn Tile="square150x150Logo"/>
                     <uap:ShowOn Tile="wide310x150Logo"/>
                   </uap:ShowNameOnTiles>
                 </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\SolitaireLogo.scale-100.png" />
-              </uap:VisualElements>
-            </Application>
-            
-            <Application Id="FreeCell" Executable="Files\freecell.exe" EntryPoint="Windows.FullTrustApplication">
-              <uap:VisualElements DisplayName="FreeCell"
-                                  Description="Strategic FreeCell Solitaire card game"
-                                  Square150x150Logo="Assets\FreeCellLogo.scale-100.png"
-                                  Square44x44Logo="Assets\FreeCell44x44.scale-100.png"
-                                  BackgroundColor="#0a5a2d">
-                <uap:DefaultTile Wide310x150Logo="Assets\FreeCellWide.scale-100.png"
-                                ShortName="FreeCell">
-                  <uap:ShowNameOnTiles>
-                    <uap:ShowOn Tile="square150x150Logo"/>
-                    <uap:ShowOn Tile="wide310x150Logo"/>
-                  </uap:ShowNameOnTiles>
-                </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\FreeCellLogo.scale-100.png" />
-              </uap:VisualElements>
-            </Application>
-            
-            <Application Id="Spider" Executable="Files\spider.exe" EntryPoint="Windows.FullTrustApplication">
-              <uap:VisualElements DisplayName="Spider Solitaire"
-                                  Description="Multi-deck Spider Solitaire challenge"
-                                  Square150x150Logo="Assets\SpiderLogo.scale-100.png"
-                                  Square44x44Logo="Assets\Spider44x44.scale-100.png"
-                                  BackgroundColor="#0a5a2d">
-                <uap:DefaultTile Wide310x150Logo="Assets\SpiderWide.scale-100.png"
-                                ShortName="Spider">
-                  <uap:ShowNameOnTiles>
-                    <uap:ShowOn Tile="square150x150Logo"/>
-                    <uap:ShowOn Tile="wide310x150Logo"/>
-                  </uap:ShowNameOnTiles>
-                </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\SpiderLogo.scale-100.png" />
-              </uap:VisualElements>
-            </Application>
-            
-            <Application Id="Pyramid" Executable="Files\pyramid.exe" EntryPoint="Windows.FullTrustApplication">
-              <uap:VisualElements DisplayName="Pyramid Solitaire"
-                                  Description="Ancient pyramid card game"
-                                  Square150x150Logo="Assets\PyramidLogo.scale-100.png"
-                                  Square44x44Logo="Assets\Pyramid44x44.scale-100.png"
-                                  BackgroundColor="#2c3e50">
-                <uap:DefaultTile Wide310x150Logo="Assets\PyramidWide.scale-100.png"
-                                ShortName="Pyramid">
-                  <uap:ShowNameOnTiles>
-                    <uap:ShowOn Tile="square150x150Logo"/>
-                    <uap:ShowOn Tile="wide310x150Logo"/>
-                  </uap:ShowNameOnTiles>
-                </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\PyramidLogo.scale-100.png" />
-              </uap:VisualElements>
-            </Application>
-            
-            <Application Id="Minesweeper" Executable="Files\minesweeper.exe" EntryPoint="Windows.FullTrustApplication">
-              <uap:VisualElements DisplayName="Minesweeper"
-                                  Description="Classic mine-finding puzzle game"
-                                  Square150x150Logo="Assets\MinesweeperLogo.scale-100.png"
-                                  Square44x44Logo="Assets\Minesweeper44x44.scale-100.png"
-                                  BackgroundColor="#34495e">
-                <uap:DefaultTile Wide310x150Logo="Assets\MinesweeperWide.scale-100.png"
-                                ShortName="Minesweeper">
-                  <uap:ShowNameOnTiles>
-                    <uap:ShowOn Tile="square150x150Logo"/>
-                    <uap:ShowOn Tile="wide310x150Logo"/>
-                  </uap:ShowNameOnTiles>
-                </uap:DefaultTile>
-                <uap:SplashScreen Image="Assets\MinesweeperLogo.scale-100.png" />
+                <uap:SplashScreen Image="Assets\LauncherLogo.scale-100.png" />
               </uap:VisualElements>
             </Application>
           </Applications>
