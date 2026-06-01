@@ -723,8 +723,19 @@ void PyramidGame::drawTableauPiles() {
                 continue;
             }
             
-            // DEAL ANIMATION FIX: Skip cards currently being animated in deal
+            // DEAL ANIMATION FIX: Skip cards not yet dealt or currently animating
             if (deal_animation_active_) {
+                // Calculate this card's deal sequence number
+                int cards_before_this_row = 0;
+                for (int r = 0; r < row; r++) cards_before_this_row += (r + 1);
+                int deal_seq = cards_before_this_row + card_idx;
+
+                // Not yet dealt at all - hide it entirely
+                if (deal_seq >= cards_dealt_) {
+                    continue;
+                }
+
+                // Currently in-flight - skip so the animated copy renders instead
                 bool is_animating = false;
                 for (const auto &anim_card : deal_cards_) {
                     if (anim_card.active &&
@@ -735,7 +746,7 @@ void PyramidGame::drawTableauPiles() {
                     }
                 }
                 if (is_animating) {
-                    continue;  // Skip this card - it's being animated
+                    continue;
                 }
             }
             
