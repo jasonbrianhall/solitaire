@@ -66,6 +66,14 @@ jobs:
           magick minesweeper.jpg -resize 256x256 minesweeper.ico || true
         fi
 
+    - name: Download Sudoku Executable
+      run: |
+        echo "Downloading Sudoku executable..."
+        wget -O SudokuGame.exe https://github.com/jasonbrianhall/sudoku_solver/releases/download/v539/SudokuGame.exe
+        if [ $? -ne 0 ]; then
+          echo "Warning: Failed to download SudokuGame.exe"
+        fi
+
     - name: Convert Icons to PNG
       run: |
         # Convert ICO files to PNG for MSIX if they don't already exist
@@ -74,6 +82,8 @@ jobs:
         [ -f "spider.ico" ] && [ ! -f "spider.png" ] && magick "spider.ico[0]" -resize 256x256 spider.png || true
         [ -f "pyramid.ico" ] && [ ! -f "pyramid.png" ] && magick "pyramid.ico[0]" -resize 256x256 pyramid.png || true
         [ -f "minesweeper.ico" ] && [ ! -f "minesweeper.png" ] && magick "minesweeper.ico[0]" -resize 256x256 minesweeper.png || true
+        # sudoku.png is already a PNG from the repo, normalize size
+        [ -f "sudoku.png" ] && magick "sudoku.png" -resize 256x256 sudoku.png || true
         
         # Use solitaire icon as main app icon if available
         if [ -f "solitaire.png" ]; then
@@ -93,12 +103,14 @@ jobs:
         cp ../../spider.ico .
         cp ../../pyramid.ico . 2>/dev/null || true
         cp ../../minesweeper.ico . 2>/dev/null || true
+        cp ../../sudoku.png . 2>/dev/null || true
         cp ../../README.md .
         cp ../../LICENSE.md .
         
-        # Copy executables - pyramid comes from build, minesweeper from download
+        # Copy executables - pyramid comes from build, minesweeper and sudoku from download
         cp ../../pyramid.exe . 2>/dev/null || true
         cp ../../minesweeper.exe . 2>/dev/null || true
+        cp ../../SudokuGame.exe . 2>/dev/null || true
         
         # Copy PNG files for MSIX
         cp ../../solitaire.png . 2>/dev/null || true
@@ -106,6 +118,7 @@ jobs:
         cp ../../spider.png . 2>/dev/null || true
         cp ../../pyramid.png . 2>/dev/null || true
         cp ../../minesweeper.png . 2>/dev/null || true
+        cp ../../sudoku.png . 2>/dev/null || true
         cp ../../icon.png . 2>/dev/null || true
         
         # Copy DLLs explicitly
@@ -197,6 +210,9 @@ jobs:
         if (Test-Path "minesweeper.png") {
           magick minesweeper.png -define icon:auto-resize=256,128,96,64,48,32,16 minesweeper.ico
         }
+        if (Test-Path "sudoku.png") {
+          magick sudoku.png -define icon:auto-resize=256,128,96,64,48,32,16 sudoku.ico
+        }
 
     - name: Generate Advanced MSI Installer
       working-directory: artifacts/build/windows
@@ -270,6 +286,7 @@ jobs:
                     <File Id="SpiderEXE" Name="spider.exe" Source="spider.exe"/>
                     <File Id="PyramidEXE" Name="pyramid.exe" Source="pyramid.exe"/>
                     <File Id="MinesweepperEXE" Name="minesweeper.exe" Source="minesweeper.exe"/>
+                    <File Id="SudokuGameEXE" Name="SudokuGame.exe" Source="SudokuGame.exe"/>
                     
                     <!-- Application files -->
                     <File Id="CardsZIP" Name="cards.zip" Source="cards.zip"/>
@@ -279,6 +296,7 @@ jobs:
                     <File Id="SpiderIconFile" Name="spider.ico" Source="spider.ico"/>
                     <File Id="PyramidIconFile" Name="pyramid.ico" Source="pyramid.ico"/>
                     <File Id="MinesweepperIconFile" Name="minesweeper.ico" Source="minesweeper.ico"/>
+                    <File Id="SudokuIconFile" Name="sudoku.ico" Source="sudoku.ico"/>
                     <File Id="SettingsIni" Name="settings.ini" Source="settings.ini"/>
                     <File Id="README" Name="README.md" Source="README.md"/>
                     <File Id="LICENSE_MD" Name="LICENSE.md" Source="LICENSE.md"/>
@@ -381,6 +399,12 @@ jobs:
                              WorkingDirectory="INSTALLFOLDER"
                              Description="Play Minesweeper"
                              Icon="MinesweepperIcon"/>
+                    <Shortcut Id="ApplicationStartMenuSudoku"
+                             Name="Sudoku"
+                             Target="[INSTALLFOLDER]SudokuGame.exe"
+                             WorkingDirectory="INSTALLFOLDER"
+                             Description="Play Sudoku"
+                             Icon="SudokuIcon"/>
                     <Shortcut Id="UninstallShortcut"
                              Name="Uninstall Solitaire Essentials"
                              Target="[SystemFolder]msiexec.exe"
@@ -452,6 +476,17 @@ jobs:
                   <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts" 
                                Name="MinesweepperDesktop" Type="integer" Value="1" KeyPath="yes"/>
                 </Component>
+                <Component Id="SudokuDesktopShortcut" Guid="E1A7D685-B9C1-4F27-AEFA-FA7F2A3B4CD9">
+                  <Condition>DESKTOP_SHORTCUT</Condition>
+                  <Shortcut Id="SudokuDesktopShortcut"
+                           Name="Sudoku"
+                           Target="[INSTALLFOLDER]SudokuGame.exe"
+                           WorkingDirectory="INSTALLFOLDER"
+                           Description="Play Sudoku"
+                           Icon="SudokuIcon"/>
+                  <RegistryValue Root="HKCU" Key="Software\SolitaireCollection\Shortcuts"
+                               Name="SudokuDesktop" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
               </Directory>
             </Directory>
             
@@ -480,6 +515,7 @@ jobs:
               <ComponentRef Id="SpiderDesktopShortcut" />
               <ComponentRef Id="PyramidDesktopShortcut" />
               <ComponentRef Id="MinesweepperDesktopShortcut" />
+              <ComponentRef Id="SudokuDesktopShortcut" />
             </Feature>
             
             <!-- Application icons -->
@@ -488,6 +524,7 @@ jobs:
             <Icon Id="SpiderIcon" SourceFile="spider.ico"/>
             <Icon Id="PyramidIcon" SourceFile="pyramid.ico"/>
             <Icon Id="MinesweepperIcon" SourceFile="minesweeper.ico"/>
+            <Icon Id="SudokuIcon" SourceFile="sudoku.ico"/>
             
             <!-- Custom actions for cleanup -->
             <CustomAction Id="CleanupRegistryOnUninstall" 
@@ -623,6 +660,7 @@ jobs:
         $spiderIcon = "artifacts/build/windows/spider.png"
         $pyramidIcon = "artifacts/build/windows/pyramid.png"
         $minesweepperIcon = "artifacts/build/windows/minesweeper.png"
+        $sudokuIcon = "artifacts/build/windows/sudoku.png"
         
         # Fallback if PNGs don't exist
         if (-not (Test-Path $solitaireIcon)) {
@@ -670,6 +708,11 @@ jobs:
         
         # Create assets for Launcher (solitaire icon only)
         Create-GameAssets -IconPath $solitaireIcon -GameName "Launcher"
+        
+        # Create assets for Sudoku
+        if (Test-Path $sudokuIcon) {
+          Create-GameAssets -IconPath $sudokuIcon -GameName "Sudoku"
+        }
         
         Write-Host "All Microsoft Store assets created successfully"
 
