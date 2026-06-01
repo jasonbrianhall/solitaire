@@ -1169,23 +1169,12 @@ bool PyramidGame::canMoveToPile(const std::vector<cardlib::Card> &cards,
 
 bool PyramidGame::canMoveToFoundation(const cardlib::Card &card,
                                         int foundation_index) const {
-  const auto &pile = foundation_[foundation_index];
-
-  std::cerr << "[canMoveToFoundation] Card: " << cardlib::rankToString(card.rank) << " of " 
-            << cardlib::suitToString(card.suit) << ", Foundation[" << foundation_index << "] size=" << pile.size();
-
-  if (pile.empty()) {
-    bool result = card.rank == cardlib::Rank::ACE;
-    std::cerr << " -> Empty foundation, need ACE: " << (result ? "YES" : "NO") << std::endl;
-    return result;
-  }
-
-  const auto &top_card = pile.back();
-  bool suit_match = card.suit == top_card.suit;
-  bool rank_match = static_cast<int>(card.rank) == static_cast<int>(top_card.rank) + 1;
-  bool result = suit_match && rank_match;
-  
-  return result;
+  // In Pyramid Solitaire the foundation is simply a discard pile for removed
+  // cards. Any card is allowed here — pairing validity is enforced upstream
+  // by canMoveToPile() before this is ever called.
+  (void)foundation_index;
+  (void)card;
+  return true;
 }
 
 void PyramidGame::moveCards(std::vector<cardlib::Card> &from,
@@ -1996,61 +1985,92 @@ void PyramidGame::processNextAutoFinishMove() {
 
   bool found_move = false;
 
-  // Check waste pile first
-  if (!waste_.empty()) {
-    const cardlib::Card &waste_card = waste_.back();
+  int max_foundation_index = 2 + static_cast<int>(foundation_.size()) - 1;
+  int first_tableau_index = max_foundation_index + 1;
 
-    // Try to move the waste card to foundation
-    for (size_t f = 0; f < foundation_.size(); f++) {
-      if (canMoveToFoundation(waste_card, f)) {
-        // Play sound when a move is found and about to be executed
-        playSound(GameSoundEvent::CardPlace);
-        
-        // Use the animation to move the card
-        startFoundationMoveAnimation(waste_card, 1, 0, f + 2);
+  // Helper: collect all currently exposed cards as (pile_index, card_index) pairs.
+  // pile_index uses the same numbering as the rest of the code:
+  //   0 = stock, 1 = waste, first_tableau_index + t = tableau row t
+  struct Candidate { int pile; int idx; cardlib::Card card; };
+  std::vector<Candidate> exposed;
 
-        // Remove card from waste pile
-        waste_.pop_back();
+  if (!waste_.empty())
+    exposed.push_back({1, static_cast<int>(waste_.size()) - 1, waste_.back()});
 
-        found_move = true;
+  for (size_t t = 0; t < tableau_.size(); t++) {
+    const auto &pile = tableau_[t];
+    // In Pyramid, any face-up non-removed card in the last position that is
+    // not covered counts.  The game stores rows, so we want the last
+    // non-removed face-up entry.
+    for (int i = static_cast<int>(pile.size()) - 1; i >= 0; --i) {
+      if (!pile[i].removed && pile[i].face_up) {
+        exposed.push_back({first_tableau_index + static_cast<int>(t), i, pile[i].card});
         break;
       }
     }
   }
 
-  // Try each tableau pile if no move was found yet
-  if (!found_move) {
-    for (size_t t = 0; t < tableau_.size(); t++) {
-      auto &pile = tableau_[t];
+  // --- 1. Look for a lone King ---
+  for (const auto &cand : exposed) {
+    if (cand.card.rank == cardlib::Rank::KING) {
+      playSound(GameSoundEvent::CardPlace);
+      startFoundationMoveAnimation(cand.card, cand.pile, cand.idx, 2 /*foundation pile 0*/);
 
-      if (!pile.empty() && pile.back().face_up) {
-        const cardlib::Card &top_card = pile.back().card;
-
-        // Try to move to foundation
-        for (size_t f = 0; f < foundation_.size(); f++) {
-          if (canMoveToFoundation(top_card, f)) {
-            // Play sound when a move is found and about to be executed
-            playSound(GameSoundEvent::CardPlace);
-            
-            // Use the animation to move the card
-            startFoundationMoveAnimation(top_card, t + 6, pile.size() - 1, f + 2);
-
-            // Remove card from tableau
-            pile.pop_back();
-
-            // Flip the new top card if needed
-            if (!pile.empty() && !pile.back().face_up) {
-              playSound(GameSoundEvent::CardFlip);
-              pile.back().face_up = true;
-            }
-
-            found_move = true;
+      // Remove from source
+      if (cand.pile == 1) {
+        waste_.pop_back();
+      } else {
+        int t = cand.pile - first_tableau_index;
+        tableau_[t][cand.idx].removed = true;
+        // Flip newly exposed card
+        for (int i = static_cast<int>(tableau_[t].size()) - 1; i >= 0; --i) {
+          if (!tableau_[t][i].removed) {
+            if (!tableau_[t][i].face_up) { tableau_[t][i].face_up = true; playSound(GameSoundEvent::CardFlip); }
             break;
           }
         }
+      }
+      found_move = true;
+      break;
+    }
+  }
 
-        if (found_move) {
-          break;
+  // --- 2. Look for a pair that sums to 13 ---
+  if (!found_move) {
+    for (size_t a = 0; a < exposed.size() && !found_move; a++) {
+      for (size_t b = a + 1; b < exposed.size() && !found_move; b++) {
+        int sum = static_cast<int>(exposed[a].card.rank) + static_cast<int>(exposed[b].card.rank);
+        if (sum == 13) {
+          playSound(GameSoundEvent::CardPlace);
+
+          // Animate card A to foundation
+          startFoundationMoveAnimation(exposed[a].card, exposed[a].pile, exposed[a].idx, 2);
+
+          // Remove both cards from their sources
+          auto remove_card = [&](const Candidate &c) {
+            if (c.pile == 1) {
+              waste_.pop_back();
+            } else {
+              int t = c.pile - first_tableau_index;
+              tableau_[t][c.idx].removed = true;
+              for (int i = static_cast<int>(tableau_[t].size()) - 1; i >= 0; --i) {
+                if (!tableau_[t][i].removed) {
+                  if (!tableau_[t][i].face_up) { tableau_[t][i].face_up = true; playSound(GameSoundEvent::CardFlip); }
+                  break;
+                }
+              }
+            }
+          };
+
+          // Remove b first so indices for a (if in same pile) stay valid.
+          // In practice these are in different piles almost always, but safer.
+          remove_card(exposed[b]);
+          remove_card(exposed[a]);
+
+          // Also push b directly to foundation (no animation for second card)
+          foundation_[0].push_back(exposed[b].card);
+
+          found_move = true;
         }
       }
     }

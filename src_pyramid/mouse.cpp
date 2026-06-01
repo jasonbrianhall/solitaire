@@ -111,9 +111,6 @@ gboolean PyramidGame::onButtonPress(GtkWidget *widget, GdkEventButton *event,
         }
       }
     }
-  } else if (event->button == 3) { // Right click
-    game->autoFinishGame();
-    return TRUE;
   }
 
   return TRUE;
