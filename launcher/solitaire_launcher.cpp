@@ -14,6 +14,7 @@ static GameButton games[] = {
     { "Spider",      "spider.exe",      "\xe2\x99\xa6" },  // ♦
     { "Minesweeper", "minesweeper.exe", "\xe2\x98\x85" },  // ★
     { "Pyramid",     "pyramid.exe",     "\xe2\x99\xa5" },  // ♥
+    { "Sudoku",      "SudokuGame.exe",  "\xe2\x8a\x9e" },  // ⊞
 };
 
 // Returns the directory containing this .exe, with trailing backslash
