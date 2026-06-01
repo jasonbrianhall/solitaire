@@ -69,7 +69,7 @@ jobs:
     - name: Download Sudoku Executable
       run: |
         echo "Downloading Sudoku executable..."
-        wget -O SudokuGame.exe https://github.com/jasonbrianhall/sudoku_solver/releases/download/v539/SudokuGame.exe
+        wget -O SudokuGame.exe https://github.com/jasonbrianhall/sudoku_solver/releases/download/v540/SudokuGame.exe
         if [ $? -ne 0 ]; then
           echo "Warning: Failed to download SudokuGame.exe"
         fi
