@@ -10,7 +10,7 @@
 #include <cmath>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include "stb_image.h"
 
 #define GRAVITY 0.3
 #define EXPLOSION_THRESHOLD_MIN 0.35

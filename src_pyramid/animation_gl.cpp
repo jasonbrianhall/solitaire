@@ -11,7 +11,7 @@
 
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include "stb_image.h"
 #include "render_gl_text.h"
 
 // OpenGL 3.4 Shader sources

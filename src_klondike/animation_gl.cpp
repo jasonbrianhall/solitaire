@@ -10,7 +10,7 @@
 #include <cmath>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include "stb_image.h"
 
 // OpenGL 3.4 Shader sources
 static const char *VERTEX_SHADER_GL = R"(
