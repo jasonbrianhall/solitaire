@@ -2027,13 +2027,21 @@ void SolitaireGame::updateCardDimensions(int window_width, int window_height) {
   optimal_card_height = static_cast<int>(optimal_card_width * card_aspect_ratio);
   
   // Set the current dimensions
+  bool dimensions_changed =
+      (current_card_width_ != optimal_card_width) ||
+      (current_card_height_ != optimal_card_height);
+
   current_card_width_ = optimal_card_width;
   current_card_height_ = optimal_card_height;
   current_card_spacing_ = std::max(min_spacing, optimal_card_width / 10); // Slightly larger spacing
   current_vert_spacing_ = vertical_spacing;
-  
-  // Reinitialize card cache with new dimensions
-  initializeCardCache();
+
+  // Reinitialize card cache with new dimensions only if they actually changed —
+  // this is a full PNG decode + rescale for every card in the deck, so it's
+  // expensive and was previously running on every single mouse click.
+  if (dimensions_changed || card_surface_cache_.empty()) {
+    initializeCardCache();
+  }
 }
 
 double SolitaireGame::getScaleFactor(int window_width, int window_height) const {
